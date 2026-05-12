@@ -17,7 +17,7 @@ void CFreeSpaceFix::ReplacementFunc(UObject& /*UObjectThis*/, CFreeSpaceFix& /*F
     static_cast<FFileManagerDeusExe*>(GFileManager)->ToModernFileName(szSaveDirNew, pszSave);
 
     ULARGE_INTEGER BytesAvailable;
-    const BOOL retval = GetDiskFreeSpaceEx(szSaveDirNew, &BytesAvailable, nullptr, nullptr);
+    GetDiskFreeSpaceEx(szSaveDirNew, &BytesAvailable, nullptr, nullptr);
 
     const int iResult = static_cast<int>(std::min<ULONGLONG>(BytesAvailable.QuadPart / 1024, std::numeric_limits<int>::max()));
     *static_cast<int*>(Result) = iResult;
