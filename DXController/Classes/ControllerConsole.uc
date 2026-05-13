@@ -14,14 +14,12 @@
 // events while we still think the trigger is held — the shim applies a
 // deadzone, so a release event with value=0 never arrives.
 //
-// Why no continuous-action gamepad bindings (lean / crouch) live here:
-// the shim auto-fires an `IST_Release` immediately after every
-// `IST_Press` for Joy* buttons regardless of physical hold state (see
-// CLAUDE.md "Joy button event quirk"). Combined with `PreProcess` being
-// stubbed (kills `Button bDuck` / `Axis aExtra0 Speed=…` aliases), there
-// is no reliable way from script alone to detect "is the button still
-// physically held." Lean and crouch via gamepad are out of scope for
-// this phase; use the keyboard aliases (Q/E/X by default) for those.
+// L-stick click (IK_Joy9) is dispatched the same way as the triggers:
+// we mirror `bDuck` on the pawn from press/release. There's no default
+// "toggle crouch" entry in the Customize Keys UI, so a `User.ini`
+// binding wouldn't give the user a discoverable hook. The pawn's
+// `bToggleCrouch` config decides hold vs. toggle behaviour (see
+// `DeusExPlayer.HandleWalking` in ../deusex-scripts).
 //
 // Execs (reachable from the binding system regardless of player class —
 // Console is in the exec dispatch chain via stock Talk/Type/ViewUp
@@ -47,6 +45,8 @@ var float RightTriggerStaleAge;
 
 event bool KeyEvent(EInputKey Key, EInputAction Action, FLOAT Delta)
 {
+    local PlayerPawn p;
+
     if (Action == IST_Axis)
     {
         if (Key == IK_JoyZ)
@@ -59,6 +59,18 @@ event bool KeyEvent(EInputKey Key, EInputAction Action, FLOAT Delta)
             HandleRightTrigger(Delta);
             return false;
         }
+    }
+    else if (Key == IK_Joy9 && (Action == IST_Press || Action == IST_Release))
+    {
+        p = GetPawn();
+        if (p != None)
+        {
+            if (Action == IST_Press)
+                p.bDuck = 1;
+            else
+                p.bDuck = 0;
+        }
+        return true;
     }
 
     return Super.KeyEvent(Key, Action, Delta);

@@ -294,22 +294,28 @@ LStickBtn / RStickBtn) are assigned into `IK_Joy1`..`IK_Joy16` by the
 C++ shim; the specific button-to-slot mapping is owned by that side.
 Axes are delivered as a continuous stream.
 
-#### Suspected native bug: spurious `IST_Release` after every Joy* press
+#### Axis value range: `-1000..1000`
 
-Observed in `DeusEx.log` (DXC diagnostics, 2026-05-13): each physical
-Joy5 / Joy6 / Joy9 press produces `IST_Press` followed by an `IST_Release`
-within the same script tick, then the user's real release arrives later
-as a **second** `IST_Release` (~1.8s gap during a held-button test).
+`IST_Axis` events arrive at `Console.KeyEvent` with `Delta` in
+`-1000..1000`, *not* `-1..1`. The shim sends raw `-1000..1000`; the
+engine passes it through to scripts unchanged. Verified by logging
+(2026-05-13):
 
-Expected: `IST_Press` on press, single `IST_Release` on physical release.
+```
+ScriptLog: DXC-AXIS Key=JoyX Delta=-1000.000000
+ScriptLog: DXC-AXIS Key=JoyY Delta=141.846161
+```
 
-Likely owner: `Extension.InputDrv` / the XInput shim — the spurious
-release fires before any UScript sees the event. Fix belongs there. The
-phase-2 attempt to compensate in `ControllerConsole` (count releases,
-treat the second as real) is reverted; revisit gamepad lean / crouch /
-other held-state actions once the native side stops emitting the
-spurious release.
+Don't normalize at the shim. UE's binding system (`Axis aBaseY Speed=…`
+etc.) assumes the `-1000..1000` scale that DirectInput sends — that's
+why default `Speed=` values without a multiplier feel responsive.
+Normalizing to `-1..1` would make movement unusably slow and force a
+compensating `Speed=` scalar, which puts the scale right back where it
+started by the time the value reaches `aForward`/`aStrafe`.
 
-Doesn't affect one-shot exec bindings (`Joy7=TogglePlayerMenuWindow`,
-`Joy1=Jump`, etc.) — those fire on press and the spurious release is a
-no-op for them.
+Implication for script-side thresholds: scale them against the
+`-1000..1000` range. `ControllerConsole.uc`'s existing
+`TriggerThreshold = 0.3` works because 0.3 is effectively zero on
+the `-1000..1000` scale — anything past the shim's deadzone clears
+it trivially. The threshold is doing "any value at all" duty; the
+shim's deadzone is what really decides held-state.
