@@ -50,6 +50,15 @@ preview only, no build). Override the build dir with `BUILD_DIR=/path`.
 block for the compiler to see this package, plus whatever ini rebindings the
 mod needs (e.g. `[Engine.Engine] Console=DXController.<YourConsole>`).
 
+UCC prompts interactively to overwrite `DeusEx/Inc/DeusExClasses.h` when
+rebuilding `DeusEx.u`; answering 'y' fails the build, answering 'n'
+lets it proceed but UCC then GPFs while loading the freshly-rebuilt
+package. `DeusEx.u` is on disk before the crash. `sync-and-build.sh`
+handles this by piping `n` to UCC's stdin and tolerating the non-zero
+exit code, then verifying the `.u` was produced. `DXController.u` is
+built in a second `UCC.exe make` invocation against the now-stable
+`DeusEx.u`; the fresh UCC process side-steps the load-time GPF.
+
 ## Documenting findings
 
 Every non-obvious quirk, ini change, build-dir mutation, or compiler
@@ -122,25 +131,6 @@ can mask further changes the user makes on the native side.
   `x = +SomeConst;` errors with `Bad or missing expression in '='`. The
   matching unary `-` (`x = -SomeConst;`) is fine — the parser only chokes
   on the redundant `+`. Just drop it: `x = SomeConst;`.
-- **`DefaultPlayerClass` on `DeusExGameInfo` is silently bypassed unless
-  `ApproveClass` is overridden.** `../deusex-scripts/DeusEx/Classes/DeusExGameInfo.uc:25-28`
-  forces `SpawnClass=class'JCDentonMale'` whenever `ApproveClass(SpawnClass)`
-  returns false, and stock `ApproveClass` (line 76-79) returns `false`
-  unconditionally. So a subclass that only sets `DefaultPlayerClass` in
-  `defaultproperties` will appear to be routed but the engine will spawn
-  JCDentonMale instead. Override `ApproveClass` on the subclass to
-  approve your player class:
-  ```uc
-  function bool ApproveClass(class<PlayerPawn> SpawnClass)
-  {
-      return ClassIsChildOf(SpawnClass, Class'YourPkg.YourPlayer');
-  }
-  ```
-  See `DXController/Classes/ControllerGameInfo.uc` for a working example.
-  A corollary: the custom player class typically wants to extend
-  `JCDentonMale` (not `DeusExPlayer` directly) so it inherits the
-  protagonist's mesh, multi-skins, and `TravelPostAccept` skin-switch
-  logic from `../deusex-scripts/DeusEx/Classes/JCDentonMale.uc`.
 - **All `var` declarations must appear before any `function` / `event` /
   `state` body in the class.** UE1 UnrealScript is strict about declaration
   order: a `var` placed after the first function compiles to
@@ -157,28 +147,47 @@ can mask further changes the user makes on the native side.
   values you care about in `[Extension.InputExt]` (and optionally mirror
   in `[Engine.Input]` for belt-and-suspenders).
 
-## Overriding base-game classes without rebuilding their package
+## Source overlay model
 
-`ucc batchexport` only recovers scripts, textures, and sounds. Packages
-containing fonts or meshes (`Engine`, most DeusEx-side packages) can't be
-reproduced from a stock install, so we can't ship edited versions of
-them. **This is why the originals in `../deusex-scripts/` are read-only** —
-even if we edited them, we couldn't rebuild their `.u`. Instead, override
-the class via subclass + ini swap from `DXController`:
+`DeusEx.u` is rebuildable (the user has batch-exported its source into
+`$BUILD_DIR/DeusEx/Classes/`). To change a class in `DeusEx`, place an
+edited copy under `DeusEx/Classes/<File>.uc` in this repo; the build
+script rsyncs it on top of the stock tree and rebuilds the package.
+Stock files we don't touch stay stock. Discipline: when adding a stock
+file to `DeusEx/Classes/` for the first time, commit it verbatim first
+(message: "Vendor stock DeusEx/Classes/<File>.uc (unmodified)"), then
+make edits in a follow-up commit. `git diff <vendor>..<edit>` then shows
+exactly our delta against upstream.
+
+Within each modified file, additions live in a banner-delimited block:
+
+```
+// === DXController additions: BEGIN ===
+...
+// === DXController additions: END ===
+```
+
+No edits to stock function bodies — pure additions. See
+`DeusEx/Classes/DeusExPlayer.uc` for the canonical example.
+
+### Packages that can't be rebuilt
+
+`ucc batchexport` recovers scripts, textures, and sounds — not fonts or
+meshes. `Engine.u` contains both, so it cannot be reproduced from a
+stock install and we cannot ship an edited version. For classes in
+unrebuildable packages, use the subclass-and-ini-swap fallback:
 
 - **Most engine plug-points are ini-bound.** `DeusEx.ini` line 22 has
   `[Engine.Engine] Console=Engine.Console`; repoint it at
   `DXController.<YourConsole>` and the engine spawns your class instead.
   Same hook for `GameEngine=`, `DefaultGame=`, `ViewportManager=`,
-  `RenderDevice=`, `AudioDevice=`, `NetworkDevice=`. Classes that are
-  referenced as defaults on `DeusExGameInfo` (`HUDType=`,
-  `DefaultPlayerClass=`, etc.) are reachable by subclassing
-  `DeusExGameInfo` and pointing `DefaultGame=` at the subclass.
+  `RenderDevice=`, `AudioDevice=`, `NetworkDevice=`.
 - **Recipe**: add `DXController/Classes/DXControllerConsole.uc` containing
   `class DXControllerConsole extends Console;`, ensure
   `EditPackages=DXController` is at the end of the `EditPackages` block in
   `DeusEx.ini`, swap the ini binding to
   `Console=DXController.DXControllerConsole`. `Engine.u` stays untouched.
+  See `DXController/Classes/ControllerConsole.uc` for a working example.
 
 ### State-scoped dispatch
 
