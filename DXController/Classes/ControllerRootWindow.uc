@@ -44,7 +44,22 @@ event bool VirtualKeyPressed(EInputKey key, bool bRepeat)
         }
     }
 
-    // Tasks 10-11 add LB/RB handling here.
+    // LB/RB only act when a persona screen is the top window. Any other
+    // top window (datacube, conversation, sub-window) gets the event
+    // through to Super so existing arrow/tab focus nav still works.
+    if (PersonaScreenBaseWindow(GetTopWindow()) != None)
+    {
+        if (key == IK_Joy5)
+        {
+            ShowPrevPersonaScreen();
+            return true;
+        }
+        if (key == IK_Joy6)
+        {
+            ShowNextPersonaScreen();
+            return true;
+        }
+    }
 
     return Super.VirtualKeyPressed(key, bRepeat);
 }
