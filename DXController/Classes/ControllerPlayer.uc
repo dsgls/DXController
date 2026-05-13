@@ -20,5 +20,22 @@ class ControllerPlayer extends JCDentonMale;
 // always reopen Inventory rather than the user's last screen.
 var travel Class<PersonaScreenBaseWindow> LastPersonaScreen;
 
-// Subsequent tasks add ToggleScopeOrLaser, FindTopPersonaScreen,
-// TogglePlayerMenuWindow.
+// LT (Joy16) binding target. Toggles scope if the equipped weapon has
+// one, else laser if it has one, else no-op. Field/method names confirmed
+// against ../deusex-scripts/DeusEx/Classes/DeusExWeapon.uc (bHasScope L70,
+// bHasLaser L76, ScopeToggle L1342, LaserToggle L1411).
+exec function ToggleScopeOrLaser()
+{
+    local DeusExWeapon w;
+
+    w = DeusExWeapon(Weapon);
+    if (w == None)
+        return;
+
+    if (w.bHasScope)
+        w.ScopeToggle();
+    else if (w.bHasLaser)
+        w.LaserToggle();
+}
+
+// Subsequent tasks add FindTopPersonaScreen, TogglePlayerMenuWindow.
