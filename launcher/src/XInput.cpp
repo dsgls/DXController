@@ -39,6 +39,8 @@ CXInput::CXInput()
  m_iMouseActivityPx(4),
  m_iPadActiveGraceMs(500),
  m_iHotplugScanMs(1000),
+ m_fLeftStickExponent(2.0f),
+ m_fRightStickExponent(2.0f),
  m_iActiveSlot(static_cast<DWORD>(-1)),
  m_bConnected(false),
  m_iPrevButtons(0),
@@ -63,6 +65,14 @@ CXInput::CXInput()
     GConfig->GetInt(PROJECTNAME, L"XInputMouseActivityPx",    m_iMouseActivityPx);
     GConfig->GetInt(PROJECTNAME, L"XInputPadActiveGraceMs",   m_iPadActiveGraceMs);
     GConfig->GetInt(PROJECTNAME, L"XInputHotplugScanMs",      m_iHotplugScanMs);
+    GConfig->GetFloat(PROJECTNAME, L"XInputLeftStickExponent",  m_fLeftStickExponent);
+    GConfig->GetFloat(PROJECTNAME, L"XInputRightStickExponent", m_fRightStickExponent);
+
+    //Guard against ini typos that would produce NaN/Inf in pow() or the
+    //fCurvedMag/fPostMag scale factor. Range is wide enough to cover every
+    //sensible feel.
+    m_fLeftStickExponent  = std::min(10.0f, std::max(0.1f, m_fLeftStickExponent));
+    m_fRightStickExponent = std::min(10.0f, std::max(0.1f, m_fRightStickExponent));
 }
 
 void CXInput::EmitButtonChanges(UEngine* const pEngine, UViewport* const pViewport, const WORD iNewButtons)
@@ -107,6 +117,7 @@ static constexpr float kAxisRange = 1000.0f;
 
 void CXInput::EmitStickAxes(UEngine* const pEngine, UViewport* const pViewport,
                             const SHORT iRawX, const SHORT iRawY, const int iDeadzone,
+                            const float fExponent,
                             const EInputKey eKeyX, const EInputKey eKeyY,
                             float& fOutX, float& fOutY)
 {
@@ -130,6 +141,23 @@ void CXInput::EmitStickAxes(UEngine* const pEngine, UViewport* const pViewport,
         const float fScale = (fMag - fDz) * kAxisRange / ((kAxisRange - fDz) * fMag);
         fOutX = std::min(kAxisRange, std::max(-kAxisRange, fX * fScale));
         fOutY = std::min(kAxisRange, std::max(-kAxisRange, fY * fScale));
+
+        //Response curve: pow(m/kAxisRange, exp) * kAxisRange, applied to the
+        //post-deadzone magnitude. Both endpoints (0 and kAxisRange) are fixed
+        //for any exp>0, so the player can always reach full speed at full
+        //deflection. exp>1 gives finer aim near zero; exp<1 is snappier.
+        //Skip when exp == 1 to keep the default path bit-identical.
+        if (fExponent != 1.0f)
+        {
+            const float fPostMag = std::sqrt(fOutX * fOutX + fOutY * fOutY);
+            if (fPostMag > 0.0f)
+            {
+                const float fCurvedMag  = std::pow(fPostMag / kAxisRange, fExponent) * kAxisRange;
+                const float fCurveScale = fCurvedMag / fPostMag;
+                fOutX = std::min(kAxisRange, std::max(-kAxisRange, fOutX * fCurveScale));
+                fOutY = std::min(kAxisRange, std::max(-kAxisRange, fOutY * fCurveScale));
+            }
+        }
     }
 
     if (fOutX != 0.0f)
@@ -232,10 +260,12 @@ void CXInput::Poll(UEngine* const pEngine, UViewport* const pViewport, const boo
     EmitButtonChanges(pEngine, pViewport, State.Gamepad.wButtons);
     EmitStickAxes(pEngine, pViewport,
                   State.Gamepad.sThumbLX, State.Gamepad.sThumbLY, m_iLeftStickDeadzone,
+                  m_fLeftStickExponent,
                   IK_JoyX, IK_JoyY,
                   m_fPrevLeftStickX, m_fPrevLeftStickY);
     EmitStickAxes(pEngine, pViewport,
                   State.Gamepad.sThumbRX, State.Gamepad.sThumbRY, m_iRightStickDeadzone,
+                  m_fRightStickExponent,
                   IK_JoyU, IK_JoyV,
                   m_fPrevRightStickX, m_fPrevRightStickY);
     m_fPrevLeftTrigger  = EmitTriggerAxis(pEngine, pViewport, State.Gamepad.bLeftTrigger,  IK_JoyZ);

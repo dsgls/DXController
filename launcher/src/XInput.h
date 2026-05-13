@@ -38,6 +38,8 @@ private:
     int m_iMouseActivityPx;         //pixels
     int m_iPadActiveGraceMs;        //milliseconds
     int m_iHotplugScanMs;           //milliseconds
+    float m_fLeftStickExponent;     //power curve applied to post-deadzone magnitude; 1.0 = linear
+    float m_fRightStickExponent;    //power curve applied to post-deadzone magnitude; 1.0 = linear
 
     //Runtime state
     DWORD m_iActiveSlot;        //(DWORD)-1 when not connected
@@ -66,10 +68,12 @@ private:
     void ReleaseHeldButtons(UEngine* pEngine, UViewport* pViewport);
 
     //Emits IST_Axis on (eKeyX, eKeyY) after applying radial deadzone with the
-    //given iDeadzone parameter (SHORT magnitude). Stores resulting values in
-    //fOutX/fOutY (zero when inside the deadzone), in -1000..1000 axis units.
+    //given iDeadzone parameter (SHORT magnitude), then applying a power curve
+    //of fExponent to the post-deadzone magnitude (direction preserved).
+    //Stores resulting values in fOutX/fOutY (zero when inside the deadzone),
+    //in -1000..1000 axis units.
     void EmitStickAxes(UEngine* pEngine, UViewport* pViewport,
-                       SHORT iRawX, SHORT iRawY, int iDeadzone,
+                       SHORT iRawX, SHORT iRawY, int iDeadzone, float fExponent,
                        EInputKey eKeyX, EInputKey eKeyY,
                        float& fOutX, float& fOutY);
 
