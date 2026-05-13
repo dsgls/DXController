@@ -38,4 +38,33 @@ exec function ToggleScopeOrLaser()
         w.LaserToggle();
 }
 
-// Subsequent tasks add FindTopPersonaScreen, TogglePlayerMenuWindow.
+// Walks from root.GetTopWindow() up the parent-owner chain looking for
+// the first ancestor that IS-A PersonaScreenBaseWindow. Returns None if
+// no persona screen is anywhere in the chain (i.e. menu isn't open, or
+// only non-persona windows like map/save dialogs are on the stack).
+//
+// Why a walk rather than just GetTopWindow(): a sub-window can be pushed
+// in front of an open persona screen (e.g. HUDMedBotAddAugsScreen on top
+// of PersonaScreenAugmentations). winStack is private on DeusExRootWindow
+// (../deusex-scripts/DeusEx/Classes/DeusExRootWindow.uc:17), so we can't
+// iterate the stack from outside; the parent-owner chain is what's
+// available. Window.GetParent() is native(1428) final on
+// ../deusex-scripts/Extension/Classes/Window.uc:152.
+function PersonaScreenBaseWindow FindTopPersonaScreen(DeusExRootWindow root)
+{
+    local Window w;
+
+    if (root == None)
+        return None;
+
+    w = root.GetTopWindow();
+    while (w != None)
+    {
+        if (PersonaScreenBaseWindow(w) != None)
+            return PersonaScreenBaseWindow(w);
+        w = w.GetParent();
+    }
+    return None;
+}
+
+// Subsequent tasks add TogglePlayerMenuWindow.
