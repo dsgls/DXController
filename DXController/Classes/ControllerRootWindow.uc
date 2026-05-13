@@ -16,4 +16,26 @@
 //=============================================================================
 class ControllerRootWindow extends DeusExRootWindow;
 
-// (Task 9 + 10 + 11 fill this in)
+// Override is safe: parent's VirtualKeyPressed is declared `event`
+// (../deusex-scripts/DeusEx/Classes/DeusExRootWindow.uc:133), not final,
+// and our same-state global override intercepts every dispatch path the
+// player goes through while in the F1 menu (no state-scoped overrides
+// exist in DeusExRootWindow).
+event bool VirtualKeyPressed(EInputKey key, bool bRepeat)
+{
+    local ControllerPlayer player;
+
+    if (key == IK_Joy7)
+    {
+        player = ControllerPlayer(parentPawn);
+        if (player != None)
+        {
+            player.TogglePlayerMenuWindow();
+            return true;
+        }
+    }
+
+    // Tasks 10-11 add LB/RB handling here.
+
+    return Super.VirtualKeyPressed(key, bRepeat);
+}
