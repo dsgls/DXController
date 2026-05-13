@@ -100,6 +100,10 @@ form in this file, the user-facing form in `README.md`.
   `IK_UnknownXX` names instead (e.g. `case IK_UnknownF0:` for D-pad up).
 - See `scripting-reference.txt` at the repo root for a fuller language
   rundown — much of the modern UScript material online does not apply here.
+- **Unary `+` on a constant on the RHS of an assignment fails to parse.**
+  `x = +SomeConst;` errors with `Bad or missing expression in '='`. The
+  matching unary `-` (`x = -SomeConst;`) is fine — the parser only chokes
+  on the redundant `+`. Just drop it: `x = SomeConst;`.
 - **`DefaultPlayerClass` on `DeusExGameInfo` is silently bypassed unless
   `ApproveClass` is overridden.** `../deusex-scripts/DeusEx/Classes/DeusExGameInfo.uc:25-28`
   forces `SpawnClass=class'JCDentonMale'` whenever `ApproveClass(SpawnClass)`
@@ -271,3 +275,22 @@ The 10 XInput controller buttons (A / B / X / Y, LB / RB, Back / Start,
 LStickBtn / RStickBtn) are assigned into `IK_Joy1`..`IK_Joy16` by the
 C++ shim; the specific button-to-slot mapping is owned by that side.
 Axes are delivered as a continuous stream.
+
+#### Joy button event quirk: auto-release per press
+
+For Joy* buttons the shim sends `IST_Press` followed by an `IST_Release`
+within the same script tick on every physical press, regardless of how
+long the button is actually held down. The user's real release arrives
+*later*, as a **second** `IST_Release` event when they physically let go
+(observed: ~1.8s of silence between the auto-release and the real one
+during a held button test).
+
+Implication for any state that needs "is the button currently held":
+- Exec functions called on press are fine — the action fires once and the
+  release is irrelevant.
+- Continuous actions (lean while held, crouch while held, etc.) can't use
+  a naive "true on press, false on release" because the auto-release ends
+  the action immediately. Count releases per press cycle and treat the
+  **second** release as the user's real one (`ControllerConsole.uc` does
+  this for Joy5/Joy6/Joy9). Pair with a long safety timeout (≥10s) so a
+  dropped second release doesn't strand the action.

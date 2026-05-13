@@ -1,12 +1,17 @@
 //=============================================================================
 // ControllerRootWindow — DeusExRootWindow subclass.
 //
+// Owns:
+//   - LastPersonaScreen memory (which persona tab to re-open).
+//   - TogglePlayerMenuWindow() — the actual open/close logic. Called from
+//     both VirtualKeyPressed (for the menu-open close path) and
+//     ControllerConsole's exec (for the menu-closed open path via the
+//     binding system).
+//
 // Intercepts gamepad key events when a persona screen is on top:
-//   IK_Joy5 (LB)  -> previous persona tab
-//   IK_Joy6 (RB)  -> next persona tab
-//   IK_Joy7 (Back) -> Player.TogglePlayerMenuWindow()
-// All others pass through to Super.VirtualKeyPressed (existing arrow /
-// tab focus nav stays intact).
+//   IK_Joy5 (LB)   -> previous persona tab
+//   IK_Joy6 (RB)   -> next persona tab
+//   IK_Joy7 (Back) -> close the menu (via TogglePlayerMenuWindow)
 //
 // Engine-routed via [Engine.Engine] Root=DXController.ControllerRootWindow
 // in DeusEx.ini, read by the native InitRootWindow() declared at
@@ -20,28 +25,23 @@ class ControllerRootWindow extends DeusExRootWindow;
 // (../deusex-scripts/DeusEx/Classes/PersonaNavBarWindow.uc:28-40 with
 // buttons created in reverse to render left-to-right):
 // Inventory, Health, Augs, Skills, Goals, Cons, Images, Logs.
-//
-// Static — populated in defaultproperties so we can index without a
-// per-instance init step. Wraps at both ends.
 var Class<PersonaScreenBaseWindow> PersonaScreens[8];
 
-// Override is safe: parent's VirtualKeyPressed is declared `event`
-// (../deusex-scripts/DeusEx/Classes/DeusExRootWindow.uc:133), not final,
-// and our same-state global override intercepts every dispatch path the
-// player goes through while in the F1 menu (no state-scoped overrides
-// exist in DeusExRootWindow).
+// The persona screen last seen open at toggle-close time. The original
+// spec parked this on a custom player class with `travel`-qualified
+// state so it survived map transitions; we can't reach the JCDentonMale
+// pawn (engine-spawned, not subclassable in SP — see docs/issues.md).
+// Living on the root window means we lose this across save/load — Inventory
+// is the fallback in that case. Acceptable trade-off for the architecture
+// simplification.
+var Class<PersonaScreenBaseWindow> LastPersonaScreen;
+
 event bool VirtualKeyPressed(EInputKey key, bool bRepeat)
 {
-    local ControllerPlayer player;
-
     if (key == IK_Joy7)
     {
-        player = ControllerPlayer(parentPawn);
-        if (player != None)
-        {
-            player.TogglePlayerMenuWindow();
-            return true;
-        }
+        TogglePlayerMenuWindow();
+        return true;
     }
 
     // LB/RB only act when a persona screen is the top window. Any other
@@ -62,6 +62,77 @@ event bool VirtualKeyPressed(EInputKey key, bool bRepeat)
     }
 
     return Super.VirtualKeyPressed(key, bRepeat);
+}
+
+// Walks from GetTopWindow() up the parent-owner chain looking for the
+// first ancestor that IS-A PersonaScreenBaseWindow. Returns None if no
+// persona screen is anywhere in the chain (menu isn't open, or only
+// non-persona windows like map/save dialogs are on the stack).
+//
+// Why a walk rather than just GetTopWindow(): a sub-window can be pushed
+// in front of an open persona screen (e.g. HUDMedBotAddAugsScreen on top
+// of PersonaScreenAugmentations). winStack is private on DeusExRootWindow
+// (../deusex-scripts/DeusEx/Classes/DeusExRootWindow.uc:17), so we can't
+// iterate the stack from outside; the parent-owner chain is what's
+// available. Window.GetParent() is native(1428) final on
+// ../deusex-scripts/Extension/Classes/Window.uc:152.
+function PersonaScreenBaseWindow FindTopPersonaScreen()
+{
+    local Window w;
+
+    w = GetTopWindow();
+    while (w != None)
+    {
+        if (PersonaScreenBaseWindow(w) != None)
+            return PersonaScreenBaseWindow(w);
+        w = w.GetParent();
+    }
+    return None;
+}
+
+// Open: opens the menu at LastPersonaScreen (defaulting to Inventory).
+// Closed: clears the window stack and records the last persona screen
+// for next time.
+//
+// RestrictInput + multiplayer-inventory guards mirror ShowInventoryWindow
+// (../deusex-scripts/DeusEx/Classes/DeusExPlayer.uc:6627-6638) — we bypass
+// the vanilla Show*Window path by calling InvokeUIScreen directly with an
+// arbitrary class, so we re-impose the same guards here. The close branch
+// is unguarded — if the menu's open, the user must already be in a state
+// where opening it was allowed.
+function TogglePlayerMenuWindow()
+{
+    local PersonaScreenBaseWindow topPersona;
+    local DeusExPlayer player;
+
+    topPersona = FindTopPersonaScreen();
+    if (topPersona != None)
+    {
+        LastPersonaScreen = topPersona.Class;
+        // ClearWindowStack matches "leave the menu entirely". Vanilla
+        // uses the same call for similar full-close situations
+        // (DeusExPlayer.LoadGame / StartNewGame branches). PopWindow
+        // would only pop one screen, leaving any sub-windows behind.
+        ClearWindowStack();
+        return;
+    }
+
+    player = DeusExPlayer(parentPawn);
+    if (player == None)
+        return;
+
+    if (player.RestrictInput())
+        return;
+    if ((player.Level.NetMode != NM_Standalone) && player.bBeltIsMPInventory)
+    {
+        player.ClientMessage("Inventory screen disabled in multiplayer");
+        return;
+    }
+
+    if (LastPersonaScreen == None)
+        LastPersonaScreen = Class'DeusEx.PersonaScreenInventory';
+
+    InvokeUIScreen(LastPersonaScreen);
 }
 
 function int FindPersonaScreenIndex(Class<PersonaScreenBaseWindow> c)
