@@ -31,8 +31,8 @@ INT WINAPI WinMain(HINSTANCE /*hInInstance*/, HINSTANCE /*hPrevInstance*/, LPSTR
     FOutputDeviceWindowsError Error;
     FFeedbackContextWindows Warn;
 
-    //If -localdata command line option present, don't use user documents for data; can't use appCmdLine() yet.
-    std::unique_ptr<FFileManagerDeusExe> pFileManager(wcswcs(GetCommandLine(), L" -localdata") == nullptr ? new FFileManagerDeusExeUserDocs : new FFileManagerDeusExe);
+    //If -userprofile command line option present, use user documents for data; otherwise use the game directory. Can't use appCmdLine() yet.
+    std::unique_ptr<FFileManagerDeusExe> pFileManager(wcswcs(GetCommandLine(), L" -userprofile") != nullptr ? new FFileManagerDeusExeUserDocs : new FFileManagerDeusExe);
 
     appInit(GPackage, GetCommandLine(), &Malloc, &Log, &Error, &Warn, pFileManager.get(), FConfigCacheIni::Factory, 1);
     GLog->Logf(L"Deus Exe: version %s.", Misc::GetVersion());
