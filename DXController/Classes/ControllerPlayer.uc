@@ -17,10 +17,3 @@ var travel Class<PersonaScreenBaseWindow> LastPersonaScreen;
 
 // Subsequent tasks add ToggleScopeOrLaser, FindTopPersonaScreen,
 // TogglePlayerMenuWindow.
-
-// Routing-sanity log; removed in this task's Step 5.
-function PostBeginPlay()
-{
-    Super.PostBeginPlay();
-    log("ControllerPlayer.PostBeginPlay — routing OK");
-}
