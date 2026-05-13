@@ -100,6 +100,40 @@ form in this file, the user-facing form in `README.md`.
   `IK_UnknownXX` names instead (e.g. `case IK_UnknownF0:` for D-pad up).
 - See `scripting-reference.txt` at the repo root for a fuller language
   rundown — much of the modern UScript material online does not apply here.
+- **`DefaultPlayerClass` on `DeusExGameInfo` is silently bypassed unless
+  `ApproveClass` is overridden.** `../deusex-scripts/DeusEx/Classes/DeusExGameInfo.uc:25-28`
+  forces `SpawnClass=class'JCDentonMale'` whenever `ApproveClass(SpawnClass)`
+  returns false, and stock `ApproveClass` (line 76-79) returns `false`
+  unconditionally. So a subclass that only sets `DefaultPlayerClass` in
+  `defaultproperties` will appear to be routed but the engine will spawn
+  JCDentonMale instead. Override `ApproveClass` on the subclass to
+  approve your player class:
+  ```uc
+  function bool ApproveClass(class<PlayerPawn> SpawnClass)
+  {
+      return ClassIsChildOf(SpawnClass, Class'YourPkg.YourPlayer');
+  }
+  ```
+  See `DXController/Classes/ControllerGameInfo.uc` for a working example.
+  A corollary: the custom player class typically wants to extend
+  `JCDentonMale` (not `DeusExPlayer` directly) so it inherits the
+  protagonist's mesh, multi-skins, and `TravelPostAccept` skin-switch
+  logic from `../deusex-scripts/DeusEx/Classes/JCDentonMale.uc`.
+- **All `var` declarations must appear before any `function` / `event` /
+  `state` body in the class.** UE1 UnrealScript is strict about declaration
+  order: a `var` placed after the first function compiles to
+  `Error, 'Var' is not allowed here`. Move vars to the top of the class body
+  (just below the `class ... extends ...;` line); the order of *functions*
+  themselves is unconstrained.
+- **`Joy*`/`JoyPov*` bindings live in `[Extension.InputExt]` in `User.ini`,
+  not `[Engine.Input]`.** Per the "Input flow" section above, the active
+  `UInput` is `Extension.InputExt` (set via `[Engine.Engine] Input=Extension.InputExt`
+  in `DeusEx.ini`), and `UInput::Exec` reads `Bindings[Key]` keyed off its
+  own class identity. Bindings written under `[Engine.Input]` are ignored
+  by the active dispatcher. A stock `User.ini` ships with both sections
+  populated (often with divergent values from accumulated edits); set the
+  values you care about in `[Extension.InputExt]` (and optionally mirror
+  in `[Engine.Input]` for belt-and-suspenders).
 
 ## Overriding base-game classes without rebuilding their package
 
