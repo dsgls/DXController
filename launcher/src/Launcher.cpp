@@ -244,7 +244,10 @@ void CLauncher::MainLoop(UEngine* const pEngine)
         const float fDeltaTime = (iTime.QuadPart - iOldTime.QuadPart) / static_cast<float>(m_iPerfCounterFreq.QuadPart);
 
         //Lock game update speed to fps limit
-        if((m_fFPSLimit == 0.0f || fDeltaTime >= 1.0f / m_fFPSLimit) && (pEngine->GetMaxTickRate() == 0.0f || fDeltaTime >= 1.0f / pEngine->GetMaxTickRate()))
+        const bool bTickThisIteration =
+            (m_fFPSLimit == 0.0f || fDeltaTime >= 1.0f / m_fFPSLimit) &&
+            (pEngine->GetMaxTickRate() == 0.0f || fDeltaTime >= 1.0f / pEngine->GetMaxTickRate());
+        if(bTickThisIteration)
         {
             pEngine->Tick(fDeltaTime);
             if(GWindowManager)
@@ -253,7 +256,7 @@ void CLauncher::MainLoop(UEngine* const pEngine)
             }
             iOldTime = iTime;
         }
-        
+
         if(pEngine->Client->Viewports.Num() == 0) //If user closes window, viewport disappears before we get WM_QUIT
         {
             m_pViewPort = nullptr;
@@ -263,7 +266,14 @@ void CLauncher::MainLoop(UEngine* const pEngine)
         GetCursorPos(&CursorPos);
         const bool bMouseOverWindow = WindowFromPoint(CursorPos) == m_hWnd;
         const bool bHasFocus = GetFocus() == m_hWnd;
-        m_XInput.Poll(pEngine, m_pViewPort, bHasFocus);
+        //Poll at tick rate, not main-loop rate: the engine accumulates IST_Axis events
+        //between ticks (same as mouse WM_INPUT deltas below), so emitting the absolute
+        //stick value many times per tick produced per-tick turn = value * polls_per_tick.
+        //Scheduling jitter in polls_per_tick caused jerky right-stick look.
+        if(bTickThisIteration)
+        {
+            m_XInput.Poll(pEngine, m_pViewPort, bHasFocus);
+        }
         if(m_pViewPort)
         {
             assert(m_hWnd);

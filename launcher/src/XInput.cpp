@@ -100,18 +100,24 @@ void CXInput::ReleaseHeldButtons(UEngine* const pEngine, UViewport* const pViewp
     m_iPrevButtons = 0;
 }
 
+//Stock Unreal WinDrv configures DirectInput joystick axes to -1000..1000 via
+//DIPROP_RANGE; User.ini Speed= values are tuned for that magnitude. Emit in the
+//same convention so existing bindings work without retuning.
+static constexpr float kAxisRange = 1000.0f;
+
 void CXInput::EmitStickAxes(UEngine* const pEngine, UViewport* const pViewport,
                             const SHORT iRawX, const SHORT iRawY, const int iDeadzone,
                             const EInputKey eKeyX, const EInputKey eKeyY,
                             float& fOutX, float& fOutY)
 {
-    //Convert SHORT to float in [-1, 1]. Use 32767.0f for both signs and clamp
-    //to handle the -32768 case symmetrically.
-    const float fX = std::max(-1.0f, static_cast<float>(iRawX) / 32767.0f);
-    const float fY = std::max(-1.0f, static_cast<float>(iRawY) / 32767.0f);
+    //Map SHORT -> -kAxisRange..kAxisRange directly. 32767.0f for both signs and
+    //clamp handles the asymmetric -32768 case.
+    constexpr float kShortToAxis = kAxisRange / 32767.0f;
+    const float fX = std::max(-kAxisRange, static_cast<float>(iRawX) * kShortToAxis);
+    const float fY = std::max(-kAxisRange, static_cast<float>(iRawY) * kShortToAxis);
 
     const float fMag = std::sqrt(fX * fX + fY * fY);
-    const float fDz  = static_cast<float>(iDeadzone) / 32767.0f;
+    const float fDz  = static_cast<float>(iDeadzone) * kShortToAxis;
 
     if (fMag <= fDz || fMag <= 0.0f)
     {
@@ -120,9 +126,10 @@ void CXInput::EmitStickAxes(UEngine* const pEngine, UViewport* const pViewport,
     }
     else
     {
-        const float fScale = (fMag - fDz) / (1.0f - fDz) / fMag;
-        fOutX = std::min(1.0f, std::max(-1.0f, fX * fScale));
-        fOutY = std::min(1.0f, std::max(-1.0f, fY * fScale));
+        //Radial deadzone: remap magnitude so fDz->0 and kAxisRange->kAxisRange (linear).
+        const float fScale = (fMag - fDz) * kAxisRange / ((kAxisRange - fDz) * fMag);
+        fOutX = std::min(kAxisRange, std::max(-kAxisRange, fX * fScale));
+        fOutY = std::min(kAxisRange, std::max(-kAxisRange, fY * fScale));
     }
 
     if (fOutX != 0.0f)
@@ -138,18 +145,18 @@ void CXInput::EmitStickAxes(UEngine* const pEngine, UViewport* const pViewport,
 float CXInput::EmitTriggerAxis(UEngine* const pEngine, UViewport* const pViewport,
                                const BYTE iRaw, const EInputKey eKey)
 {
-    const float fValue = static_cast<float>(iRaw) / 255.0f;
-    const float fT     = static_cast<float>(m_iTriggerThreshold) / 255.0f;
+    const int iT = m_iTriggerThreshold;
 
     float fOut;
-    if (fValue <= fT)
+    if (iRaw <= iT)
     {
         fOut = 0.0f;
     }
     else
     {
-        fOut = (fValue - fT) / (1.0f - fT);
-        fOut = std::min(1.0f, fOut);
+        //Linear remap (iT, 255] -> (0, kAxisRange]; same convention as sticks.
+        fOut = static_cast<float>(iRaw - iT) * kAxisRange / static_cast<float>(255 - iT);
+        fOut = std::min(kAxisRange, fOut);
     }
 
     if (fOut != 0.0f)
