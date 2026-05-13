@@ -168,6 +168,49 @@ arrive with `IST_Press` / `IST_Release`. State-scoped overrides exist
 `global.KeyEvent`, the menu states do not. To hook the stream without
 rebuilding `Engine.u`, subclass `Console` per the override section above.
 
+### Native input handler: `Extension.InputExt`
+
+The active `UInput` is `Extension.InputExt` (native, in `Extension.dll`),
+wired via `[Engine.Engine] Input=Extension.InputExt` in `DeusEx.ini`.
+It is *not* stock UE1 `UInput`; its `Process` override changes what
+reaches the binding system:
+
+1. **UI gets first refusal.** If the current pawn is an
+   `Extension.PlayerPawnExt` with a non-null `rootWindow`, every event
+   (key *and* axis) is offered to the C++ window system first via
+   `rootWindow.Process(Key, Action, Delta)`. If the UI consumes it,
+   InputExt synthesises an `IST_Release` for every currently-held bound
+   key (so movement/aim doesn't stick when a menu, conversation,
+   datacube, or computer terminal grabs focus) and returns without
+   dispatching the binding. This is why look/move freeze the instant a
+   UI surface appears — the axis stream is silently swallowed upstream
+   of `Bindings[]`.
+2. **Press/release de-duplication.** For `IST_Press`/`IST_Release`
+   InputExt tracks a per-key pressed bit and drops duplicate presses or
+   stray releases before dispatch. `IST_Axis` skips this entirely.
+3. **Binding dispatch.** Whatever survives goes through the normal
+   `UInput::Exec` path against `Bindings[Key]` from
+   `[Extension.InputExt]` in `User.ini` — same shape as stock.
+
+It also:
+
+- **Stubs out `PreProcess` (returns true, no-op).** Stock UE1
+  `UInput::PreProcess` handles button-alias state-change synthesis;
+  that machinery is dead here. Pure axis bindings (`KeyAxis aBaseX
+  SpeedBase=…`) are unaffected, since axes go through `Process`/`Exec`,
+  not `PreProcess`.
+- **Adds a `Key(iKey)` member** for character/typing input, invoked from
+  `Extension.GameEngineExt.Key` when `UEngine::Key` doesn't consume the
+  event. Routes the keystroke into `rootWindow.Key` so UI text controls
+  get a typing channel that is separate from the binding system.
+
+**Implication for the XInput work:** axis events from the C++ shim flow
+through the standard binding path unchanged *unless* a UI surface is
+open, in which case `rootWindow.Process` swallows them and gameplay
+never sees the deltas. Button press/release events (`IK_Joy1`–
+`IK_Joy16`, D-pad slots) are already de-duplicated by InputExt, so the
+shim doesn't need its own edge filter.
+
 ### XInput → UE event mapping
 
 The C++-side XInput shim feeds these `EInputKey` slots into
