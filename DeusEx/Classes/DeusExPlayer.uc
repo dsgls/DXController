@@ -356,6 +356,12 @@ const			NintendoDelay = 6.0;
 // For closing comptuers if the server quits
 var Computers ActiveComputer;
 
+// === DXController additions: BEGIN ===
+var travel Class<PersonaScreenBaseWindow> LastPersonaScreen;
+var bool bGamepadLeftTriggerHeld, bGamepadRightTriggerHeld;
+const GamepadTriggerThreshold = 0.3;
+// === DXController additions: END ===
+
 // native Functions
 native(1099) final function string GetDeusExVersion();
 native(2100) final function ConBindEvents();
@@ -12029,6 +12035,113 @@ function ForceDisconnect(string Message)
 	DisconnectPlayer();
 }
 
+
+// === DXController additions: BEGIN ===
+
+// Back-button target. Opens at LastPersonaScreen (defaulting to
+// Inventory); if a persona screen is already on top, remembers it
+// and closes the entire menu stack.
+exec function TogglePlayerMenuWindow()
+{
+    local DeusExRootWindow root;
+    local PersonaScreenBaseWindow topPersona;
+
+    root = DeusExRootWindow(rootWindow);
+    if (root == None)
+        return;
+
+    topPersona = FindTopPersonaScreen();
+    if (topPersona != None)
+    {
+        LastPersonaScreen = topPersona.Class;
+        root.ClearWindowStack();
+        return;
+    }
+
+    if (RestrictInput())
+        return;
+    if ((Level.NetMode != NM_Standalone) && bBeltIsMPInventory)
+    {
+        ClientMessage("Inventory screen disabled in multiplayer");
+        return;
+    }
+
+    if (LastPersonaScreen == None)
+        LastPersonaScreen = Class'DeusEx.PersonaScreenInventory';
+    InvokeUIScreen(LastPersonaScreen);
+}
+
+// LT-trigger target. Toggles scope if equipped weapon has one, else
+// laser if it has one, else no-op.
+exec function ToggleScopeOrLaser()
+{
+    local DeusExWeapon w;
+
+    w = DeusExWeapon(Weapon);
+    if (w == None)
+        return;
+    if (w.bHasScope)
+        w.ScopeToggle();
+    else if (w.bHasLaser)
+        w.LaserToggle();
+}
+
+// Called by ControllerConsole on every IK_JoyZ axis event.
+function OnGamepadLeftTrigger(float value)
+{
+    local bool nowHeld;
+    nowHeld = (value >= GamepadTriggerThreshold);
+    if (nowHeld == bGamepadLeftTriggerHeld)
+        return;
+    bGamepadLeftTriggerHeld = nowHeld;
+    if (nowHeld)
+        ToggleScopeOrLaser();
+}
+
+// Called by ControllerConsole on every IK_JoyR axis event. Mirrors
+// "Button bFire | Fire": held-fire bit + initial Fire kick on press.
+function OnGamepadRightTrigger(float value)
+{
+    local bool nowHeld;
+    nowHeld = (value >= GamepadTriggerThreshold);
+    if (nowHeld == bGamepadRightTriggerHeld)
+        return;
+    bGamepadRightTriggerHeld = nowHeld;
+    if (nowHeld)
+    {
+        bFire = 1;
+        Fire(0.0);
+    }
+    else
+    {
+        bFire = 0;
+    }
+}
+
+function OnGamepadCrouchPress()   { bDuck = 1; }
+function OnGamepadCrouchRelease() { bDuck = 0; }
+
+// Walks rootWindow.GetTopWindow() up the parent-owner chain looking
+// for the first PersonaScreenBaseWindow ancestor. Returns None if no
+// persona screen is anywhere in the chain.
+function PersonaScreenBaseWindow FindTopPersonaScreen()
+{
+    local DeusExRootWindow root;
+    local Window w;
+
+    root = DeusExRootWindow(rootWindow);
+    if (root == None)
+        return None;
+    w = root.GetTopWindow();
+    while (w != None)
+    {
+        if (PersonaScreenBaseWindow(w) != None)
+            return PersonaScreenBaseWindow(w);
+        w = w.GetParent();
+    }
+    return None;
+}
+// === DXController additions: END ===
 
 // ----------------------------------------------------------------------
 // ----------------------------------------------------------------------
