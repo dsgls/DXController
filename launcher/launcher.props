@@ -23,7 +23,7 @@
       <LanguageStandard>Default</LanguageStandard>
     </ClCompile>
     <Link>
-      <AdditionalDependencies>uxtheme.lib;version.lib;Shlwapi.lib;Comctl32.lib;../games/$(GAMENAME)/engine/lib/engine.lib;../games/$(GAMENAME)/core/lib/core.lib;../games/$(GAMENAME)/extension/lib/extension.lib;../games/$(GAMENAME)/window/lib/window.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>uxtheme.lib;version.lib;Shlwapi.lib;Comctl32.lib;Xinput.lib;../games/$(GAMENAME)/engine/lib/engine.lib;../games/$(GAMENAME)/core/lib/core.lib;../games/$(GAMENAME)/extension/lib/extension.lib;../games/$(GAMENAME)/window/lib/window.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <BaseAddress>
       </BaseAddress>
       <OutputFile>$(OutDir)$(GAMEEXE)</OutputFile>

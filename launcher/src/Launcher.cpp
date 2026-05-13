@@ -263,6 +263,7 @@ void CLauncher::MainLoop(UEngine* const pEngine)
         GetCursorPos(&CursorPos);
         const bool bMouseOverWindow = WindowFromPoint(CursorPos) == m_hWnd;
         const bool bHasFocus = GetFocus() == m_hWnd;
+        m_XInput.Poll(pEngine, m_pViewPort, bHasFocus);
         if(m_pViewPort)
         {
             assert(m_hWnd);
@@ -345,7 +346,8 @@ void CLauncher::MainLoop(UEngine* const pEngine)
 
             const bool bMouseInClientRect = PtInRect(&rClientScreen, CursorPos)!=0; //This makes sure resize cursor isn't hidden
             const bool bCaptured = GetCapture() == m_hWnd;
-            if (bMouseInClientRect && (bMouseOverWindow || bCaptured)) //Want to show cursor when over preferences window when we don't have focus, but not when it's under the window if we do
+            const bool bHideForPad = m_XInput.IsPadActive();
+            if (bHideForPad || (bMouseInClientRect && (bMouseOverWindow || bCaptured))) //Want to show cursor when over preferences window when we don't have focus, but not when it's under the window if we do; force-hide while pad-active
             {
                 while(ShowCursor(FALSE) > 0); //Get rid of double mouse cursors when game doesn't clip it
             }
@@ -369,11 +371,12 @@ void CLauncher::MainLoop(UEngine* const pEngine)
             case WM_MOUSEMOVE:
                 if (m_pViewPort && m_bRawInput)
                 {
-                    if (bMouseOverWindow) //Because preferences window defers mousemove calls to us, somehow
+                    const int iXPos = GET_X_LPARAM(Msg.lParam);
+                    const int iYPos = GET_Y_LPARAM(Msg.lParam);
+                    m_XInput.NotifyMouseActivity(iXPos, iYPos);
+                    if (bMouseOverWindow && !m_XInput.IsPadActive()) //Because preferences window defers mousemove calls to us, somehow
                     {
                         //Use WM_MOUSEMOVE to control menu cursor
-                        const int iXPos = GET_X_LPARAM(Msg.lParam);
-                        const int iYPos = GET_Y_LPARAM(Msg.lParam);
                         pEngine->MousePosition(m_pViewPort, 0, static_cast<float>(iXPos), static_cast<float>(iYPos));
                     }
                     bSkipMessage = true;

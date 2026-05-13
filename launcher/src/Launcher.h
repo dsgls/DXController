@@ -1,5 +1,6 @@
 #pragma once
 
+#include "XInput.h"
 
 class CLauncher : private FExecHook
 {
@@ -22,6 +23,7 @@ private:
     UViewport* m_pViewPort = nullptr; //If user closes window, viewport disappears before we get WM_QUIT
     bool m_bPrevInMenu = false;
     bool m_bInBorderlessFullscreenWindow = false;
+    CXInput m_XInput;
 
     //Settings
     float m_fFPSLimit = 120.0f; //Because GetMaxTickRate() is float
