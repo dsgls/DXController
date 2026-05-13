@@ -18,6 +18,13 @@ ln -s "/path/to/Deus Ex" gamedir   # e.g. "/mnt/c/leikir/Deus Ex GOTY - hax"
 `gamedir/` is gitignored. The build script reads it as `BUILD_DIR`; override
 with `BUILD_DIR=/path ./sync-and-build.sh` if you'd rather not symlink.
 
+The mod modifies `DeusEx.u`, so `gamedir/DeusEx/Classes/` must contain
+the stock package source. One-time setup from `gamedir/System/`:
+
+```cmd
+ucc.exe batchexport DeusEx.u Class uc ..\DeusEx\Classes
+```
+
 ## Build
 
 ```bash
@@ -110,6 +117,8 @@ Inside the inventory / persona menu, LB and RB cycle between tabs.
 
 - DXController overrides `[Engine.Engine]` `Console=` and `Root=`. Any other
   mod that overrides one of those will conflict — last one wins.
+- DXController modifies `DeusEx.u`. Any other mod that ships its own
+  `DeusEx.u` will conflict — last-installed wins.
 - Multiplayer rejects non-stock root windows server-side. Single-player
   only; do not load the mod for an MP session.
 - The XInput shim that delivers `IK_Joy*` and `IK_JoyPov*` events is
