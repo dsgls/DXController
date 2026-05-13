@@ -1,28 +1,31 @@
 #!/usr/bin/env bash
-# Sync DXController/ to the game build dir, then build DXController.u.
+# Sync DXController/ and DeusEx/ overlays to the game build dir, then
+# build DeusEx.u and DXController.u.
 #
-# Steps:
-#   1. rsync DXController/ to $BUILD_DIR/DXController/
-#   2. delete $BUILD_DIR/System/DXController.u (ucc skips packages whose .u exists)
-#   3. run UCC.exe make from $BUILD_DIR/System
+# Layout:
+#   $REPO_DIR/DXController/Classes/*.uc   — our package's sources
+#   $REPO_DIR/DeusEx/Classes/*.uc         — overlay edits to stock DeusEx
 #
-# Root-level files (CLAUDE.md, scripting-reference.txt, batch-export.ps1,
-# this script, .git/) are intentionally not synced.
+# The DeusEx overlay assumes $BUILD_DIR/DeusEx/Classes/ already contains
+# the full stock source (from a one-time
+# `ucc batchexport DeusEx.u Class uc ..\DeusEx\Classes` run). Our overlay
+# just replaces specific files; the rest of the stock tree stays as-is.
 #
-# Files in the build dir that aren't in the repo (compiled .u outputs,
-# extracted .pcx/.wav assets, etc.) are left alone — no --delete.
-#
-# DeusEx.ini must have `EditPackages=DXController` appended to the
-# EditPackages block for ucc to pick up this package.
+# Build flow:
+#   1. rsync DXController/ -> $BUILD_DIR/DXController/
+#   2. rsync DeusEx/       -> $BUILD_DIR/DeusEx/
+#   3. delete DeusEx.u; `echo n | UCC.exe make`. UCC prompts to overwrite
+#      DeusEx/Inc/DeusExClasses.h; we answer 'n'. UCC subsequently GPFs
+#      while loading the freshly-rebuilt package to build DXController.
+#      DeusEx.u is written before the crash. `|| true` swallows the exit
+#      code; the `-f` check is the real success signal.
+#   4. delete DXController.u; fresh `UCC.exe make`. No native header, no
+#      prompt; the fresh UCC process side-steps the load-time GPF.
 #
 # Usage:
 #   ./sync-and-build.sh          # sync + build
 #   ./sync-and-build.sh -n       # dry run (rsync --dry-run, skip build)
 #   BUILD_DIR=/path ./sync-and-build.sh
-#
-# BUILD_DIR defaults to ./gamedir, which is a gitignored symlink in this
-# repo pointing at the actual game install. Set up once with:
-#   ln -s "/path/to/Deus Ex" gamedir
 
 set -euo pipefail
 
@@ -42,13 +45,29 @@ if [[ ! -d "$BUILD_DIR" ]]; then
 fi
 
 rsync "${RSYNC_FLAGS[@]}" "$REPO_DIR/DXController/" "$BUILD_DIR/DXController/"
+rsync "${RSYNC_FLAGS[@]}" "$REPO_DIR/DeusEx/"       "$BUILD_DIR/DeusEx/"
 
 if (( DRY_RUN )); then
     echo "sync-and-build: dry run — skipping .u delete and build"
     exit 0
 fi
 
-rm -f "$BUILD_DIR/System/DXController.u"
-
 cd "$BUILD_DIR/System"
+
+# Pass 1: rebuild DeusEx.u (tolerate the GPF; verify .u landed)
+rm -f "$BUILD_DIR/System/DeusEx.u"
+cmd.exe /c "echo n | UCC.exe make" || true
+if [[ ! -f "$BUILD_DIR/System/DeusEx.u" ]]; then
+    echo "sync-and-build: DeusEx.u was not produced" >&2
+    exit 1
+fi
+
+# Pass 2: rebuild DXController.u in a fresh UCC process
+rm -f "$BUILD_DIR/System/DXController.u"
 cmd.exe /c "UCC.exe make"
+if [[ ! -f "$BUILD_DIR/System/DXController.u" ]]; then
+    echo "sync-and-build: DXController.u was not produced" >&2
+    exit 1
+fi
+
+echo "sync-and-build: ok"
