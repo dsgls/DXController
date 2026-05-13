@@ -70,6 +70,24 @@ constraint encountered during development gets written down
 If a finding belongs in both, document concisely in both — the quirk
 form in this file, the user-facing form in `README.md`.
 
+### Suspected bugs in user-owned native code: flag, don't compensate
+
+The XInput shim and `Extension.InputDrv` are code the user owns and can
+fix at the source. If a behaviour looks like a bug there (events that
+shouldn't fire, events that should fire but don't, values in the wrong
+range, missing edges, etc.), **do not build a UScript workaround.**
+Surface the observation explicitly:
+
+- What the script-side sees, with concrete event sequences / values
+  from `DeusEx.log` if available.
+- Which native component is the likely owner (shim DLL, `Extension.dll`,
+  `InputDrv`, etc.) so the user knows where to look.
+- What the *expected* behaviour would be.
+
+Then stop and let the user fix it natively. A UScript band-aid hides
+the real defect, accumulates compensating complexity in the mod, and
+can mask further changes the user makes on the native side.
+
 ## UnrealScript quirks (this is UE1-era UScript — newer references will mislead)
 
 - **Enums are bytes, but `int(enumValue)` doesn't compile.** The conventional
@@ -276,21 +294,22 @@ LStickBtn / RStickBtn) are assigned into `IK_Joy1`..`IK_Joy16` by the
 C++ shim; the specific button-to-slot mapping is owned by that side.
 Axes are delivered as a continuous stream.
 
-#### Joy button event quirk: auto-release per press
+#### Suspected native bug: spurious `IST_Release` after every Joy* press
 
-For Joy* buttons the shim sends `IST_Press` followed by an `IST_Release`
-within the same script tick on every physical press, regardless of how
-long the button is actually held down. The user's real release arrives
-*later*, as a **second** `IST_Release` event when they physically let go
-(observed: ~1.8s of silence between the auto-release and the real one
-during a held button test).
+Observed in `DeusEx.log` (DXC diagnostics, 2026-05-13): each physical
+Joy5 / Joy6 / Joy9 press produces `IST_Press` followed by an `IST_Release`
+within the same script tick, then the user's real release arrives later
+as a **second** `IST_Release` (~1.8s gap during a held-button test).
 
-Implication for any state that needs "is the button currently held":
-- Exec functions called on press are fine — the action fires once and the
-  release is irrelevant.
-- Continuous actions (lean while held, crouch while held, etc.) can't use
-  a naive "true on press, false on release" because the auto-release ends
-  the action immediately. Count releases per press cycle and treat the
-  **second** release as the user's real one (`ControllerConsole.uc` does
-  this for Joy5/Joy6/Joy9). Pair with a long safety timeout (≥10s) so a
-  dropped second release doesn't strand the action.
+Expected: `IST_Press` on press, single `IST_Release` on physical release.
+
+Likely owner: `Extension.InputDrv` / the XInput shim — the spurious
+release fires before any UScript sees the event. Fix belongs there. The
+phase-2 attempt to compensate in `ControllerConsole` (count releases,
+treat the second as real) is reverted; revisit gamepad lean / crouch /
+other held-state actions once the native side stops emitting the
+spurious release.
+
+Doesn't affect one-shot exec bindings (`Joy7=TogglePlayerMenuWindow`,
+`Joy1=Jump`, etc.) — those fire on press and the spurious release is a
+no-op for them.
