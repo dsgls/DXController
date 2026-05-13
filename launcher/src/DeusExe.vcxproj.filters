@@ -60,6 +60,9 @@
     <ClCompile Include="NativeHooks.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="WinDrvPatch.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="FreeSpaceFix.cpp">
       <Filter>Fixes\Source Files</Filter>
     </ClCompile>
@@ -102,6 +105,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="NativeHooks.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="WinDrvPatch.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="FreeSpaceFix.h">

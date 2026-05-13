@@ -6,6 +6,7 @@
 #include "Fixapp.h"
 #include "ExecHook.h"
 #include "NativeHooks.h"
+#include "WinDrvPatch.h"
 #include "Launcher.h"
 
 //Do not put before stdafx.h
@@ -197,6 +198,12 @@ CLauncher::CLauncher()
             int iSizeY = r.bottom - r.top;
             ApplyAutoFOV(iSizeX, iSizeY);
         }
+
+        //Apply WinDrv binary patches BEFORE creating CNativeHooks so that any
+        //mismatch dialog runs before we start mutating GNatives[]. m_hWnd is
+        //assigned earlier in this constructor (right after pEngine->Init); it
+        //will be NULL on a dedicated server, which the dialog tolerates.
+        CWinDrvPatch WinDrvPatch(m_hWnd);
 
         //Initialize native hooks
         CNativeHooks NativeHooks(PROJECTNAME);
