@@ -67,4 +67,49 @@ function PersonaScreenBaseWindow FindTopPersonaScreen(DeusExRootWindow root)
     return None;
 }
 
-// Subsequent tasks add TogglePlayerMenuWindow.
+// Back-button binding target. Open: closes the entire menu and records
+// the last persona screen. Closed: opens the menu at LastPersonaScreen
+// (defaulting to Inventory if nothing remembered yet).
+//
+// RestrictInput + multiplayer-inventory guards mirror ShowInventoryWindow
+// (../deusex-scripts/DeusEx/Classes/DeusExPlayer.uc:6627-6638) — we bypass
+// the vanilla Show*Window path by calling InvokeUIScreen directly with an
+// arbitrary class, so we re-impose the same guards here. The close
+// branch is unguarded — if the menu's open, the user must already be in
+// a state where opening it was allowed.
+exec function TogglePlayerMenuWindow()
+{
+    local DeusExRootWindow root;
+    local PersonaScreenBaseWindow topPersona;
+
+    root = DeusExRootWindow(rootWindow);
+    if (root == None)
+        return;
+
+    topPersona = FindTopPersonaScreen(root);
+    if (topPersona != None)
+    {
+        LastPersonaScreen = topPersona.Class;
+        // ClearWindowStack matches "leave the menu entirely", which is
+        // what Back means here. Vanilla uses the same call for similar
+        // full-close situations (DeusExPlayer.LoadGame /
+        // StartNewGame branches). PopWindow would only pop one screen,
+        // leaving any sub-windows behind.
+        root.ClearWindowStack();
+        return;
+    }
+
+    // Open branch — re-impose Show*Window guards.
+    if (RestrictInput())
+        return;
+    if ((Level.NetMode != NM_Standalone) && bBeltIsMPInventory)
+    {
+        ClientMessage("Inventory screen disabled in multiplayer");
+        return;
+    }
+
+    if (LastPersonaScreen == None)
+        LastPersonaScreen = Class'DeusEx.PersonaScreenInventory';
+
+    InvokeUIScreen(LastPersonaScreen);
+}
