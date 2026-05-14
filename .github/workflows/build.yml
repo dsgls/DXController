@@ -1,0 +1,129 @@
+name: Build
+
+on:
+  push:
+    branches: [master]
+    tags: ['v*']
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    env:
+      WINEDEBUG: -all
+      WINEPREFIX: ${{ runner.temp }}/wineprefix
+      # Suppress wine's prompt to download mono/gecko on first run — UCC
+      # needs neither and the prompt would block the build.
+      WINEDLLOVERRIDES: "mscoree,mshtml="
+
+    steps:
+      - name: Install wine
+        run: |
+          sudo dpkg --add-architecture i386
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends wine wine32 wine64
+
+      - name: Initialize wine prefix
+        run: |
+          wineboot --init
+          # Wait for wineserver to settle before the first real wine
+          # invocation; otherwise the next step can race the prefix
+          # creation.
+          wineserver -w
+
+      - name: Checkout DXController
+        uses: actions/checkout@v4
+
+      - name: Load buildtools deploy key
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.BUILDTOOLS_DEPLOY_KEY }}
+
+      - name: Clone deusex-buildtools (shallow)
+        run: |
+          git clone --depth=1 \
+            git@github.com:dsgls/deusex-buildtools.git \
+            "$RUNNER_TEMP/build"
+
+      - name: Overlay DXController and DeusEx sources
+        run: |
+          rsync -rt DXController/ "$RUNNER_TEMP/build/DXController/"
+          rsync -rt DeusEx/       "$RUNNER_TEMP/build/DeusEx/"
+
+      - name: Register mod with the compiler
+        run: |
+          INI="$RUNNER_TEMP/build/System/DeusEx.ini"
+          if ! grep -qxF 'EditPackages=DXController' "$INI"; then
+            echo 'EditPackages=DXController' >> "$INI"
+          fi
+
+      - name: Build pass 1 — DeusEx.u
+        working-directory: ${{ runner.temp }}/build/System
+        run: |
+          rm -f DeusEx.u
+          # UCC prompts to overwrite DeusEx/Inc/DeusExClasses.h; 'n'
+          # lets the build proceed. UCC then GPFs while loading the
+          # rebuilt package — DeusEx.u is on disk before the crash.
+          # `|| true` tolerates the GPF; the size check below is the
+          # real success signal.
+          echo n | wine UCC.exe make || true
+          if [ ! -f DeusEx.u ]; then
+            echo "::error::DeusEx.u was not produced"
+            exit 1
+          fi
+          SIZE=$(stat -c%s DeusEx.u)
+          if [ "$SIZE" -lt 1048576 ]; then
+            echo "::error::DeusEx.u is $SIZE bytes (< 1 MiB) — UCC silent failure"
+            exit 1
+          fi
+          echo "DeusEx.u OK ($SIZE bytes)"
+
+      - name: Build pass 2 — DXController.u
+        working-directory: ${{ runner.temp }}/build/System
+        run: |
+          rm -f DXController.u
+          wine UCC.exe make
+          if [ ! -f DXController.u ]; then
+            echo "::error::DXController.u was not produced"
+            exit 1
+          fi
+          SIZE=$(stat -c%s DXController.u)
+          if [ "$SIZE" -lt 102400 ]; then
+            echo "::error::DXController.u is $SIZE bytes (< 100 KiB) — UCC silent failure"
+            exit 1
+          fi
+          echo "DXController.u OK ($SIZE bytes)"
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dxcontroller-build
+          path: |
+            ${{ runner.temp }}/build/System/DeusEx.u
+            ${{ runner.temp }}/build/System/DXController.u
+
+      - name: Stage release contents
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          REL="$RUNNER_TEMP/release/DXController-${GITHUB_REF_NAME}"
+          mkdir -p "$REL"
+          cp README.md "$REL/"
+          cp "$RUNNER_TEMP/build/System/DeusEx.u" "$REL/"
+          cp "$RUNNER_TEMP/build/System/DXController.u" "$REL/"
+
+      - name: Create release zip
+        if: startsWith(github.ref, 'refs/tags/v')
+        working-directory: ${{ runner.temp }}/release
+        run: |
+          zip -r "DXController-${GITHUB_REF_NAME}.zip" \
+            "DXController-${GITHUB_REF_NAME}/"
+
+      - name: Create GitHub release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            "$RUNNER_TEMP/release/DXController-${GITHUB_REF_NAME}.zip" \
+            --title "DXController $GITHUB_REF_NAME" \
+            --generate-notes
