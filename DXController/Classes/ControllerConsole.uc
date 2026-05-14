@@ -109,7 +109,7 @@ event bool KeyEvent(EInputKey Key, EInputAction Action, FLOAT Delta)
             // release on close fires an unintended equip.
             root = ControllerRootWindow(p.rootWindow);
             if (!p.bGamepadLBHeld && !p.bGamepadRBHeld && !p.RestrictInput()
-                && root != None && root.GetTopWindow() == None)
+                && root != None && !root.IsAnyUIForeground())
             {
                 p.OnGamepadWeaponWheel(true);
                 if (root.radial != None)
@@ -136,7 +136,7 @@ event bool KeyEvent(EInputKey Key, EInputAction Action, FLOAT Delta)
             // Same UI-foreground gate as Joy5 — see comment above.
             root = ControllerRootWindow(p.rootWindow);
             if (!p.bGamepadLBHeld && !p.bGamepadRBHeld && !p.RestrictInput()
-                && root != None && root.GetTopWindow() == None)
+                && root != None && !root.IsAnyUIForeground())
             {
                 p.OnGamepadAugWheel(true);
                 if (root.radial != None)

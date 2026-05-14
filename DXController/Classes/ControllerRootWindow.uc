@@ -389,6 +389,28 @@ function ShowAdjacentPersonaScreen(int direction)
     InvokeUIScreen(PersonaScreens[idx]);
 }
 
+// True if any DeusExBaseWindow is currently a direct child of the root.
+// Matches both PushWindow-managed screens (persona, main menu) AND
+// NewChild-only windows (conversations via ConPlay.PlayerEnterConversation,
+// computer/datacube terminals, etc.). GetTopWindow() only sees the
+// PushWindow stack, so it misses conversations entirely.
+//
+// Same predicate DescendantAdded uses to fire the radial cancel-on-UI-
+// takeover; factored here so wheel-open gating and cancel logic agree.
+function bool IsAnyUIForeground()
+{
+    local Window c;
+
+    c = GetTopChild();
+    while (c != None)
+    {
+        if (DeusExBaseWindow(c) != None)
+            return true;
+        c = c.GetLowerSibling();
+    }
+    return false;
+}
+
 defaultproperties
 {
     PersonaScreens(0)=Class'DeusEx.PersonaScreenInventory'
