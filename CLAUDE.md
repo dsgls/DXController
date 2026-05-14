@@ -98,6 +98,19 @@ Then stop and let the user fix it natively. A UScript band-aid hides
 the real defect, accumulates compensating complexity in the mod, and
 can mask further changes the user makes on the native side.
 
+### Debug logging
+
+All gamepad-domain debug logs go through the static helper
+`class'DXControllerDebug'.static.DebugLog("DXC-…")`. Gating: the helper
+itself checks `bGamepadDebugLog` config var, so call sites are
+unconditional. Do **not** create new ad-hoc `Log(...)` calls in
+controller code, and do **not** add per-class config bools. If a new
+debug category needs its own toggle, add a sibling `var config bool`
+to `DXControllerDebug.uc` plus a parallel helper.
+
+Prefix all such logs with `DXC-<area>`: `DXC-WHEEL`, `DXC-NAV`,
+`DXC-CURSOR`, etc.
+
 ## UnrealScript quirks (this is UE1-era UScript — newer references will mislead)
 
 - **Enums are bytes, but `int(enumValue)` doesn't compile.** The conventional
@@ -147,6 +160,35 @@ can mask further changes the user makes on the native side.
   populated (often with divergent values from accumulated edits); set the
   values you care about in `[Extension.InputExt]` (and optionally mirror
   in `[Engine.Input]` for belt-and-suspenders).
+- **`DeusExRootWindow.RefreshDisplay` is dead code in single-player.**
+  `DeusExPlayer.RefreshSystems`
+  (`../deusex-scripts/DeusEx/Classes/DeusExPlayer.uc:1614`) is the only
+  per-tick caller and it short-circuits on
+  `Level.NetMode == NM_Standalone`. Don't put logic there. For per-tick
+  mutation hooks, use `Tick(float)` on `Extension.RootWindow` (line 164)
+  — verified to fire on `ControllerRootWindow` (subclass) and to safely
+  call `AskParentForReconfigure`-triggering methods like
+  `PersonaScreenInventory.SelectInventory` (Tick runs between frames,
+  not during draw). For per-frame *read-only* state queries,
+  `DrawWindow` on a child window is fine; never trigger
+  attach/select/`PressButton` from `DrawWindow` (that path calls
+  `AskParentForReconfigure` which UE1 forbids during draw — the
+  cascade crashes the game). For "react to a window appearing or
+  leaving the stack", use `DescendantAdded`/`DescendantRemoved`
+  instead — see "Menu nav controllers".
+- **`DeusExRootWindow.GetTopWindow()` reflects the `PushWindow` stack
+  only.** It returns `winStack[winCount-1]`, which is populated by
+  `PushWindow` and emptied by `PopWindow`. Windows added via direct
+  `NewChild` on the root — notably conversation windows
+  (`../deusex-scripts/DeusEx/Classes/ConPlay.uc:84` does
+  `rootWindow.NewChild(Class'ConWindowActive', False)`) and the HUD-side
+  children — never enter `winStack` and so don't show up in
+  `GetTopWindow()`. Implication: `GetTopWindow() == None` is **not** a
+  reliable "no UI is foregrounded" test. To check whether any UI screen
+  owns the foreground (for purposes like "should the wheel open?"),
+  walk `root.GetTopChild()` siblings looking for a `DeusExBaseWindow`
+  match — that's the same predicate `DescendantAdded` uses to drive
+  the radial cancel-on-UI-takeover.
 
 ## Source overlay model
 
@@ -356,3 +398,144 @@ Implication for script-side thresholds: scale them against the
 the `-1000..1000` scale — anything past the shim's deadzone clears
 it trivially. The threshold is doing "any value at all" duty; the
 shim's deadzone is what really decides held-state.
+
+## Menu nav controllers
+
+Per-screen gamepad navigation lives in `DXController/Classes/<Screen>NavController.uc`,
+each extending `MenuNavController`. `ControllerRootWindow` keeps a
+class→controller registry and attaches when a registered screen class is
+added to the root via `DescendantAdded`, detaches when its screen is
+removed via `DescendantRemoved`. To add a new screen: write the
+controller, then add one
+`RegisterNav(Class'DeusEx.X', Class'XNavController')` line in
+`ControllerRootWindow.RegisterNavControllers()`. No other plumbing needed.
+
+### Window-stack observation: use engine events, never polling
+
+Attach/detach of nav controllers is driven by
+`ControllerRootWindow.DescendantAdded(Window)` and
+`DescendantRemoved(Window)` — UE1 native events that fire on every
+ancestor when a child enters or leaves the window tree. By the time
+`DescendantRemoved` fires the descendant is still a valid Window pointer
+(vanilla `HUDBarkDisplay.DescendantRemoved`
+(`../deusex-scripts/DeusEx/Classes/HUDBarkDisplay.uc:84`) calls
+`descendant.IsA(...)` on it), so detach can safely log
+`descendant.Class` and clear refs *before* the C++ object is freed.
+
+Why this matters: `InvokeUIScreen`-style screen swaps destroy the old
+screen and push the new one synchronously inside one event handler. Any
+"did the top window change?" check that runs *after* the swap (per-frame
+poll, lazy `MaybeAttachNav`-style detection) inspects a dangling pointer
+and crashes when it dereferences `screen.Class`. Engine events fire
+*during* the swap, so the detach happens against a live pointer.
+
+Use this pattern for any "react to a window appearing or leaving the
+stack" need — nav attach/detach, the radial wheel's UI-takeover cancel
+(`RadialMenuWindow.OnTopWindowPushed`), and anything similar in future.
+Don't use `RefreshDisplay`, `RefreshHUDDisplay`, or any polling loop for
+window-stack observation.
+
+### EInputKey is not in scope from controllers
+
+`MenuNavController extends Object`. `EInputKey` is on `Engine.Actor` and
+isn't reachable from `Object` scope, so `HandleActivate` takes `byte`, not
+`EInputKey`. Compare against literal byte values, each with a comment:
+
+- `200` = `IK_Joy1` (A)
+- `201` = `IK_Joy2` (B)
+- `202` = `IK_Joy3` (X)
+- `203` = `IK_Joy4` (Y)
+- `209` = `IK_Joy10` (R-stick click)
+
+`ControllerRootWindow.VirtualKeyPressed` is in `Window` scope and *can* see
+`EInputKey`, but UE1 rejects implicit `EInputKey`→`byte` coercion in function
+args. Use a local: `local byte bkey; bkey = key;` before
+`activeNav.HandleActivate(bkey)`. See `ControllerRootWindow.uc` for the
+pattern.
+
+### Button activation idiom
+
+Use `btn.PressButton()` (no args) — same path the keyboard uses,
+`ButtonActivated` fires upstream. `btn.ActivateButton(IK_LeftMouse)` also
+works but mixes in right-click semantics. Always gate on `btn.bIsSensitive`
+before pressing.
+
+Note: `bIsSensitive` lives on `Window` (`../deusex-scripts/Extension/Classes/Window.uc`),
+not on `ButtonWindow`. The intuitive `ButtonWindow.bSensitive` does not exist
+— the field is named `bIsSensitive` and inherited from `Window`. Reference
+the typed action-button field directly (e.g. `s.btnEquip.bIsSensitive`).
+
+### Vanilla list screens (`PersonaListWindow`)
+
+For native list-backed screens (Images, Logs, Conversations, Load/Save,
+Themes), use the row API on `Extension.ListWindow`:
+
+- Select first: `lst.SetRow(lst.IndexToRowId(0), True, True)`.
+- Navigate: `lst.MoveRow(MOVELIST_Up/Down, True, True)`.
+- Edge detection: read `lst.GetFocusRow()` before and after `MoveRow`; if
+  unchanged, you're at an edge. Fall through to `MOVELIST_Home`/`End` to
+  wrap, or halt if no wrap.
+- `EMoveList` constants live on `ExtensionObject`.
+
+The screen's `ListSelectionChanged` callback usually fires automatically on
+row change and drives any side-panel display update — no explicit re-display
+call needed from the controller. Verify per screen.
+
+`GetFocusedRect` should return `false` on list screens (rows aren't `Window`
+objects, so the focus overlay can't draw a frame around them). `bAllowRepeat=True`.
+
+Canonical template: `DXController/Classes/ImagesNavController.uc`.
+
+### Spatial nearest-neighbour (grid screens)
+
+For non-list screens with absolutely-positioned buttons (Inventory, Augs,
+AugInstall):
+
+- Get each button's centre via `ConvertCoordinates(btn, 0.5*btn.width, 0.5*btn.height, root, cx, cy)`.
+- Filter candidates by direction with a `bSkip` boolean (UE1 has no `goto`
+  or `continue`).
+- Compare squared Euclidean distance; pick the nearest.
+- For wrap behaviour: see `InvNavController.FindWrapTarget` (same-row
+  preference for horizontal wrap, then nearest column for vertical).
+- `bAllowRepeat=False` — grid nav should be single-press.
+
+Canonical templates: `DXController/Classes/InvNavController.uc` (with wrap),
+`DXController/Classes/AugsNavController.uc` (no wrap).
+
+### Text scrolling (`PersonaScrollAreaWindow`)
+
+The native scroll-area class exposes only `vScale.MoveThumb(MOVETHUMB_StepUp)`
+and `vScale.MoveThumb(MOVETHUMB_StepDown)` — there is no pixel-granularity
+API. For R-stick smooth scroll:
+
+- Deadzone: ~200 on the -1000..1000 axis scale.
+- Accumulate raw deflection; fire one step per ~500 accumulated units;
+  reset accumulator when stick re-enters deadzone.
+- R-stick up sends positive `ry` → `StepUp` (content moves toward top).
+
+Two access patterns depending on the screen:
+
+- **Direct field** (e.g. `PersonaScreenLogs.winScroll` is the
+  `PersonaScrollAreaWindow` itself): use `s.winScroll.vScale.MoveThumb(...)`.
+- **Indirect via `CreateScrollTileWindow`** (e.g. `PersonaScreenGoals.winGoals`
+  is the *inner* `TileWindow`, not the scroll area): walk
+  `winGoals.GetParent().GetParent()` to reach the `PersonaScrollAreaWindow`.
+  See `PersonaScreenBaseWindow.CreateScrollTileWindow` for why.
+
+Canonical templates: `DXController/Classes/LogsNavController.uc` (direct),
+`DXController/Classes/GoalsNavController.uc` (parent-chain walk).
+
+### Verify field names against `../deusex-scripts/` before coding
+
+UE1 enforces typed field access at compile time and does not validate `IsA('Name')`
+strings, so a wrong field name fails at build (good) but a wrong `IsA` only
+fails silently at runtime (bad). Before writing a new controller:
+
+1. Open `../deusex-scripts/DeusEx/Classes/<Screen>.uc` and confirm the exact
+   field names, types, and any `Select*`/`ListSelectionChanged` callbacks
+   that drive auto-display.
+2. For action buttons, follow the inheritance chain to `ButtonWindow` to
+   confirm `PressButton()` is available without a cast.
+3. If the screen is a subclass of another (e.g. `HUDMedBotAddAugsScreen
+   expands PersonaScreenAugmentations`), the registry key match is exact —
+   register the subclass separately if it needs different navigation.

@@ -119,6 +119,19 @@ JoyR=
 
 Inside the inventory / persona menu, LB and RB cycle between tabs.
 
+## Debugging
+
+DXController emits diagnostic log lines (prefixed `DXC-`) describing
+gamepad navigation, cursor-mode transitions, and wheel events. They
+are off by default. To enable, add the following to `DeusEx.ini`:
+
+```ini
+[DXController.DXControllerDebug]
+bGamepadDebugLog=True
+```
+
+Logs go to `…/System/DeusEx.log`.
+
 ## Known incompatibilities
 
 - DXController overrides `[Engine.Engine]` `Console=` and `Root=`. Any other
