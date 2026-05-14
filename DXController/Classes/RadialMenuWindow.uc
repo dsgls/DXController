@@ -15,8 +15,7 @@
 //                          fade out. bOpen becomes false immediately;
 //                          bClosing stays true until openAlpha reaches 0.
 //=============================================================================
-class RadialMenuWindow extends HUDBaseWindow
-    config(DeusEx);
+class RadialMenuWindow extends HUDBaseWindow;
 
 // Wheel mode values; matches the spec's EWheelMode.
 const WM_None   = 0;
@@ -32,8 +31,6 @@ const WheelRadius      = 130.0;   // pixels from screen-centre to each icon's ce
 const IconSize         = 48.0;    // base icon edge length, pixels
 const IconSelScale     = 1.15;    // size multiplier for the selected slot
 const FramePadding     = 8.0;     // selection frame is icon size + 2 * this
-
-var config bool bGamepadDebugLog;
 
 var bool  bOpen;
 var int   mode;            // WM_None | WM_Weapon | WM_Aug
@@ -64,12 +61,6 @@ var int   lastFocusedSlot;
 // never started this open-cycle.
 var float lastFocusTime;
 
-function DebugLog(string msg)
-{
-    if (bGamepadDebugLog)
-        Log(msg);
-}
-
 function Open(int newMode)
 {
     if (bOpen)
@@ -85,7 +76,7 @@ function Open(int newMode)
     lastFocusTime = 0.0;
     if (mode == WM_Aug)
         PopulateAugSlots();
-    DebugLog("DXC-WHEEL OPEN mode=" $ string(newMode));
+    class'DXControllerDebug'.static.DebugLog("DXC-WHEEL OPEN mode=" $ string(newMode));
 }
 
 function PopulateAugSlots()
@@ -204,7 +195,7 @@ function Close(bool bApply)
         }
     }
 
-    DebugLog("DXC-WHEEL CLOSE slot=" $ string(highlightedSlot)
+    class'DXControllerDebug'.static.DebugLog("DXC-WHEEL CLOSE slot=" $ string(highlightedSlot)
         $ " action=" $ actionLog);
 
     bOpen = false;
@@ -292,7 +283,7 @@ function UpdateStick(float x, float y)
     }
 
     if (highlightedSlot != oldSlot)
-        DebugLog("DXC-WHEEL HL slot=" $ string(highlightedSlot));
+        class'DXControllerDebug'.static.DebugLog("DXC-WHEEL HL slot=" $ string(highlightedSlot));
 }
 
 function RefreshHUDDisplay(float DeltaTime)
@@ -315,7 +306,7 @@ function RefreshHUDDisplay(float DeltaTime)
     // intentional selection.
     if (root.GetTopWindow() != None)
     {
-        DebugLog("DXC-WHEEL CANCEL reason=ui-takeover");
+        class'DXControllerDebug'.static.DebugLog("DXC-WHEEL CANCEL reason=ui-takeover");
         Close(false);
     }
 }
