@@ -87,7 +87,7 @@ JoyPovLeft=ActivateBelt 2
 JoyPovRight=ActivateBelt 3
 JoyPovDown=ActivateBelt 4
 JoyX=Axis aStrafe
-JoyY=Axis aBaseY INVERT=-1
+JoyY=Axis aBaseY
 JoyU=Axis aTurn
 JoyV=Axis aLookUp
 JoyZ=
