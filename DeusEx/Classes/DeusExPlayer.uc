@@ -360,6 +360,28 @@ var Computers ActiveComputer;
 var travel Class<PersonaScreenBaseWindow> LastPersonaScreen;
 var bool bGamepadLeftTriggerHeld, bGamepadRightTriggerHeld;
 const GamepadTriggerThreshold = 0.3;
+
+// L-stick deflection state — latched on every IK_JoyX/IK_JoyY axis event
+// by ControllerConsole, read each tick by ProcessMove / HandleWalking.
+var float GamepadStickX, GamepadStickY;     // raw -1000..1000 from the shim
+var float GamepadStickMag;                  // derived 0..1 magnitude
+
+// Throttle for the in-game debug ClientMessage stream.
+var float GamepadDebugLastMsgTime;
+
+// Stock-computed WaterSpeed cached in PlayerSwimming.BeginState so we
+// can re-scale it each tick from current deflection instead of locking
+// to the value at water entry.
+var float BaseWaterSpeed;
+
+// Calibration constants (see spec §6). No ini surface — opinionated defaults.
+const GamepadWalkRunThreshold       = 0.60;
+const GamepadWalkRunThresholdHyst   = 0.05;
+const GamepadCrouchSpeedCap         = 0.50;
+const GamepadCarrySpeedCap          = 0.50;
+const GamepadMinScaledSpeed         = 30;
+const GamepadWalkAnimSpeedFraction  = 0.50;
+const bGamepadMovementDebug         = False;
 // === DXController additions: END ===
 
 // native Functions
@@ -3125,6 +3147,22 @@ function HandleWalking()
 
 		lastbDuck = bDuck;
 	}
+
+	// === DXController additions: BEGIN ===
+	// When the gamepad L-stick is active, override the stock keyboard-
+	// derived bIsWalking with a threshold-on-deflection rule. Hysteresis
+	// (0.05) prevents chatter at the seam. The keyboard path (bAlwaysRun,
+	// bToggleWalk) above is unchanged when the stick is centered.
+	if (GamepadStickMag > 0.0)
+	{
+		if (bIsWalking)
+			bIsWalking = GamepadStickMag < GamepadWalkRunThreshold;
+		else
+			bIsWalking = GamepadStickMag < (GamepadWalkRunThreshold - GamepadWalkRunThresholdHyst);
+	}
+
+	LogGamepadMovementState();
+	// === DXController additions: END ===
 }
 
 // ----------------------------------------------------------------------
@@ -3569,6 +3607,10 @@ state PlayerWalking
 
 		GroundSpeed = FMax(newSpeed, 100);
 
+		// === DXController additions: BEGIN ===
+		GroundSpeed = ApplyGamepadSpeedScale(GroundSpeed);
+		// === DXController additions: END ===
+
 		// if we are moving or crouching, we can't lean
 		// uncomment below line to disallow leaning during crouch
 
@@ -3834,6 +3876,10 @@ state PlayerSwimming
 	{
 		local vector loc;
 
+		// === DXController additions: BEGIN ===
+		WaterSpeed = ApplyGamepadSpeedScale(BaseWaterSpeed);
+		// === DXController additions: END ===
+
         //DEUS_EX AMSD Additional updates
         //Because of replication delay, aug icons end up being a step behind generally.  So refresh them
         //every freaking tick.  
@@ -3921,6 +3967,14 @@ state PlayerSwimming
 		}
 		else
 			WaterSpeed = Default.WaterSpeed * mult;
+
+		// === DXController additions: BEGIN ===
+		// Cache the stock-computed WaterSpeed for per-tick scaling in
+		// state PlayerSwimming { event PlayerTick }. BeginState fires once
+		// at water entry — scaling here would lock swim speed to the
+		// deflection held at splashdown.
+		BaseWaterSpeed = WaterSpeed;
+		// === DXController additions: END ===
 
 		Super.BeginState();
 	}
@@ -12129,6 +12183,98 @@ function PersonaScreenBaseWindow FindTopPersonaScreen()
     if (root == None)
         return None;
     return PersonaScreenBaseWindow(root.GetTopWindow());
+}
+
+// ----------------------------------------------------------------------
+// Gamepad L-stick latch
+// ----------------------------------------------------------------------
+
+// Called by ControllerConsole on every IK_JoyX or IK_JoyY axis event.
+// Stores raw axis values and recomputes deflection magnitude. The same
+// axis stream still drives aBaseX/aBaseY through the [Extension.InputExt]
+// binding — this is a listen-only second tap.
+function OnGamepadLeftStick(float rawX, float rawY)
+{
+    local float mag;
+
+    GamepadStickX = rawX;
+    GamepadStickY = rawY;
+    mag = Sqrt(rawX*rawX + rawY*rawY) / 1000.0;
+    GamepadStickMag = FClamp(mag, 0.0, 1.0);
+}
+
+// Debug telemetry — gated by bGamepadMovementDebug. Logs to DeusEx.log
+// every call (per-frame is fine; this is verification-only) and to the
+// in-game ClientMessage stream at most once every 2 seconds.
+final function LogGamepadMovementState()
+{
+    local string msg;
+    local string animName;
+
+    if (!bGamepadMovementDebug)
+        return;
+
+    if (bIsWalking)
+        animName = "Walk";
+    else
+        animName = "Run";
+
+    msg = "DXC-MOVE mag=" $ GamepadStickMag
+        $ " GroundSpeed=" $ GroundSpeed
+        $ " VSize=" $ VSize(Velocity)
+        $ " bIsWalking=" $ bIsWalking
+        $ " anim=" $ animName
+        $ " rate=" $ AnimRate;
+
+    Log(msg, 'ScriptLog');
+
+    if (Level.TimeSeconds - GamepadDebugLastMsgTime >= 2.0)
+    {
+        ClientMessage(msg);
+        GamepadDebugLastMsgTime = Level.TimeSeconds;
+    }
+}
+
+// ----------------------------------------------------------------------
+// Speed scaling
+// ----------------------------------------------------------------------
+
+// Current movement speed as fraction of class-default GroundSpeed.
+// Aug Speed can push above 1.0; we clamp at 1.5 to bound the anim-rate
+// multiplier in PlayWalking/PlayRunning.
+final function float CurrentSpeedFraction()
+{
+    if (Default.GroundSpeed <= 0)
+        return 1.0;
+    return FClamp(GroundSpeed / Default.GroundSpeed, 0.0, 1.5);
+}
+
+// Multiplies the stock-computed speed cap by L-stick deflection, with
+// crouch and carry caps applied as FMin (not multiplicative) so that
+// low deflection still produces low speed when crouched or carrying.
+// Floor at GamepadMinScaledSpeed (overrides stock's FMax(_, 100)).
+//
+// If the stick is centered (mag == 0) we're either on keyboard or the
+// gamepad is centered — return unchanged so keyboard players see no
+// change.
+final function float ApplyGamepadSpeedScale(float speedCap)
+{
+    local float mag, scaled;
+
+    if (GamepadStickMag <= 0.0)
+        return speedCap;
+
+    mag = GamepadStickMag;
+
+    if (bIsCrouching || bForceDuck)
+        mag = FMin(mag, GamepadCrouchSpeedCap);
+
+    if (CarriedDecoration != None ||
+        (inHand != None && inHand.IsA('POVCorpse')))
+        mag = FMin(mag, GamepadCarrySpeedCap);
+
+    scaled = speedCap * mag;
+    return FMax(scaled, GamepadMinScaledSpeed);
 }
 // === DXController additions: END ===
 
