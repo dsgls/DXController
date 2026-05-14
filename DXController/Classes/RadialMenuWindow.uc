@@ -63,7 +63,7 @@ function Close(bool bApply)
         if (mode == WM_Weapon)
         {
             root = DeusExRootWindow(GetRootWindow());
-            if (root != None && root.hud != None && root.hud.belt != None)
+            if (root != None && root.hud != None && root.hud.belt != None && player != None)
             {
                 belt = root.hud.belt;
                 inv = belt.objects[highlightedSlot].GetItem();
