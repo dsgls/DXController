@@ -23,7 +23,7 @@ const WM_None   = 0;
 const WM_Weapon = 1;
 const WM_Aug    = 2;
 
-const StickDeadzone     = 400.0;    // ~40% of the -1000..1000 axis range
+const StickDeadzone     = 300.0;    // ~30% of the -1000..1000 axis range
 const DegreesPerRadian  = 57.2957795;
 
 const WheelRadius      = 130.0;   // pixels from screen-centre to each icon's centre
@@ -184,8 +184,9 @@ function Close(bool bApply)
 }
 
 // Returns angle in degrees clockwise from "up", 0..360.
-// Assumes shim sends stick-up as y < 0 (screen-coord convention). If
-// in-game testing shows the wheel inverted vertically, negate y here.
+// Shim sends raw axis: y > 0 = stick up (physical), y < 0 = stick down.
+// (User.ini's `JoyY ... INVERT=-1` flips this only for the camera-look
+// binding path; the raw axis we receive here is uninverted.)
 function float ComputeAngleDegrees(float x, float y)
 {
     local float angle;
@@ -194,9 +195,12 @@ function float ComputeAngleDegrees(float x, float y)
         if (x >= 0) return 90.0;
         return 270.0;
     }
-    angle = Atan(x / (-y)) * DegreesPerRadian;
-    if (y > 0)
-        angle += 180.0;         // stick pushed down (y > 0 in screen coords)
+    // Shim sends raw axis: y > 0 = stick up (physical), y < 0 = stick down.
+    // (User.ini's `JoyY ... INVERT=-1` flips this only for the camera-look
+    // binding path; the raw axis we receive here is uninverted.)
+    angle = Atan(x / y) * DegreesPerRadian;
+    if (y < 0)
+        angle += 180.0;         // stick pushed down
     else if (angle < 0)
         angle += 360.0;         // stick in upper-left quadrant
     return angle;
