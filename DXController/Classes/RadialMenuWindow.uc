@@ -24,6 +24,11 @@ const WM_Aug    = 2;
 const StickDeadzone     = 400.0;    // ~40% of the -1000..1000 axis range
 const DegreesPerRadian  = 57.2957795;
 
+const WheelRadius      = 130.0;   // pixels from screen-centre to each icon's centre
+const IconSize         = 48.0;    // base icon edge length, pixels
+const IconSelScale     = 1.15;    // size multiplier for the selected slot
+const FramePadding     = 8.0;     // selection frame is icon size + 2 * this
+
 var bool  bOpen;
 var int   mode;            // WM_None | WM_Weapon | WM_Aug
 var float stickX, stickY;  // latest right-stick sample, -1000..1000
@@ -102,6 +107,96 @@ function UpdateStick(float x, float y)
 
     if (highlightedSlot != oldSlot)
         Log("DXC-WHEEL HL slot=" $ string(highlightedSlot));
+}
+
+event DrawWindow(GC gc)
+{
+    local int i;
+    local float cx, cy;
+    local Color tintIcon, tintFrame, tintDim;
+    local Inventory inv;
+    local DeusExRootWindow root;
+    local HUDObjectBelt belt;
+
+    Super.DrawWindow(gc);
+
+    if (!bOpen || mode != WM_Weapon)
+        return;
+
+    root = DeusExRootWindow(GetRootWindow());
+    if (root == None || root.hud == None || root.hud.belt == None)
+        return;
+    belt = root.hud.belt;
+
+    cx = width  * 0.5;
+    cy = height * 0.5;
+
+    // Pull the HUD theme colour for our accent.
+    tintFrame = player.ThemeManager.GetCurrentHUDColorTheme().GetColorFromName('HUDColor_Borders');
+    tintIcon  = ColorAlpha(255, 255, 255, 255);
+    tintDim   = ColorAlpha(80, 80, 80, 255);
+
+    gc.EnableTranslucency(true);
+
+    for (i = 0; i < 10; i++)
+    {
+        inv = belt.objects[i].GetItem();
+        DrawSlot(gc, i, cx, cy, inv, (i == highlightedSlot), tintFrame, tintIcon, tintDim);
+    }
+}
+
+function DrawSlot(GC gc, int slotIdx, float cx, float cy,
+                  Inventory inv, bool bSelected,
+                  Color tintFrame, Color tintIcon, Color tintDim)
+{
+    local float angleDeg, angleRad;
+    local float sx, sy;             // slot centre
+    local float size, x, y;         // icon rect
+    local float frameSize, fx, fy;  // frame rect
+
+    angleDeg = slotIdx * 36.0;
+    angleRad = angleDeg / DegreesPerRadian;
+    sx = cx + WheelRadius * Sin(angleRad);
+    sy = cy - WheelRadius * Cos(angleRad);
+
+    size = IconSize;
+    if (bSelected)
+        size = IconSize * IconSelScale;
+
+    x = sx - size * 0.5;
+    y = sy - size * 0.5;
+
+    // Selection frame: a tinted square drawn behind the icon.
+    if (bSelected)
+    {
+        frameSize = size + 2.0 * FramePadding;
+        fx = sx - frameSize * 0.5;
+        fy = sy - frameSize * 0.5;
+        gc.SetTileColor(tintFrame);
+        gc.DrawTexture(fx, fy, frameSize, frameSize, 0, 0, Texture'Engine.WhiteTexture');
+    }
+
+    if (inv != None && inv.Icon != None)
+    {
+        gc.SetTileColor(tintIcon);
+        gc.DrawTexture(x, y, size, size, 0, 0, inv.Icon);
+    }
+    else
+    {
+        // Empty slot — dim placeholder frame, no icon.
+        gc.SetTileColor(tintDim);
+        gc.DrawTexture(x, y, size, size, 0, 0, Texture'Engine.WhiteTexture');
+    }
+}
+
+function Color ColorAlpha(int r, int g, int b, int a)
+{
+    local Color c;
+    c.R = r;
+    c.G = g;
+    c.B = b;
+    c.A = a;
+    return c;
 }
 
 defaultproperties
