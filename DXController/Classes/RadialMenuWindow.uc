@@ -324,8 +324,6 @@ event DrawWindow(GC gc)
     tintWhite = ColorAlpha(255, 255, 255, 255);
     tintDim   = ColorAlpha(80, 80, 80, 255);
 
-    gc.EnableTranslucency(true);
-
     if (mode == WM_Weapon)
     {
         if (root.hud == None || root.hud.belt == None)
@@ -377,26 +375,31 @@ function DrawSlot(GC gc, int slotIdx, float cx, float cy,
     x = sx - size * 0.5;
     y = sy - size * 0.5;
 
-    // Selection frame: a tinted square drawn behind the icon.
+    // Selection frame: a thin outline around the icon (drawn before the icon
+    // itself so the icon overlays the outline cleanly).
     if (bSelected)
     {
         frameSize = size + 2.0 * FramePadding;
         fx = sx - frameSize * 0.5;
         fy = sy - frameSize * 0.5;
+        gc.SetStyle(DSTY_Masked);
         gc.SetTileColor(ScaleAlpha(tintFrame, alpha));
-        gc.DrawTexture(fx, fy, frameSize, frameSize, 0, 0, Texture'Engine.WhiteTexture');
+        gc.DrawBox(fx, fy, frameSize, frameSize, 0, 0, 2, Texture'Solid');
     }
 
     if (inv != None && inv.Icon != None)
     {
-        gc.SetTileColor(ScaleAlpha(tintIcon, alpha));
+        gc.SetStyle(DSTY_Masked);
+        gc.SetTileColorRGB(255, 255, 255);
         gc.DrawTexture(x, y, size, size, 0, 0, inv.Icon);
     }
     else
     {
-        // Empty slot — dim placeholder frame, no icon.
+        // Empty slot — subtle filled placeholder so the wheel still shows
+        // the slot exists.
+        gc.SetStyle(DSTY_Translucent);
         gc.SetTileColor(ScaleAlpha(tintDim, alpha));
-        gc.DrawTexture(x, y, size, size, 0, 0, Texture'Engine.WhiteTexture');
+        gc.DrawPattern(x, y, size, size, 0, 0, Texture'Solid');
     }
 }
 
@@ -426,8 +429,9 @@ function DrawAugSlot(GC gc, int slotIdx, float cx, float cy,
         frameSize = size + 2.0 * FramePadding;
         fx = sx - frameSize * 0.5;
         fy = sy - frameSize * 0.5;
+        gc.SetStyle(DSTY_Masked);
         gc.SetTileColor(ScaleAlpha(tintFrame, alpha));
-        gc.DrawTexture(fx, fy, frameSize, frameSize, 0, 0, Texture'Engine.WhiteTexture');
+        gc.DrawBox(fx, fy, frameSize, frameSize, 0, 0, 2, Texture'Solid');
     }
 
     if (aug != None)
@@ -437,14 +441,16 @@ function DrawAugSlot(GC gc, int slotIdx, float cx, float cy,
             iconTex = aug.Icon;
         if (iconTex != None)
         {
+            gc.SetStyle(DSTY_Masked);
             gc.SetTileColor(ScaleAlpha(tintAug, alpha));
             gc.DrawTexture(x, y, size, size, 0, 0, iconTex);
         }
     }
     else
     {
+        gc.SetStyle(DSTY_Translucent);
         gc.SetTileColor(ScaleAlpha(tintDim, alpha));
-        gc.DrawTexture(x, y, size, size, 0, 0, Texture'Engine.WhiteTexture');
+        gc.DrawPattern(x, y, size, size, 0, 0, Texture'Solid');
     }
 }
 
@@ -506,14 +512,17 @@ function DrawCentreReadout(GC gc, float cx, float cy,
         }
     }
 
-    // Background panel.
+    // Background panel: subtle dark fill so the text reads against busy
+    // gameplay underneath.
     panelW = 180;
     panelH = 40;
     panelX = cx - panelW * 0.5;
     panelY = cy - panelH * 0.5;
-    gc.SetTileColor(ScaleAlpha(tintFrame, alpha));
-    gc.DrawTexture(panelX, panelY, panelW, panelH, 0, 0, Texture'Engine.WhiteTexture');
+    gc.SetStyle(DSTY_Translucent);
+    gc.SetTileColor(ScaleAlpha(ColorAlpha(0, 0, 0, 255), alpha));
+    gc.DrawPattern(panelX, panelY, panelW, panelH, 0, 0, Texture'Solid');
 
+    gc.SetStyle(DSTY_Masked);
     gc.SetTextColor(ScaleAlpha(tintText, alpha));
     gc.SetFont(Font'DeusExUI.FontMenuSmall');
     gc.SetAlignments(HALIGN_Center, VALIGN_Top);
