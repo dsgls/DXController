@@ -29,6 +29,13 @@ event InitWindow()
     radial.SetWindowAlignments(HALIGN_Full, VALIGN_Full, 0, 0);
 }
 
+function RefreshDisplay(float DeltaTime)
+{
+    Super.RefreshDisplay(DeltaTime);
+    if (radial != None)
+        radial.RefreshHUDDisplay(DeltaTime);
+}
+
 event bool VirtualKeyPressed(EInputKey key, bool bRepeat)
 {
     local DeusExPlayer p;

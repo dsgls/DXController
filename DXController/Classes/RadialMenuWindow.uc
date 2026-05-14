@@ -203,6 +203,31 @@ function UpdateStick(float x, float y)
         Log("DXC-WHEEL HL slot=" $ string(highlightedSlot));
 }
 
+function RefreshHUDDisplay(float DeltaTime)
+{
+    local DeusExRootWindow root;
+
+    Super.RefreshHUDDisplay(DeltaTime);
+
+    if (!bOpen)
+        return;
+
+    root = DeusExRootWindow(GetRootWindow());
+    if (root == None)
+        return;
+
+    // GetTopWindow returns the topmost pushed window (datacube, conversation,
+    // persona screen, computer terminal). If anything is pushed, cancel —
+    // Extension.InputExt will synthesise releases for all held keys including
+    // our trigger button, and we don't want that release to be treated as an
+    // intentional selection.
+    if (root.GetTopWindow() != None)
+    {
+        Log("DXC-WHEEL CANCEL reason=ui-takeover");
+        Close(false);
+    }
+}
+
 event DrawWindow(GC gc)
 {
     local int i;
