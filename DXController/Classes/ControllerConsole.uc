@@ -21,6 +21,13 @@ event bool KeyEvent(EInputKey Key, EInputAction Action, FLOAT Delta)
     if (p == None)
         return Super.KeyEvent(Key, Action, Delta);
 
+    // Notify root window so it can flip from CM_Mouse → CM_Gamepad.
+    if (p.rootWindow != None)
+    {
+        if (ControllerRootWindow(p.rootWindow) != None)
+            ControllerRootWindow(p.rootWindow).NoticeGamepadActivity();
+    }
+
     if (Action == IST_Axis)
     {
         if (Key == IK_JoyZ)
@@ -33,6 +40,19 @@ event bool KeyEvent(EInputKey Key, EInputAction Action, FLOAT Delta)
             p.OnGamepadRightTrigger(Delta);
             return false;
         }
+        if (Key == IK_JoyX || Key == IK_JoyY)
+        {
+            root = ControllerRootWindow(p.rootWindow);
+            if (root != None && root.radial != None && root.radial.IsViewLocked() && root.radial.bSticky)
+            {
+                if (Key == IK_JoyX)
+                    root.radial.UpdateStick(Delta, root.radial.stickY);
+                else
+                    root.radial.UpdateStick(root.radial.stickX, Delta);
+                return true;  // consumed — suppress binding-system movement
+            }
+        }
+
         if (Key == IK_JoyX)
         {
             p.OnGamepadLeftStick(Delta, p.GamepadStickY);
@@ -56,6 +76,14 @@ event bool KeyEvent(EInputKey Key, EInputAction Action, FLOAT Delta)
                     root.radial.UpdateStick(root.radial.stickX, Delta);
                 return true;  // consumed — suppress binding-system camera-pan
             }
+
+            // No wheel open. If a menu screen owns the focus and its
+            // nav controller accepts R-stick scroll, forward and consume.
+            if (root != None && root.activeNav != None && Key == IK_JoyV)
+            {
+                if (root.activeNav.HandleScroll(Delta))
+                    return true;  // consumed — suppress binding-system camera-pan
+            }
         }
     }
     else if (Key == IK_Joy9)
@@ -75,11 +103,16 @@ event bool KeyEvent(EInputKey Key, EInputAction Action, FLOAT Delta)
     {
         if (Action == IST_Press)
         {
-            if (!p.bGamepadLBHeld && !p.bGamepadRBHeld && !p.RestrictInput())
+            // Block wheel-open while any UI screen owns the foreground
+            // (conversation, datacube, persona menu, etc.) — otherwise
+            // the wheel opens *behind* the UI and the synthesised
+            // release on close fires an unintended equip.
+            root = ControllerRootWindow(p.rootWindow);
+            if (!p.bGamepadLBHeld && !p.bGamepadRBHeld && !p.RestrictInput()
+                && root != None && root.GetTopWindow() == None)
             {
-                root = ControllerRootWindow(p.rootWindow);
                 p.OnGamepadWeaponWheel(true);
-                if (root != None && root.radial != None)
+                if (root.radial != None)
                     root.radial.Open(root.radial.WM_Weapon);
             }
             return true;
@@ -100,11 +133,13 @@ event bool KeyEvent(EInputKey Key, EInputAction Action, FLOAT Delta)
     {
         if (Action == IST_Press)
         {
-            if (!p.bGamepadLBHeld && !p.bGamepadRBHeld && !p.RestrictInput())
+            // Same UI-foreground gate as Joy5 — see comment above.
+            root = ControllerRootWindow(p.rootWindow);
+            if (!p.bGamepadLBHeld && !p.bGamepadRBHeld && !p.RestrictInput()
+                && root != None && root.GetTopWindow() == None)
             {
-                root = ControllerRootWindow(p.rootWindow);
                 p.OnGamepadAugWheel(true);
-                if (root != None && root.radial != None)
+                if (root.radial != None)
                     root.radial.Open(root.radial.WM_Aug);
             }
             return true;

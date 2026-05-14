@@ -18,9 +18,10 @@
 class RadialMenuWindow extends HUDBaseWindow;
 
 // Wheel mode values; matches the spec's EWheelMode.
-const WM_None   = 0;
-const WM_Weapon = 1;
-const WM_Aug    = 2;
+const WM_None      = 0;
+const WM_Weapon    = 1;
+const WM_Aug       = 2;
+const WM_BeltAssign = 3;
 
 const StickDeadzone     = 300.0;    // ~30% of the -1000..1000 axis range
 const DegreesPerRadian  = 57.2957795;
@@ -33,7 +34,10 @@ const IconSelScale     = 1.15;    // size multiplier for the selected slot
 const FramePadding     = 8.0;     // selection frame is icon size + 2 * this
 
 var bool  bOpen;
-var int   mode;            // WM_None | WM_Weapon | WM_Aug
+var bool  bSticky;
+var Inventory sourceItem;
+var Window    stickySourceScreen;  // the persona screen the wheel was opened from
+var int   mode;            // WM_None | WM_Weapon | WM_Aug | WM_BeltAssign
 var float stickX, stickY;  // latest right-stick sample, -1000..1000
 var int   highlightedSlot; // 0..9 or -1 if in deadzone / wheel closed
 var Augmentation augSlots[10];  // null where slot is empty
@@ -61,7 +65,7 @@ var int   lastFocusedSlot;
 // never started this open-cycle.
 var float lastFocusTime;
 
-function Open(int newMode)
+function Open(int newMode, optional Inventory item, optional bool bStickyMode, optional Window sourceScreen)
 {
     if (bOpen)
         return;
@@ -69,11 +73,14 @@ function Open(int newMode)
     bClosing = false;
     openAlpha = 0.0;
     mode = newMode;
-    stickX = 0;
-    stickY = 0;
+    stickX = 0.0;
+    stickY = 0.0;
     highlightedSlot = -1;
     lastFocusedSlot = -1;
     lastFocusTime = 0.0;
+    bSticky = bStickyMode;
+    sourceItem = item;
+    stickySourceScreen = sourceScreen;
     if (mode == WM_Aug)
         PopulateAugSlots();
     class'DXControllerDebug'.static.DebugLog("DXC-WHEEL OPEN mode=" $ string(newMode));
@@ -139,8 +146,15 @@ function Close(bool bApply)
         root = DeusExRootWindow(GetRootWindow());
         if (root != None && root.GetTopWindow() != None)
         {
-            bApply = false;
-            actionLog = "cancel-ui";
+            if (bSticky && root.GetTopWindow() == stickySourceScreen)
+            {
+                // Source screen is the top window — expected for sticky mode. Don't demote.
+            }
+            else
+            {
+                bApply = false;
+                actionLog = "cancel-ui";
+            }
         }
     }
 
@@ -149,7 +163,7 @@ function Close(bool bApply)
     // recentre-then-release muscle pattern. Setting highlightedSlot here
     // also makes the 80 ms fade-out render the dispatched slot as
     // highlighted — the acknowledgment.
-    if (bApply && highlightedSlot < 0 && lastFocusedSlot >= 0 && player != None
+    if (!bSticky && bApply && highlightedSlot < 0 && lastFocusedSlot >= 0 && player != None
         && (player.Level.TimeSeconds - lastFocusTime) < FocusGrace)
     {
         highlightedSlot = lastFocusedSlot;
@@ -190,6 +204,21 @@ function Close(bool bApply)
                 {
                     aug.Activate();
                     actionLog = "activate";
+                }
+            }
+        }
+        else if (mode == WM_BeltAssign)
+        {
+            if (player != None && sourceItem != None)
+            {
+                player.AddObjectToBelt(sourceItem, highlightedSlot, true);
+                actionLog = "assign:" $ string(highlightedSlot);
+
+                // Refresh persona inventory belt display, if open.
+                if (stickySourceScreen != None
+                    && PersonaScreenInventory(stickySourceScreen) != None)
+                {
+                    PersonaScreenInventory(stickySourceScreen).CleanBelt();
                 }
             }
         }
@@ -286,29 +315,25 @@ function UpdateStick(float x, float y)
         class'DXControllerDebug'.static.DebugLog("DXC-WHEEL HL slot=" $ string(highlightedSlot));
 }
 
-function RefreshHUDDisplay(float DeltaTime)
+// Called by ControllerRootWindow.DescendantAdded when a screen gets
+// pushed onto the stack. Cancels the wheel so the synthesised release
+// (Extension.InputExt fires IST_Release for held keys when UI takes
+// focus) doesn't commit an accidental equip/toggle. Replaces the
+// per-tick RefreshHUDDisplay polling, which never fired in
+// single-player (RefreshDisplay short-circuits on NM_Standalone).
+function OnTopWindowPushed(Window pushed)
 {
-    local DeusExRootWindow root;
-
-    Super.RefreshHUDDisplay(DeltaTime);
-
     if (!bOpen)
         return;
 
-    root = DeusExRootWindow(GetRootWindow());
-    if (root == None)
+    // Sticky-mode source screens (Inventory's belt-assign wheel) are
+    // expected — the source is exactly the window we want on top.
+    if (bSticky && pushed == stickySourceScreen)
         return;
 
-    // GetTopWindow returns the topmost pushed window (datacube, conversation,
-    // persona screen, computer terminal). If anything is pushed, cancel —
-    // Extension.InputExt will synthesise releases for all held keys including
-    // our trigger button, and we don't want that release to be treated as an
-    // intentional selection.
-    if (root.GetTopWindow() != None)
-    {
-        class'DXControllerDebug'.static.DebugLog("DXC-WHEEL CANCEL reason=ui-takeover");
-        Close(false);
-    }
+    class'DXControllerDebug'.static.DebugLog(
+        "DXC-WHEEL CANCEL reason=ui-takeover");
+    Close(false);
 }
 
 event DrawWindow(GC gc)
@@ -371,7 +396,7 @@ event DrawWindow(GC gc)
     tintWhite = ColorAlpha(255, 255, 255, 255);
     tintDim   = ColorAlpha(80, 80, 80, 255);
 
-    if (mode == WM_Weapon)
+    if (mode == WM_Weapon || mode == WM_BeltAssign)
     {
         if (root.hud == None || root.hud.belt == None)
             return;
@@ -556,6 +581,26 @@ function DrawCentreReadout(GC gc, float cx, float cy,
                 statusLine = string(Int(aug.EnergyRate)) $ "/min  ACTIVE";
             else
                 statusLine = string(Int(aug.EnergyRate)) $ "/min  OFF";
+        }
+    }
+    else if (mode == WM_BeltAssign)
+    {
+        if (sourceItem != None)
+        {
+            nameLine = sourceItem.ItemName $ " -> slot " $ string(highlightedSlot);
+            root = DeusExRootWindow(GetRootWindow());
+            if (root != None && root.hud != None && root.hud.belt != None)
+            {
+                inv = root.hud.belt.objects[highlightedSlot].GetItem();
+                if (inv == None)
+                    statusLine = "(empty)";
+                else
+                    statusLine = "currently: " $ inv.ItemName;
+            }
+            else
+            {
+                statusLine = "";
+            }
         }
     }
 
