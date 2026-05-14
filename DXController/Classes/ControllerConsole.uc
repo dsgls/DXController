@@ -30,6 +30,26 @@ event bool KeyEvent(EInputKey Key, EInputAction Action, FLOAT Delta)
 
     if (Action == IST_Axis)
     {
+        // Bug 3 diagnostic: log L-stick / R-stick events when the radial is
+        // open/sticky or a nav controller is active, so we can tell whether
+        // axis events reach Console.KeyEvent at all during menu mode.
+        // Filter |Delta|>100 to skip centring noise; only the four player
+        // sticks (X/Y/U/V) are interesting.
+        if (Abs(Delta) > 100.0
+            && (Key == IK_JoyX || Key == IK_JoyY || Key == IK_JoyU || Key == IK_JoyV))
+        {
+            root = ControllerRootWindow(p.rootWindow);
+            if (root != None && root.radial != None
+                && (root.radial.bOpen || root.radial.bSticky || root.activeNav != None))
+            {
+                class'DXControllerDebug'.static.DebugLog(
+                    "DXC-AXIS Key=" $ string(Key) $ " Delta=" $ string(int(Delta))
+                    $ " bOpen=" $ string(root.radial.bOpen)
+                    $ " bSticky=" $ string(root.radial.bSticky)
+                    $ " nav=" $ string(root.activeNav != None));
+            }
+        }
+
         if (Key == IK_JoyZ)
         {
             p.OnGamepadLeftTrigger(Delta);
