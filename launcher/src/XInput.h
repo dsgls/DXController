@@ -15,9 +15,9 @@ public:
     // /IST_Axis events. Must NOT be called every MainLoop iteration -- the engine
     // accumulates IST_Axis between ticks, so multiple emits per tick scale the
     // resulting turn/look amount by the poll count and produce visible jerk.
-    // No-op if pViewport is null. Synthesizes releases for any held buttons
-    // when bHasFocus is false or the controller has disconnected, so the engine
-    // never sees stuck inputs.
+    // No-op if pViewport is null. Synthesizes releases for any held buttons and
+    // IST_Axis(0.0) for any held analog channels when bHasFocus is false or the
+    // controller has disconnected, so the engine never sees stuck inputs.
     void Poll(UEngine* pEngine, UViewport* pViewport, bool bHasFocus);
 
     // True if controller input crossed activity thresholds within the last
@@ -48,7 +48,8 @@ private:
 
     //Previous-frame post-deadzone stick/trigger values, in Unreal's joystick axis
     //convention (-1000..1000 for sticks, 0..1000 for triggers). Used by packet
-    //dedup to know whether axes need re-emission.
+    //dedup, by the non-zero -> zero edge emit in EmitStickAxes/EmitTriggerAxis,
+    //and by FlushHeldAxes.
     float m_fPrevLeftStickX;
     float m_fPrevLeftStickY;
     float m_fPrevRightStickX;
@@ -67,6 +68,11 @@ private:
     void EmitButtonChanges(UEngine* pEngine, UViewport* pViewport, WORD iNewButtons);
     void ReleaseHeldButtons(UEngine* pEngine, UViewport* pViewport);
 
+    //Emits IST_Axis(eKey, 0.0f) for every analog channel whose cached prev
+    //is non-zero, then zeros the prev. Used by the focus-loss and disconnect
+    //paths so scripts see a clean release rather than a stuck last value.
+    void FlushHeldAxes(UEngine* pEngine, UViewport* pViewport);
+
     //Emits IST_Axis on (eKeyX, eKeyY) after applying radial deadzone with the
     //given iDeadzone parameter (SHORT magnitude), then applying a power curve
     //of fExponent to the post-deadzone magnitude (direction preserved).
@@ -77,8 +83,10 @@ private:
                        EInputKey eKeyX, EInputKey eKeyY,
                        float& fOutX, float& fOutY);
 
-    //Returns post-threshold value in [0, 1000] and emits IST_Axis on eKey when
-    //non-zero.
+    //Returns post-threshold value in [0, 1000]. Emits IST_Axis(eKey, fOut) when
+    //fOut is non-zero, or IST_Axis(eKey, 0.0f) on the non-zero -> zero edge
+    //(when fOut is zero but fPrev is non-zero). Caller passes the previous
+    //tick's cached value as fPrev.
     float EmitTriggerAxis(UEngine* pEngine, UViewport* pViewport,
-                          BYTE iRaw, EInputKey eKey);
+                          BYTE iRaw, float fPrev, EInputKey eKey);
 };

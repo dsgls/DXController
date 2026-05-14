@@ -121,6 +121,12 @@ void CXInput::EmitStickAxes(UEngine* const pEngine, UViewport* const pViewport,
                             const EInputKey eKeyX, const EInputKey eKeyY,
                             float& fOutX, float& fOutY)
 {
+    //fOutX/fOutY are passed by reference and hold the previous tick's
+    //post-deadzone value on entry. Snapshot before the existing logic
+    //overwrites them so we can detect the non-zero -> zero edge below.
+    const float fPrevX = fOutX;
+    const float fPrevY = fOutY;
+
     //Map SHORT -> -kAxisRange..kAxisRange directly. 32767.0f for both signs and
     //clamp handles the asymmetric -32768 case.
     constexpr float kShortToAxis = kAxisRange / 32767.0f;
@@ -164,14 +170,22 @@ void CXInput::EmitStickAxes(UEngine* const pEngine, UViewport* const pViewport,
     {
         pEngine->InputEvent(pViewport, eKeyX, IST_Axis, fOutX);
     }
+    else if (fPrevX != 0.0f)
+    {
+        pEngine->InputEvent(pViewport, eKeyX, IST_Axis, 0.0f);
+    }
     if (fOutY != 0.0f)
     {
         pEngine->InputEvent(pViewport, eKeyY, IST_Axis, fOutY);
     }
+    else if (fPrevY != 0.0f)
+    {
+        pEngine->InputEvent(pViewport, eKeyY, IST_Axis, 0.0f);
+    }
 }
 
 float CXInput::EmitTriggerAxis(UEngine* const pEngine, UViewport* const pViewport,
-                               const BYTE iRaw, const EInputKey eKey)
+                               const BYTE iRaw, const float fPrev, const EInputKey eKey)
 {
     const int iT = m_iTriggerThreshold;
 
@@ -191,7 +205,37 @@ float CXInput::EmitTriggerAxis(UEngine* const pEngine, UViewport* const pViewpor
     {
         pEngine->InputEvent(pViewport, eKey, IST_Axis, fOut);
     }
+    else if (fPrev != 0.0f)
+    {
+        pEngine->InputEvent(pViewport, eKey, IST_Axis, 0.0f);
+    }
     return fOut;
+}
+
+void CXInput::FlushHeldAxes(UEngine* const pEngine, UViewport* const pViewport)
+{
+    struct Entry
+    {
+        float*    pPrev;
+        EInputKey eKey;
+    };
+    Entry aAxes[] =
+    {
+        { &m_fPrevLeftStickX,   IK_JoyX },
+        { &m_fPrevLeftStickY,   IK_JoyY },
+        { &m_fPrevRightStickX,  IK_JoyU },
+        { &m_fPrevRightStickY,  IK_JoyV },
+        { &m_fPrevLeftTrigger,  IK_JoyZ },
+        { &m_fPrevRightTrigger, IK_JoyR },
+    };
+    for (Entry& Axis : aAxes)
+    {
+        if (*Axis.pPrev != 0.0f)
+        {
+            pEngine->InputEvent(pViewport, Axis.eKey, IST_Axis, 0.0f);
+            *Axis.pPrev = 0.0f;
+        }
+    }
 }
 
 void CXInput::Poll(UEngine* const pEngine, UViewport* const pViewport, const bool bHasFocus)
@@ -203,6 +247,7 @@ void CXInput::Poll(UEngine* const pEngine, UViewport* const pViewport, const boo
     if (!bHasFocus)
     {
         ReleaseHeldButtons(pEngine, pViewport);
+        FlushHeldAxes(pEngine, pViewport);
         return;
     }
     if (!m_bConnected)
@@ -235,6 +280,7 @@ void CXInput::Poll(UEngine* const pEngine, UViewport* const pViewport, const boo
     if (iResult == ERROR_DEVICE_NOT_CONNECTED)
     {
         ReleaseHeldButtons(pEngine, pViewport);
+        FlushHeldAxes(pEngine, pViewport);
         m_bConnected = false;
         m_iActiveSlot = static_cast<DWORD>(-1);
         return;
@@ -268,8 +314,8 @@ void CXInput::Poll(UEngine* const pEngine, UViewport* const pViewport, const boo
                   m_fRightStickExponent,
                   IK_JoyU, IK_JoyV,
                   m_fPrevRightStickX, m_fPrevRightStickY);
-    m_fPrevLeftTrigger  = EmitTriggerAxis(pEngine, pViewport, State.Gamepad.bLeftTrigger,  IK_JoyZ);
-    m_fPrevRightTrigger = EmitTriggerAxis(pEngine, pViewport, State.Gamepad.bRightTrigger, IK_JoyR);
+    m_fPrevLeftTrigger  = EmitTriggerAxis(pEngine, pViewport, State.Gamepad.bLeftTrigger,  m_fPrevLeftTrigger,  IK_JoyZ);
+    m_fPrevRightTrigger = EmitTriggerAxis(pEngine, pViewport, State.Gamepad.bRightTrigger, m_fPrevRightTrigger, IK_JoyR);
 
     const bool bPadActiveThisPoll =
         iButtonsChanged != 0 ||
