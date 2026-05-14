@@ -30,11 +30,12 @@ event bool KeyEvent(EInputKey Key, EInputAction Action, FLOAT Delta)
 
     if (Action == IST_Axis)
     {
-        // Bug 3 diagnostic: log L-stick / R-stick events when the radial is
-        // open/sticky or a nav controller is active, so we can tell whether
-        // axis events reach Console.KeyEvent at all during menu mode.
-        // Filter |Delta|>100 to skip centring noise; only the four player
-        // sticks (X/Y/U/V) are interesting.
+        // Log L-stick / R-stick events when the radial is open/sticky or a
+        // nav controller is active. Filter |Delta|>100 to skip centring
+        // noise; only the four player sticks (X/Y/U/V) are interesting.
+        // Useful to confirm the Menuing-state forwarder (state block at
+        // end of file) is reaching here and the gates below see the
+        // expected wheel/nav state.
         if (Abs(Delta) > 100.0
             && (Key == IK_JoyX || Key == IK_JoyY || Key == IK_JoyU || Key == IK_JoyV))
         {
@@ -63,9 +64,13 @@ event bool KeyEvent(EInputKey Key, EInputAction Action, FLOAT Delta)
         if (Key == IK_JoyX || Key == IK_JoyY)
         {
             root = ControllerRootWindow(p.rootWindow);
-            // Sticky belt-assign wheel: persona screen owns the foreground,
-            // so IsViewLocked() is false. bOpen+bSticky is the unambiguous
-            // signal that the wheel is the intended L-stick consumer.
+            // Sticky wheel (belt-assign from a persona screen): L-stick
+            // navigates slots. The non-sticky weapon/aug wheels (held
+            // with LB/RB during gameplay) deliberately leave L-stick on
+            // player movement; their navigation is R-stick (next block).
+            // Gate on bSticky to distinguish. Using bOpen (rather than
+            // IsViewLocked()) also keeps the post-close grace window —
+            // R-stick-only — from holding L-stick away from movement.
             if (root != None && root.radial != None && root.radial.bOpen && root.radial.bSticky)
             {
                 if (Key == IK_JoyX)
@@ -181,4 +186,46 @@ event bool KeyEvent(EInputKey Key, EInputAction Action, FLOAT Delta)
     }
 
     return Super.KeyEvent(Key, Action, Delta);
+}
+
+//=============================================================================
+// state Menuing — selective axis pass-through.
+//
+// UI-paused state. Entered by PlayerPawn.ShowMenu() from
+// DeusExRootWindow.UIPauseGame(), which fires from every PushWindow that
+// doesn't pass bNoPause=True (persona screens, conversations launched via
+// PushWindow, datacubes, computer terminals).
+//
+// Stock Console.state Menuing.KeyEvent (Engine/Classes/Console.uc:731)
+// short-circuits on Action != IST_Press, dropping every axis event. Per
+// UE1 state-scoped dispatch (CLAUDE.md "State-scoped dispatch"), the
+// parent's state-scoped function shadows the child's class-scoped
+// override, so the IST_Axis branch of ControllerConsole.KeyEvent — the
+// sticky-wheel UpdateStick path and the nav-controller HandleScroll
+// path — never runs while a Menuing-state menu owns the foreground.
+//
+// Forward stick axes (X/Y/U/V) to the class-scoped (global) handler so
+// those consumers receive their events. Triggers (IK_JoyZ/IK_JoyR) are
+// deliberately not forwarded: OnGamepadRightTrigger raises bFire and
+// OnGamepadLeftTrigger toggles scope/laser, and Fire()'s RestrictInput()
+// guard does not catch the menu-open case (it only fires for
+// Interpolating/Dying/Paralyzed). Non-axis events stay on stock Menuing
+// semantics: Super.KeyEvent resolves to Console.state Menuing.KeyEvent,
+// preserving MainMenu.MenuProcessInput dispatch and the Scrollback
+// reset.
+//
+// This is the same idiom as stock state Typing.KeyEvent at
+// Engine/Classes/Console.uc:635, which calls global.KeyEvent so the
+// subclass's KeyEvent sees typing-state events.
+//=============================================================================
+state Menuing
+{
+    function bool KeyEvent(EInputKey Key, EInputAction Action, FLOAT Delta)
+    {
+        if (Action == IST_Axis
+            && (Key == IK_JoyX || Key == IK_JoyY
+             || Key == IK_JoyU || Key == IK_JoyV))
+            return global.KeyEvent(Key, Action, Delta);
+        return Super.KeyEvent(Key, Action, Delta);
+    }
 }
