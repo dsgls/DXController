@@ -52,7 +52,7 @@ event bool KeyEvent(EInputKey Key, EInputAction Action, FLOAT Delta)
                     root.radial.UpdateStick(Delta, root.radial.stickY);
                 else
                     root.radial.UpdateStick(root.radial.stickX, Delta);
-                return false;  // consume — do not let binding system camera-pan
+                return true;  // consumed — suppress binding-system camera-pan
             }
         }
     }
