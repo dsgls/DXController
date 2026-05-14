@@ -48,10 +48,43 @@ function Open(int newMode)
 
 function Close(bool bApply)
 {
+    local DeusExRootWindow root;
+    local HUDObjectBelt belt;
+    local Inventory inv;
+    local string actionLog;
+
     if (!bOpen)
         return;
+
+    actionLog = "cancel";
+
+    if (bApply && highlightedSlot >= 0)
+    {
+        if (mode == WM_Weapon)
+        {
+            root = DeusExRootWindow(GetRootWindow());
+            if (root != None && root.hud != None && root.hud.belt != None)
+            {
+                belt = root.hud.belt;
+                inv = belt.objects[highlightedSlot].GetItem();
+                if (inv != None)
+                {
+                    player.ActivateBelt(highlightedSlot);
+                    actionLog = "equip";
+                }
+                else
+                {
+                    player.PutInHand(None);
+                    actionLog = "unequip";
+                }
+            }
+        }
+        // Aug branch will be added in Task 8.
+    }
+
     Log("DXC-WHEEL CLOSE slot=" $ string(highlightedSlot)
-        $ " apply=" $ string(bApply));
+        $ " action=" $ actionLog);
+
     bOpen = false;
     mode = WM_None;
     highlightedSlot = -1;
