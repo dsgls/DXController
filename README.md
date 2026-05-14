@@ -51,6 +51,12 @@ Console=DXController.ControllerConsole
 Root=DXController.ControllerRootWindow
 ```
 
+In `[DeusEx.DeusExPlayer]`:
+
+```ini
+bToggleCrouch=True
+```
+
 ### `gamedir/System/User.ini`
 
 **Back up `User.ini` before editing** — the snippet overwrites existing
