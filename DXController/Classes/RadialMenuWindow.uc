@@ -131,8 +131,9 @@ event DrawWindow(GC gc)
     cx = width  * 0.5;
     cy = height * 0.5;
 
-    // Pull the HUD theme colour for our accent.
-    tintFrame = player.ThemeManager.GetCurrentHUDColorTheme().GetColorFromName('HUDColor_Borders');
+    // Pull the HUD theme colour for our accent (colBorder is maintained by
+    // HUDBaseWindow.StyleChanged and stays in sync with theme changes).
+    tintFrame = colBorder;
     tintIcon  = ColorAlpha(255, 255, 255, 255);
     tintDim   = ColorAlpha(80, 80, 80, 255);
 
