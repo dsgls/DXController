@@ -21,6 +21,9 @@ const WM_None   = 0;
 const WM_Weapon = 1;
 const WM_Aug    = 2;
 
+const StickDeadzone     = 400.0;    // ~40% of the -1000..1000 axis range
+const DegreesPerRadian  = 57.2957795;
+
 var bool  bOpen;
 var int   mode;            // WM_None | WM_Weapon | WM_Aug
 var float stickX, stickY;  // latest right-stick sample, -1000..1000
@@ -49,11 +52,56 @@ function Close(bool bApply)
     highlightedSlot = -1;
 }
 
+// Returns angle in degrees clockwise from "up", 0..360.
+// Assumes shim sends stick-up as y < 0 (screen-coord convention). If
+// in-game testing shows the wheel inverted vertically, negate y here.
+function float ComputeAngleDegrees(float x, float y)
+{
+    local float angle;
+    if (Abs(y) < 0.001)
+    {
+        if (x >= 0) return 90.0;
+        return 270.0;
+    }
+    angle = Atan(x / (-y)) * DegreesPerRadian;
+    if (y > 0)
+        angle += 180.0;         // stick pushed down (y > 0 in screen coords)
+    else if (angle < 0)
+        angle += 360.0;         // stick in upper-left quadrant
+    return angle;
+}
+
 function UpdateStick(float x, float y)
 {
+    local float mag, angle;
+    local int   slot, oldSlot;
+
     stickX = x;
     stickY = y;
-    // highlightedSlot stays -1 until Task 3 implements the math.
+
+    if (!bOpen)
+        return;
+
+    oldSlot = highlightedSlot;
+
+    mag = Sqrt(x*x + y*y);
+    if (mag < StickDeadzone)
+    {
+        highlightedSlot = -1;
+    }
+    else
+    {
+        angle = ComputeAngleDegrees(x, y);
+
+        // Each segment is 36°; slot 0 is centred on 0°, so segment N
+        // spans (N*36 - 18) .. (N*36 + 18). Add 18 before dividing to
+        // collapse this to a plain integer divide.
+        slot = int((angle + 18.0) / 36.0) % 10;
+        highlightedSlot = slot;
+    }
+
+    if (highlightedSlot != oldSlot)
+        Log("DXC-WHEEL HL slot=" $ string(highlightedSlot));
 }
 
 defaultproperties

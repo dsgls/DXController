@@ -43,6 +43,18 @@ event bool KeyEvent(EInputKey Key, EInputAction Action, FLOAT Delta)
             p.OnGamepadLeftStick(p.GamepadStickX, Delta);
             return false;
         }
+        if (Key == IK_JoyU || Key == IK_JoyV)
+        {
+            root = ControllerRootWindow(p.rootWindow);
+            if (root != None && root.radial != None && root.radial.bOpen)
+            {
+                if (Key == IK_JoyU)
+                    root.radial.UpdateStick(Delta, root.radial.stickY);
+                else
+                    root.radial.UpdateStick(root.radial.stickX, Delta);
+                return false;  // consume — do not let binding system camera-pan
+            }
+        }
     }
     else if (Key == IK_Joy9)
     {
