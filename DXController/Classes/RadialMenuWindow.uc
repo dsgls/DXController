@@ -404,9 +404,9 @@ function DrawCentreReadout(GC gc, float cx, float cy, Color tintFrame, Color tin
         {
             nameLine = aug.AugmentationName;
             if (aug.IsActive())
-                statusLine = "ACTIVE";
+                statusLine = Sprintf(aug.EnergyRateLabel, Int(aug.EnergyRate)) $ "  ACTIVE";
             else
-                statusLine = "OFF";
+                statusLine = Sprintf(aug.EnergyRateLabel, Int(aug.EnergyRate)) $ "  OFF";
         }
     }
 
