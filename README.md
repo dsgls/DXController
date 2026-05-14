@@ -28,11 +28,11 @@ ucc.exe batchexport DeusEx.u Class uc ..\DeusEx\Classes
 ## Build
 
 ```bash
-./sync-and-build.sh        # rsync DXController/ → gamedir/, delete DXController.u, UCC.exe make
+./sync-and-build.sh        # rsync DXController/ and DeusEx/ → gamedir/, two-pass UCC build
 ./sync-and-build.sh -n     # dry-run rsync, skip build
 ```
 
-Output: `gamedir/System/DXController.u`.
+Output: `gamedir/System/DeusEx.u` and `gamedir/System/DXController.u`.
 
 ## Configuration (one-time)
 
