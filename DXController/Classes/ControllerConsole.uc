@@ -43,7 +43,10 @@ event bool KeyEvent(EInputKey Key, EInputAction Action, FLOAT Delta)
         if (Key == IK_JoyX || Key == IK_JoyY)
         {
             root = ControllerRootWindow(p.rootWindow);
-            if (root != None && root.radial != None && root.radial.IsViewLocked() && root.radial.bSticky)
+            // Sticky belt-assign wheel: persona screen owns the foreground,
+            // so IsViewLocked() is false. bOpen+bSticky is the unambiguous
+            // signal that the wheel is the intended L-stick consumer.
+            if (root != None && root.radial != None && root.radial.bOpen && root.radial.bSticky)
             {
                 if (Key == IK_JoyX)
                     root.radial.UpdateStick(Delta, root.radial.stickY);
