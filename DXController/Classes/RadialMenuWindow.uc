@@ -33,6 +33,7 @@ var bool  bOpen;
 var int   mode;            // WM_None | WM_Weapon | WM_Aug
 var float stickX, stickY;  // latest right-stick sample, -1000..1000
 var int   highlightedSlot; // 0..9 or -1 if in deadzone / wheel closed
+var Augmentation augSlots[10];  // null where slot is empty
 
 function Open(int newMode)
 {
@@ -43,7 +44,48 @@ function Open(int newMode)
     stickX = 0;
     stickY = 0;
     highlightedSlot = -1;
+    if (mode == WM_Aug)
+        PopulateAugSlots();
     Log("DXC-WHEEL OPEN mode=" $ string(newMode));
+}
+
+function PopulateAugSlots()
+{
+    local Augmentation aug;
+    local int i, j;
+
+    // Clear the cache.
+    for (i = 0; i < 10; i++)
+        augSlots[i] = None;
+
+    if (player == None || player.AugmentationSystem == None)
+        return;
+
+    // Walk the aug list, insertion-sort by HotKeyNum into augSlots.
+    aug = player.AugmentationSystem.FirstAug;
+    while (aug != None)
+    {
+        if (aug.bHasIt && !aug.bAlwaysActive)
+        {
+            // Find insertion index.
+            for (i = 0; i < 10; i++)
+            {
+                if (augSlots[i] == None)
+                    break;
+                if (aug.HotKeyNum < augSlots[i].HotKeyNum)
+                    break;
+            }
+
+            if (i < 10)
+            {
+                // Shift higher slots up.
+                for (j = 9; j > i; j--)
+                    augSlots[j] = augSlots[j-1];
+                augSlots[i] = aug;
+            }
+        }
+        aug = aug.next;
+    }
 }
 
 function Close(bool bApply)
