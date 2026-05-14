@@ -68,6 +68,45 @@ function CollectAugButtons()
         "DXC-NAV AugInstall collected=" $ string(augButtonCount));
 }
 
+// Detect that PopulateAugCanList has rebuilt the cannister tree since the
+// last CollectAugButtons (e.g. after an aug has been installed) and
+// re-collect if so. UE1 nulls references to destroyed Window objects, so
+// a None entry or an empty client object on a cached button indicates
+// the underlying row is gone.
+function RefreshIfStale()
+{
+    local int i;
+    local bool bStale;
+
+    bStale = false;
+    for (i = 0; i < augButtonCount; i++)
+    {
+        if (augButtons[i] == None || augButtons[i].GetClientObject() == None)
+        {
+            bStale = true;
+            break;
+        }
+    }
+    if (!bStale)
+        return;
+
+    class'DXControllerDebug'.static.DebugLog("DXC-NAV AugInstall stale-refresh");
+    CollectAugButtons();
+
+    focusIndex = -1;
+    focused    = None;
+    for (i = 0; i < augButtonCount; i++)
+    {
+        if (augButtons[i] != None)
+        {
+            focusIndex = i;
+            focused    = augButtons[i];
+            HUDMedBotAddAugsScreen(screen).SelectAugmentation(augButtons[i]);
+            return;
+        }
+    }
+}
+
 function InitFocus()
 {
     local int i;
@@ -99,6 +138,7 @@ function bool HandleDPad(int dx, int dy)
 {
     local int step, i, idx;
 
+    RefreshIfStale();
     if (augButtonCount == 0 || dy == 0)
         return true;    // consume; left/right ignored on this screen
 
@@ -131,6 +171,7 @@ function bool HandleActivate(byte button)
 {
     local HUDMedBotAddAugsScreen s;
 
+    RefreshIfStale();
     s = HUDMedBotAddAugsScreen(screen);
     if (s == None)
         return true;
