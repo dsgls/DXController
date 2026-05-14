@@ -24,7 +24,7 @@ itself.
 read-only — **do not edit anything there**. To change base-game behavior, add
 a new class to `DXController/Classes/` that extends or shadows the original,
 and route the engine to it (ini swap, subclass + repoint, etc. — see
-"Overriding base-game classes" below).
+"Source overlay model" below).
 
 When you need to read a stock class, look it up under
 `../deusex-scripts/<Pkg>/Classes/<File>.uc`.
@@ -34,17 +34,18 @@ When you need to read a stock class, look it up under
 From WSL:
 
 ```bash
-./sync-and-build.sh   # rsyncs DXController/, deletes DXController.u, runs UCC.exe make
+./sync-and-build.sh   # rsyncs DXController/ and DeusEx/, two-pass UCC build
 ```
 
-The script does three things in order: rsync `DXController/` to
-`$BUILD_DIR/DXController/`, delete `$BUILD_DIR/System/DXController.u`, run
-`UCC.exe make` from `$BUILD_DIR/System`. Pass `-n` for a dry run (rsync
+The script rsyncs `DXController/` and `DeusEx/` onto `$BUILD_DIR/`, then
+runs `UCC.exe make` twice: pass 1 deletes and rebuilds `DeusEx.u`
+(tolerating a known UCC GPF — see below); pass 2 deletes and rebuilds
+`DXController.u` in a fresh UCC process. Pass `-n` for a dry run (rsync
 preview only, no build). Override the build dir with `BUILD_DIR=/path`.
 
 `UCC.exe` lives in `…/System/`. The compiler walks every package in
 `EditPackages` and emits `<Pkg>.u` next to it. If a `.u` already exists it is
-**not** rebuilt, which is why the script deletes `DXController.u` on every run.
+**not** rebuilt, which is why the script deletes both `.u` files on every run.
 
 `DeusEx.ini` needs `EditPackages=DXController` appended to the `EditPackages`
 block for the compiler to see this package, plus whatever ini rebindings the
@@ -122,8 +123,8 @@ can mask further changes the user makes on the native side.
   are `IK_UnknownF0..F3` instead of `IK_JoyPov{Up,Down,Left,Right}`).
   `Console extends Object`, so Actor's enum is not in scope here at
   all — the stale copy is what the compiler resolves in `Console` and
-  its subclasses. Since we don't rebuild `Engine.u` (see "Overriding
-  base-game classes" below), reach the missing slots by their
+  its subclasses. Since we don't rebuild `Engine.u` (see "Packages
+  that can't be rebuilt" below), reach the missing slots by their
   `IK_UnknownXX` names instead (e.g. `case IK_UnknownF0:` for D-pad up).
 - See `scripting-reference.txt` at the repo root for a fuller language
   rundown — much of the modern UScript material online does not apply here.
@@ -231,7 +232,8 @@ The engine's first script-side entry point for any key/axis event is
 arrive with `IST_Press` / `IST_Release`. State-scoped overrides exist
 (`Typing`, `Menuing`, etc.); the `Typing` override forwards to
 `global.KeyEvent`, the menu states do not. To hook the stream without
-rebuilding `Engine.u`, subclass `Console` per the override section above.
+rebuilding `Engine.u`, subclass `Console` per the "Packages that can't
+be rebuilt" section above.
 
 ### Native input handler: `Extension.InputExt`
 
