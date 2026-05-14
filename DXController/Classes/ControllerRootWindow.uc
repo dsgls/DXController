@@ -58,7 +58,7 @@ function int FindPersonaScreenIndex(Class<PersonaScreenBaseWindow> c)
     local int i;
     if (c == None)
         return -1;
-    for (i = 0; i < 8; i++)
+    for (i = 0; i < ArrayCount(PersonaScreens); i++)
     {
         if (PersonaScreens[i] == c)
             return i;
@@ -79,9 +79,9 @@ function ShowAdjacentPersonaScreen(int direction)
     if (idx < 0)
         return;
 
-    // Modulo 8 wrap. UScript's % keeps the sign of the dividend, so add
-    // 8 before taking the mod to handle direction = -1 cleanly.
-    idx = (idx + direction + 8) % 8;
+    // UScript's % keeps the sign of the dividend, so add ArrayCount
+    // before the modulus to handle direction = -1 cleanly.
+    idx = (idx + direction + ArrayCount(PersonaScreens)) % ArrayCount(PersonaScreens);
 
     // Mirror PersonaNavBarWindow.ButtonActivated: persist current screen
     // state, then invoke the next one. InvokeUIScreen pops the existing
@@ -90,9 +90,6 @@ function ShowAdjacentPersonaScreen(int direction)
     top.SaveSettings();
     InvokeUIScreen(PersonaScreens[idx]);
 }
-
-function ShowPrevPersonaScreen() { ShowAdjacentPersonaScreen(-1); }
-function ShowNextPersonaScreen() { ShowAdjacentPersonaScreen(+1); }
 
 defaultproperties
 {

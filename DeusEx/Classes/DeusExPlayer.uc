@@ -12121,25 +12121,14 @@ function OnGamepadRightTrigger(float value)
 function OnGamepadCrouchPress()   { bDuck = 1; }
 function OnGamepadCrouchRelease() { bDuck = 0; }
 
-// Walks rootWindow.GetTopWindow() up the parent-owner chain looking
-// for the first PersonaScreenBaseWindow ancestor. Returns None if no
-// persona screen is anywhere in the chain.
 function PersonaScreenBaseWindow FindTopPersonaScreen()
 {
     local DeusExRootWindow root;
-    local Window w;
 
     root = DeusExRootWindow(rootWindow);
     if (root == None)
         return None;
-    w = root.GetTopWindow();
-    while (w != None)
-    {
-        if (PersonaScreenBaseWindow(w) != None)
-            return PersonaScreenBaseWindow(w);
-        w = w.GetParent();
-    }
-    return None;
+    return PersonaScreenBaseWindow(root.GetTopWindow());
 }
 // === DXController additions: END ===
 
