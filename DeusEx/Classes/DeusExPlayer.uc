@@ -12289,6 +12289,18 @@ function OnGamepadWeaponWheel(bool bPressed)
     else
         bGamepadLBHeld = false;
 }
+
+// Called by ControllerConsole on every IK_Joy6 (RB) press/release.
+// State-only; the DXController-side ControllerConsole performs the
+// radial Open/Close call (see CLAUDE.md: "DeusEx can't reference
+// DXController types").
+function OnGamepadAugWheel(bool bPressed)
+{
+    if (bPressed)
+        bGamepadRBHeld = true;
+    else
+        bGamepadRBHeld = false;
+}
 // === DXController additions: END ===
 
 // ----------------------------------------------------------------------

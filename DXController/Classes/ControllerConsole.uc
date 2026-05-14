@@ -94,6 +94,31 @@ event bool KeyEvent(EInputKey Key, EInputAction Action, FLOAT Delta)
             return true;
         }
     }
+    else if (Key == IK_Joy6)
+    {
+        if (Action == IST_Press)
+        {
+            if (!p.bGamepadRBHeld)
+            {
+                root = ControllerRootWindow(p.rootWindow);
+                p.OnGamepadAugWheel(true);
+                if (root != None && root.radial != None)
+                    root.radial.Open(root.radial.WM_Aug);
+            }
+            return true;
+        }
+        if (Action == IST_Release)
+        {
+            if (p.bGamepadRBHeld)
+            {
+                root = ControllerRootWindow(p.rootWindow);
+                p.OnGamepadAugWheel(false);
+                if (root != None && root.radial != None)
+                    root.radial.Close(true);
+            }
+            return true;
+        }
+    }
 
     return Super.KeyEvent(Key, Action, Delta);
 }
