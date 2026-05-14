@@ -34,6 +34,8 @@ var int   mode;            // WM_None | WM_Weapon | WM_Aug
 var float stickX, stickY;  // latest right-stick sample, -1000..1000
 var int   highlightedSlot; // 0..9 or -1 if in deadzone / wheel closed
 var Augmentation augSlots[10];  // null where slot is empty
+var Color colAugActive;
+var Color colAugInactive;
 
 function Open(int newMode)
 {
@@ -188,20 +190,20 @@ event DrawWindow(GC gc)
 {
     local int i;
     local float cx, cy;
-    local Color tintIcon, tintFrame, tintDim;
-    local Inventory inv;
+    local Color tintFrame, tintWhite, tintDim, tintAug;
     local DeusExRootWindow root;
     local HUDObjectBelt belt;
+    local Inventory inv;
+    local Augmentation aug;
 
     Super.DrawWindow(gc);
 
-    if (!bOpen || mode != WM_Weapon)
+    if (!bOpen)
         return;
 
     root = DeusExRootWindow(GetRootWindow());
-    if (root == None || root.hud == None || root.hud.belt == None)
+    if (root == None)
         return;
-    belt = root.hud.belt;
 
     cx = width  * 0.5;
     cy = height * 0.5;
@@ -209,15 +211,35 @@ event DrawWindow(GC gc)
     // Pull the HUD theme colour for our accent (colBorder is maintained by
     // HUDBaseWindow.StyleChanged and stays in sync with theme changes).
     tintFrame = colBorder;
-    tintIcon  = ColorAlpha(255, 255, 255, 255);
+    tintWhite = ColorAlpha(255, 255, 255, 255);
     tintDim   = ColorAlpha(80, 80, 80, 255);
 
     gc.EnableTranslucency(true);
 
-    for (i = 0; i < 10; i++)
+    if (mode == WM_Weapon)
     {
-        inv = belt.objects[i].GetItem();
-        DrawSlot(gc, i, cx, cy, inv, (i == highlightedSlot), tintFrame, tintIcon, tintDim);
+        if (root.hud == None || root.hud.belt == None)
+            return;
+        belt = root.hud.belt;
+        for (i = 0; i < 10; i++)
+        {
+            inv = belt.objects[i].GetItem();
+            DrawSlot(gc, i, cx, cy, inv, (i == highlightedSlot),
+                     tintFrame, tintWhite, tintDim);
+        }
+    }
+    else if (mode == WM_Aug)
+    {
+        for (i = 0; i < 10; i++)
+        {
+            aug = augSlots[i];
+            if (aug != None && aug.IsActive())
+                tintAug = colAugActive;
+            else
+                tintAug = colAugInactive;
+            DrawAugSlot(gc, i, cx, cy, aug, (i == highlightedSlot),
+                        tintFrame, tintAug, tintDim);
+        }
     }
 }
 
@@ -265,6 +287,53 @@ function DrawSlot(GC gc, int slotIdx, float cx, float cy,
     }
 }
 
+function DrawAugSlot(GC gc, int slotIdx, float cx, float cy,
+                     Augmentation aug, bool bSelected,
+                     Color tintFrame, Color tintAug, Color tintDim)
+{
+    local float angleDeg, angleRad;
+    local float sx, sy, size, x, y;
+    local float frameSize, fx, fy;
+    local Texture iconTex;
+
+    angleDeg = slotIdx * 36.0;
+    angleRad = angleDeg / DegreesPerRadian;
+    sx = cx + WheelRadius * Sin(angleRad);
+    sy = cy - WheelRadius * Cos(angleRad);
+
+    size = IconSize;
+    if (bSelected)
+        size = IconSize * IconSelScale;
+    x = sx - size * 0.5;
+    y = sy - size * 0.5;
+
+    if (bSelected)
+    {
+        frameSize = size + 2.0 * FramePadding;
+        fx = sx - frameSize * 0.5;
+        fy = sy - frameSize * 0.5;
+        gc.SetTileColor(tintFrame);
+        gc.DrawTexture(fx, fy, frameSize, frameSize, 0, 0, Texture'Engine.WhiteTexture');
+    }
+
+    if (aug != None)
+    {
+        iconTex = aug.smallIcon;
+        if (iconTex == None)
+            iconTex = aug.Icon;
+        if (iconTex != None)
+        {
+            gc.SetTileColor(tintAug);
+            gc.DrawTexture(x, y, size, size, 0, 0, iconTex);
+        }
+    }
+    else
+    {
+        gc.SetTileColor(tintDim);
+        gc.DrawTexture(x, y, size, size, 0, 0, Texture'Engine.WhiteTexture');
+    }
+}
+
 function Color ColorAlpha(int r, int g, int b, int a)
 {
     local Color c;
@@ -280,4 +349,6 @@ defaultproperties
     bOpen=False
     mode=0
     highlightedSlot=-1
+    colAugActive=(R=255,G=255,B=0,A=255)
+    colAugInactive=(R=100,G=100,B=100,A=255)
 }
