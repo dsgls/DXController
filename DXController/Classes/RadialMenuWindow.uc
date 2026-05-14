@@ -7,12 +7,13 @@
 // the wheel — see CLAUDE.md "Input flow" section).
 //
 // State machine:
-//   - bOpen = false      : window invisible, ticks idle.
-//   - Open(WM_Weapon)    : begin showing the weapon wheel.
-//   - Open(WM_Aug)       : begin showing the aug wheel.
+//   - bOpen = false, bClosing = false : window invisible, ticks idle.
+//   - Open(WM_Weapon)    : begin showing the weapon wheel (fades in).
+//   - Open(WM_Aug)       : begin showing the aug wheel (fades in).
 //   - UpdateStick(x, y)  : called every right-stick axis event while open.
-//   - Close(bApply)      : tear down. If bApply, dispatch the selected
-//                          action (equip / unequip / toggle).
+//   - Close(bApply)      : dispatch selection at button-release time, then
+//                          fade out. bOpen becomes false immediately;
+//                          bClosing stays true until openAlpha reaches 0.
 //=============================================================================
 class RadialMenuWindow extends HUDBaseWindow;
 
@@ -37,11 +38,18 @@ var Augmentation augSlots[10];  // null where slot is empty
 var Color colAugActive;
 var Color colAugInactive;
 
+// Fade state.
+var float openAlpha;       // 0..1
+var bool  bClosing;        // true while fading out (bOpen is already false)
+var float lastDrawTime;    // for per-frame delta computation in DrawWindow
+
 function Open(int newMode)
 {
     if (bOpen)
         return;
     bOpen = true;
+    bClosing = false;
+    openAlpha = 0.0;
     mode = newMode;
     stickX = 0;
     stickY = 0;
@@ -160,8 +168,10 @@ function Close(bool bApply)
         $ " action=" $ actionLog);
 
     bOpen = false;
-    mode = WM_None;
+    bClosing = true;
     highlightedSlot = -1;
+    // mode stays set until fade-out completes — so DrawWindow can still
+    // render the right wheel type during the fade.
 }
 
 // Returns angle in degrees clockwise from "up", 0..360.
@@ -245,6 +255,7 @@ event DrawWindow(GC gc)
 {
     local int i;
     local float cx, cy;
+    local float now, delta;
     local Color tintFrame, tintWhite, tintDim, tintAug;
     local DeusExRootWindow root;
     local HUDObjectBelt belt;
@@ -253,8 +264,39 @@ event DrawWindow(GC gc)
 
     Super.DrawWindow(gc);
 
-    if (!bOpen)
+    if (!bOpen && !bClosing)
         return;
+
+    // Per-frame fade animation. Use Level.TimeSeconds because RefreshHUDDisplay
+    // is throttled to 4 Hz upstream and would produce a step-jump rather than
+    // a smooth fade.
+    if (player != None)
+    {
+        now = player.Level.TimeSeconds;
+        if (lastDrawTime <= 0.0)
+            delta = 0.0;          // first frame since open/reopen
+        else
+            delta = now - lastDrawTime;
+        lastDrawTime = now;
+
+        // Long delta = wheel was closed for a while, reset cleanly.
+        if (delta > 0.5)
+            delta = 0.0;
+
+        if (bOpen && !bClosing)
+            openAlpha = FMin(1.0, openAlpha + delta / 0.08);
+        else if (bClosing)
+        {
+            openAlpha = FMax(0.0, openAlpha - delta / 0.08);
+            if (openAlpha <= 0.0)
+            {
+                bClosing = false;
+                mode = WM_None;
+                lastDrawTime = 0.0;
+                return;  // fade-out done, nothing to draw
+            }
+        }
+    }
 
     root = DeusExRootWindow(GetRootWindow());
     if (root == None)
@@ -280,7 +322,7 @@ event DrawWindow(GC gc)
         {
             inv = belt.objects[i].GetItem();
             DrawSlot(gc, i, cx, cy, inv, (i == highlightedSlot),
-                     tintFrame, tintWhite, tintDim);
+                     tintFrame, tintWhite, tintDim, openAlpha);
         }
     }
     else if (mode == WM_Aug)
@@ -293,16 +335,17 @@ event DrawWindow(GC gc)
             else
                 tintAug = colAugInactive;
             DrawAugSlot(gc, i, cx, cy, aug, (i == highlightedSlot),
-                        tintFrame, tintAug, tintDim);
+                        tintFrame, tintAug, tintDim, openAlpha);
         }
     }
 
-    DrawCentreReadout(gc, cx, cy, tintFrame, tintWhite);
+    DrawCentreReadout(gc, cx, cy, tintFrame, tintWhite, openAlpha);
 }
 
 function DrawSlot(GC gc, int slotIdx, float cx, float cy,
                   Inventory inv, bool bSelected,
-                  Color tintFrame, Color tintIcon, Color tintDim)
+                  Color tintFrame, Color tintIcon, Color tintDim,
+                  float alpha)
 {
     local float angleDeg, angleRad;
     local float sx, sy;             // slot centre
@@ -327,26 +370,27 @@ function DrawSlot(GC gc, int slotIdx, float cx, float cy,
         frameSize = size + 2.0 * FramePadding;
         fx = sx - frameSize * 0.5;
         fy = sy - frameSize * 0.5;
-        gc.SetTileColor(tintFrame);
+        gc.SetTileColor(ScaleAlpha(tintFrame, alpha));
         gc.DrawTexture(fx, fy, frameSize, frameSize, 0, 0, Texture'Engine.WhiteTexture');
     }
 
     if (inv != None && inv.Icon != None)
     {
-        gc.SetTileColor(tintIcon);
+        gc.SetTileColor(ScaleAlpha(tintIcon, alpha));
         gc.DrawTexture(x, y, size, size, 0, 0, inv.Icon);
     }
     else
     {
         // Empty slot — dim placeholder frame, no icon.
-        gc.SetTileColor(tintDim);
+        gc.SetTileColor(ScaleAlpha(tintDim, alpha));
         gc.DrawTexture(x, y, size, size, 0, 0, Texture'Engine.WhiteTexture');
     }
 }
 
 function DrawAugSlot(GC gc, int slotIdx, float cx, float cy,
                      Augmentation aug, bool bSelected,
-                     Color tintFrame, Color tintAug, Color tintDim)
+                     Color tintFrame, Color tintAug, Color tintDim,
+                     float alpha)
 {
     local float angleDeg, angleRad;
     local float sx, sy, size, x, y;
@@ -369,7 +413,7 @@ function DrawAugSlot(GC gc, int slotIdx, float cx, float cy,
         frameSize = size + 2.0 * FramePadding;
         fx = sx - frameSize * 0.5;
         fy = sy - frameSize * 0.5;
-        gc.SetTileColor(tintFrame);
+        gc.SetTileColor(ScaleAlpha(tintFrame, alpha));
         gc.DrawTexture(fx, fy, frameSize, frameSize, 0, 0, Texture'Engine.WhiteTexture');
     }
 
@@ -380,18 +424,19 @@ function DrawAugSlot(GC gc, int slotIdx, float cx, float cy,
             iconTex = aug.Icon;
         if (iconTex != None)
         {
-            gc.SetTileColor(tintAug);
+            gc.SetTileColor(ScaleAlpha(tintAug, alpha));
             gc.DrawTexture(x, y, size, size, 0, 0, iconTex);
         }
     }
     else
     {
-        gc.SetTileColor(tintDim);
+        gc.SetTileColor(ScaleAlpha(tintDim, alpha));
         gc.DrawTexture(x, y, size, size, 0, 0, Texture'Engine.WhiteTexture');
     }
 }
 
-function DrawCentreReadout(GC gc, float cx, float cy, Color tintFrame, Color tintText)
+function DrawCentreReadout(GC gc, float cx, float cy,
+                           Color tintFrame, Color tintText, float alpha)
 {
     local DeusExRootWindow root;
     local HUDObjectBelt belt;
@@ -453,10 +498,10 @@ function DrawCentreReadout(GC gc, float cx, float cy, Color tintFrame, Color tin
     panelH = 40;
     panelX = cx - panelW * 0.5;
     panelY = cy - panelH * 0.5;
-    gc.SetTileColor(tintFrame);
+    gc.SetTileColor(ScaleAlpha(tintFrame, alpha));
     gc.DrawTexture(panelX, panelY, panelW, panelH, 0, 0, Texture'Engine.WhiteTexture');
 
-    gc.SetTextColor(tintText);
+    gc.SetTextColor(ScaleAlpha(tintText, alpha));
     gc.SetFont(Font'DeusExUI.FontMenuSmall');
     gc.SetAlignments(HALIGN_Center, VALIGN_Top);
     gc.DrawText(panelX, panelY + 4, panelW, 16, nameLine);
@@ -473,11 +518,20 @@ function Color ColorAlpha(int r, int g, int b, int a)
     return c;
 }
 
+function Color ScaleAlpha(Color c, float scale)
+{
+    c.A = int(float(c.A) * scale);
+    return c;
+}
+
 defaultproperties
 {
     bOpen=False
     mode=0
     highlightedSlot=-1
+    openAlpha=0.0
+    bClosing=False
+    lastDrawTime=0.0
     colAugActive=(R=255,G=255,B=0,A=255)
     colAugInactive=(R=100,G=100,B=100,A=255)
 }
