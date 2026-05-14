@@ -95,6 +95,7 @@ function Close(bool bApply)
     local DeusExRootWindow root;
     local HUDObjectBelt belt;
     local Inventory inv;
+    local Augmentation aug;
     local string actionLog;
 
     if (!bOpen)
@@ -123,7 +124,23 @@ function Close(bool bApply)
                 }
             }
         }
-        // Aug branch will be added in Task 8.
+        else if (mode == WM_Aug)
+        {
+            aug = augSlots[highlightedSlot];
+            if (aug != None)
+            {
+                if (aug.IsActive())
+                {
+                    aug.Deactivate();
+                    actionLog = "deactivate";
+                }
+                else
+                {
+                    aug.Activate();
+                    actionLog = "activate";
+                }
+            }
+        }
     }
 
     Log("DXC-WHEEL CLOSE slot=" $ string(highlightedSlot)
