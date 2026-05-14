@@ -103,6 +103,19 @@ function Close(bool bApply)
 
     actionLog = "cancel";
 
+    // If a non-HUD window is on top at close time, the close was triggered
+    // by Extension.InputExt's synthesised release (UI took focus mid-hold).
+    // Demote to cancel so we don't accidentally equip/toggle.
+    if (bApply)
+    {
+        root = DeusExRootWindow(GetRootWindow());
+        if (root != None && root.GetTopWindow() != None)
+        {
+            bApply = false;
+            actionLog = "cancel-ui";
+        }
+    }
+
     if (bApply && highlightedSlot >= 0)
     {
         if (mode == WM_Weapon)
