@@ -102,8 +102,8 @@ JoyR=
 | B              | Reload                          |
 | X              | Use / interact                  |
 | Y              | unbound                         |
-| LB             | Lean left                       |
-| RB             | Lean right                      |
+| LB             | Inventory equip wheel           |
+| RB             | Augmentation equip wheel        |
 | Back           | Toggle inventory / persona menu |
 | Start          | Main menu                       |
 | L-stick click  | Crouch                          |
