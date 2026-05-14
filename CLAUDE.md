@@ -283,27 +283,35 @@ shim doesn't need its own edge filter.
 The C++-side XInput shim feeds these `EInputKey` slots into
 `Console.KeyEvent`:
 
-| XInput source   | UE `EInputKey`        | Byte        | Action          |
-|-----------------|-----------------------|-------------|-----------------|
-| Left stick X    | `IK_JoyX`             | 0xE0        | `IST_Axis`      |
-| Left stick Y    | `IK_JoyY`             | 0xE1        | `IST_Axis`      |
-| Left trigger    | `IK_JoyZ`             | 0xE2        | `IST_Axis`      |
-| Right trigger   | `IK_JoyR`             | 0xE3        | `IST_Axis`      |
-| Right stick X   | `IK_JoyU`             | 0xE8        | `IST_Axis`      |
-| Right stick Y   | `IK_JoyV`             | 0xE9        | `IST_Axis`      |
-| D-pad Up        | `IK_JoyPovUp`†        | 0xF0        | Press / Release |
-| D-pad Down      | `IK_JoyPovDown`†      | 0xF1        | Press / Release |
-| D-pad Left      | `IK_JoyPovLeft`†      | 0xF2        | Press / Release |
-| D-pad Right     | `IK_JoyPovRight`†     | 0xF3        | Press / Release |
-| Face / shoulder / stick-click buttons | `IK_Joy1`–`IK_Joy16` | 0xC8–0xD7 | Press / Release |
+| XInput source              | UE `EInputKey`        | Byte        | Action          |
+|----------------------------|-----------------------|-------------|-----------------|
+| Left stick X               | `IK_JoyX`             | 0xE0        | `IST_Axis`      |
+| Left stick Y               | `IK_JoyY`             | 0xE1        | `IST_Axis`      |
+| Left trigger               | `IK_JoyZ`             | 0xE2        | `IST_Axis`      |
+| Right trigger              | `IK_JoyR`             | 0xE3        | `IST_Axis`      |
+| Right stick X              | `IK_JoyU`             | 0xE8        | `IST_Axis`      |
+| Right stick Y              | `IK_JoyV`             | 0xE9        | `IST_Axis`      |
+| A button                   | `IK_Joy1`             | 0xC8        | Press / Release |
+| B button                   | `IK_Joy2`             | 0xC9        | Press / Release |
+| X button                   | `IK_Joy3`             | 0xCA        | Press / Release |
+| Y button                   | `IK_Joy4`             | 0xCB        | Press / Release |
+| Left shoulder (LB)         | `IK_Joy5`             | 0xCC        | Press / Release |
+| Right shoulder (RB)        | `IK_Joy6`             | 0xCD        | Press / Release |
+| Back button                | `IK_Joy7`             | 0xCE        | Press / Release |
+| Start button               | `IK_Joy8`             | 0xCF        | Press / Release |
+| Left stick click           | `IK_Joy9`             | 0xD0        | Press / Release |
+| Right stick click          | `IK_Joy10`            | 0xD1        | Press / Release |
+| D-pad Up                   | `IK_JoyPovUp`†        | 0xF0        | Press / Release |
+| D-pad Down                 | `IK_JoyPovDown`†      | 0xF1        | Press / Release |
+| D-pad Left                 | `IK_JoyPovLeft`†      | 0xF2        | Press / Release |
+| D-pad Right                | `IK_JoyPovRight`†     | 0xF3        | Press / Release |
 
 † Modern names from `Actor.uc`. In `Console`-scope these slots are
 `IK_UnknownF0..F3` (Console.uc's stale enum) — see quirk above.
 
-The 10 XInput controller buttons (A / B / X / Y, LB / RB, Back / Start,
-LStickBtn / RStickBtn) are assigned into `IK_Joy1`..`IK_Joy16` by the
-C++ shim; the specific button-to-slot mapping is owned by that side.
-Axes are delivered as a continuous stream.
+Axes are delivered as a continuous stream. The button-to-slot mapping
+is owned by the C++ shim and the table above mirrors its current
+assignments; if the shim's mapping changes, update the table to match.
 
 #### Axis value range: `-1000..1000`
 

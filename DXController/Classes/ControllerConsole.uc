@@ -32,6 +32,16 @@ event bool KeyEvent(EInputKey Key, EInputAction Action, FLOAT Delta)
             p.OnGamepadRightTrigger(Delta);
             return false;
         }
+        if (Key == IK_JoyX)
+        {
+            p.OnGamepadLeftStick(Delta, p.GamepadStickY);
+            return false;
+        }
+        if (Key == IK_JoyY)
+        {
+            p.OnGamepadLeftStick(p.GamepadStickX, Delta);
+            return false;
+        }
     }
     else if (Key == IK_Joy9)
     {
