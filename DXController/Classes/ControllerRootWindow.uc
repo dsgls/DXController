@@ -20,6 +20,14 @@ class ControllerRootWindow extends DeusExRootWindow;
 // (../deusex-scripts/DeusEx/Classes/PersonaNavBarWindow.uc:28-40 with
 // buttons created in reverse to render left-to-right).
 var Class<PersonaScreenBaseWindow> PersonaScreens[8];
+var RadialMenuWindow radial;
+
+event InitWindow()
+{
+    Super.InitWindow();
+    radial = RadialMenuWindow(NewChild(Class'RadialMenuWindow'));
+    radial.SetWindowAlignments(HALIGN_Full, VALIGN_Full, 0, 0);
+}
 
 event bool VirtualKeyPressed(EInputKey key, bool bRepeat)
 {
