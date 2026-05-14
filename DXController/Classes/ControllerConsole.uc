@@ -46,8 +46,10 @@ event bool KeyEvent(EInputKey Key, EInputAction Action, FLOAT Delta)
         if (Key == IK_JoyU || Key == IK_JoyV)
         {
             root = ControllerRootWindow(p.rootWindow);
-            if (root != None && root.radial != None && root.radial.bOpen)
+            if (root != None && root.radial != None && root.radial.IsViewLocked())
             {
+                // UpdateStick short-circuits when !bOpen, so calling it during
+                // the post-close grace window is a no-op past the field write.
                 if (Key == IK_JoyU)
                     root.radial.UpdateStick(Delta, root.radial.stickY);
                 else

@@ -25,6 +25,7 @@ const WM_Aug    = 2;
 
 const StickDeadzone     = 300.0;    // ~30% of the -1000..1000 axis range
 const DegreesPerRadian  = 57.2957795;
+const ViewLockGrace     = 0.2;      // seconds after close where RS still swallowed
 
 const WheelRadius      = 130.0;   // pixels from screen-centre to each icon's centre
 const IconSize         = 48.0;    // base icon edge length, pixels
@@ -45,6 +46,11 @@ var Color colAugInactive;
 var float openAlpha;       // 0..1
 var bool  bClosing;        // true while fading out (bOpen is already false)
 var float lastDrawTime;    // for per-frame delta computation in DrawWindow
+
+// Level.TimeSeconds value until which RS axis events should still be
+// swallowed after the wheel has closed. Prevents the camera from jerking
+// when the user releases LB/RB before re-centring the right stick.
+var float viewLockUntil;
 
 function DebugLog(string msg)
 {
@@ -179,8 +185,21 @@ function Close(bool bApply)
     bOpen = false;
     bClosing = true;
     highlightedSlot = -1;
+    if (player != None)
+        viewLockUntil = player.Level.TimeSeconds + ViewLockGrace;
     // mode stays set until fade-out completes — so DrawWindow can still
     // render the right wheel type during the fade.
+}
+
+// True while RS events should still bypass the camera-look binding —
+// either the wheel is open, or we're inside the post-close grace window.
+function bool IsViewLocked()
+{
+    if (bOpen)
+        return true;
+    if (player != None && player.Level.TimeSeconds < viewLockUntil)
+        return true;
+    return false;
 }
 
 // Returns angle in degrees clockwise from "up", 0..360.
