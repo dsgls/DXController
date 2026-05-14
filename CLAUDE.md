@@ -266,9 +266,19 @@ exists, else to the global one. A subclass that only overrides
 To hook every path, redeclare the state on the subclass and override the
 function there too. `Super.X` inside a state block resolves to the
 parent's same-state body, not parent's global — exactly what a pre/post
-hook wants. Use `state Foo extends Foo` to inherit the parent state body
-and replace only specific methods (preserves labels, latent code, and
-sibling state-scoped functions).
+hook wants. The redeclared state inherits the parent's other state-scoped
+functions, labels, and latent code unless explicitly overridden, so the
+override is a partial replacement, not a full reimplementation.
+
+**Canonical example in this codebase:** `ControllerConsole.state Menuing`
+(`DXController/Classes/ControllerConsole.uc`, bottom of file). Stock
+`Console.state Menuing.KeyEvent` short-circuits on `Action != IST_Press`
+and so drops every axis event. The override forwards stick axes (X/Y/U/V)
+to `global.KeyEvent` so the class-scoped handler's axis branch — radial
+`UpdateStick`, nav-controller `HandleScroll` — runs in menu mode.
+Triggers stay on `Super` so they don't fire weapons mid-menu. Mirrors
+stock `Console.state Typing.KeyEvent`'s use of `global.KeyEvent` at
+`Engine/Classes/Console.uc:635`.
 
 ### Limits
 
@@ -331,12 +341,19 @@ It also:
   event. Routes the keystroke into `rootWindow.Key` so UI text controls
   get a typing channel that is separate from the binding system.
 
-**Implication for the XInput work:** axis events from the C++ shim flow
-through the standard binding path unchanged *unless* a UI surface is
-open, in which case `rootWindow.Process` swallows them and gameplay
-never sees the deltas. Button press/release events (`IK_Joy1`–
-`IK_Joy16`, D-pad slots) are already de-duplicated by InputExt, so the
-shim doesn't need its own edge filter.
+**Implication for the XInput work:** axis events from the C++ shim
+reach `Console.KeyEvent` on every frame regardless of UI state —
+`Console.KeyEvent` runs upstream of `InputExt::Process`, so InputExt's
+"UI gets first refusal" only affects the *binding-dispatch* path
+downstream. What can make axes appear dead in script is a separate
+quirk in stock `Console`: `state Menuing.KeyEvent` short-circuits
+`Action != IST_Press`, so once `PushWindow` → `UIPauseGame` →
+`ShowMenu` puts the console in `Menuing`, axis events never reach
+`global.KeyEvent`. The fix is a subclass-side state override (see
+"State-scoped dispatch → Canonical example"), not anything on the
+native side. Button press/release events (`IK_Joy1`–`IK_Joy16`, D-pad
+slots) are already de-duplicated by InputExt, so the shim doesn't need
+its own edge filter.
 
 ### XInput → UE event mapping
 
