@@ -359,6 +359,8 @@ var Computers ActiveComputer;
 // === DXController additions: BEGIN ===
 var travel Class<PersonaScreenBaseWindow> LastPersonaScreen;
 var bool bGamepadLeftTriggerHeld, bGamepadRightTriggerHeld;
+var bool bGamepadLBHeld;
+var bool bGamepadRBHeld;
 const GamepadTriggerThreshold = 0.3;
 
 // L-stick deflection state — latched on every IK_JoyX/IK_JoyY axis event
@@ -12275,6 +12277,17 @@ final function float ApplyGamepadSpeedScale(float speedCap)
 
     scaled = speedCap * mag;
     return FMax(scaled, GamepadMinScaledSpeed);
+}
+
+// Called by ControllerConsole on every IK_Joy5 (LB) press/release.
+// Tracks held state; the actual radial open/close is done in ControllerConsole
+// (DXController package) to avoid a forward-reference to ControllerRootWindow.
+function OnGamepadWeaponWheel(bool bPressed)
+{
+    if (bPressed)
+        bGamepadLBHeld = true;
+    else
+        bGamepadLBHeld = false;
 }
 // === DXController additions: END ===
 

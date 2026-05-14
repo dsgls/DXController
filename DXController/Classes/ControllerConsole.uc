@@ -14,6 +14,7 @@ class ControllerConsole extends Console;
 event bool KeyEvent(EInputKey Key, EInputAction Action, FLOAT Delta)
 {
     local DeusExPlayer p;
+    local ControllerRootWindow root;
 
     if (Viewport != None)
         p = DeusExPlayer(Viewport.Actor);
@@ -53,6 +54,31 @@ event bool KeyEvent(EInputKey Key, EInputAction Action, FLOAT Delta)
         if (Action == IST_Release)
         {
             p.OnGamepadCrouchRelease();
+            return true;
+        }
+    }
+    else if (Key == IK_Joy5)
+    {
+        if (Action == IST_Press)
+        {
+            if (!p.bGamepadLBHeld)
+            {
+                root = ControllerRootWindow(p.rootWindow);
+                p.OnGamepadWeaponWheel(true);
+                if (root != None && root.radial != None)
+                    root.radial.Open(root.radial.WM_Weapon);
+            }
+            return true;
+        }
+        if (Action == IST_Release)
+        {
+            if (p.bGamepadLBHeld)
+            {
+                root = ControllerRootWindow(p.rootWindow);
+                p.OnGamepadWeaponWheel(false);
+                if (root != None && root.radial != None)
+                    root.radial.Close(true);
+            }
             return true;
         }
     }
