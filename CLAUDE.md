@@ -171,6 +171,24 @@ Within each modified file, additions live in a banner-delimited block:
 No edits to stock function bodies — pure additions. See
 `DeusEx/Classes/DeusExPlayer.uc` for the canonical example.
 
+### `DeusEx` can't reference `DXController` types
+
+`sync-and-build.sh` builds `DeusEx.u` in pass 1, then `DXController.u`
+in pass 2. So any UScript source under `DeusEx/Classes/` is compiled
+before `DXController` exists — code there cannot name a `DXController`
+type (e.g. `ControllerRootWindow`, `RadialMenuWindow`) without the
+compiler emitting `Unrecognized type 'X'`.
+
+Pattern when a `DeusEx`-side addition needs to interact with a
+`DXController` UI/orchestration object: keep the `DeusEx`-side code
+**state-only** (vars and pure setters/getters), and do all cross-class
+orchestration from `DXController` code (typically `ControllerConsole`
+or `ControllerRootWindow`), reaching into the pawn via the pawn
+methods/vars. The crouch pair is the simplest precedent —
+`OnGamepadCrouchPress/Release` just write `bDuck`; the
+`ControllerConsole` side knows how to call them. The weapon-wheel LB
+handler (commit `22a7876`) follows the same split intentionally.
+
 ### Packages that can't be rebuilt
 
 `ucc batchexport` recovers scripts, textures, and sounds — not fonts or
