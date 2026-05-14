@@ -258,6 +258,8 @@ event DrawWindow(GC gc)
                         tintFrame, tintAug, tintDim);
         }
     }
+
+    DrawCentreReadout(gc, cx, cy, tintFrame, tintWhite);
 }
 
 function DrawSlot(GC gc, int slotIdx, float cx, float cy,
@@ -349,6 +351,78 @@ function DrawAugSlot(GC gc, int slotIdx, float cx, float cy,
         gc.SetTileColor(tintDim);
         gc.DrawTexture(x, y, size, size, 0, 0, Texture'Engine.WhiteTexture');
     }
+}
+
+function DrawCentreReadout(GC gc, float cx, float cy, Color tintFrame, Color tintText)
+{
+    local DeusExRootWindow root;
+    local HUDObjectBelt belt;
+    local Inventory inv;
+    local DeusExWeapon dxWeapon;
+    local Augmentation aug;
+    local string nameLine, statusLine;
+    local float panelW, panelH, panelX, panelY;
+
+    if (highlightedSlot < 0)
+        return;  // deadzone — nothing to show
+
+    nameLine = "";
+    statusLine = "";
+
+    if (mode == WM_Weapon)
+    {
+        root = DeusExRootWindow(GetRootWindow());
+        if (root == None || root.hud == None || root.hud.belt == None)
+            return;
+        belt = root.hud.belt;
+        inv = belt.objects[highlightedSlot].GetItem();
+        if (inv == None)
+        {
+            nameLine   = "(empty)";
+            statusLine = "";
+        }
+        else
+        {
+            nameLine = inv.ItemName;
+            dxWeapon = DeusExWeapon(inv);
+            if (dxWeapon != None && dxWeapon.AmmoType != None)
+                statusLine = string(dxWeapon.AmmoType.AmmoAmount)
+                           $ " / " $ string(dxWeapon.AmmoType.MaxAmmo);
+            else
+                statusLine = "";
+        }
+    }
+    else if (mode == WM_Aug)
+    {
+        aug = augSlots[highlightedSlot];
+        if (aug == None)
+        {
+            nameLine   = "(unassigned)";
+            statusLine = "";
+        }
+        else
+        {
+            nameLine = aug.AugmentationName;
+            if (aug.IsActive())
+                statusLine = "ACTIVE";
+            else
+                statusLine = "OFF";
+        }
+    }
+
+    // Background panel.
+    panelW = 180;
+    panelH = 40;
+    panelX = cx - panelW * 0.5;
+    panelY = cy - panelH * 0.5;
+    gc.SetTileColor(tintFrame);
+    gc.DrawTexture(panelX, panelY, panelW, panelH, 0, 0, Texture'Engine.WhiteTexture');
+
+    gc.SetTextColor(tintText);
+    gc.SetFont(Font'DeusExUI.FontMenuSmall');
+    gc.SetAlignments(HALIGN_Center, VALIGN_Top);
+    gc.DrawText(panelX, panelY + 4, panelW, 16, nameLine);
+    gc.DrawText(panelX, panelY + 20, panelW, 16, statusLine);
 }
 
 function Color ColorAlpha(int r, int g, int b, int a)
