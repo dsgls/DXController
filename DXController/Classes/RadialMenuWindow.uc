@@ -496,9 +496,9 @@ function DrawCentreReadout(GC gc, float cx, float cy,
         {
             nameLine = aug.AugmentationName;
             if (aug.IsActive())
-                statusLine = Sprintf(aug.EnergyRateLabel, Int(aug.EnergyRate)) $ "  ACTIVE";
+                statusLine = string(Int(aug.EnergyRate)) $ "/min  ACTIVE";
             else
-                statusLine = Sprintf(aug.EnergyRateLabel, Int(aug.EnergyRate)) $ "  OFF";
+                statusLine = string(Int(aug.EnergyRate)) $ "/min  OFF";
         }
     }
 

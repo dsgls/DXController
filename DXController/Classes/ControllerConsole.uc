@@ -73,7 +73,7 @@ event bool KeyEvent(EInputKey Key, EInputAction Action, FLOAT Delta)
     {
         if (Action == IST_Press)
         {
-            if (!p.bGamepadLBHeld && !p.bGamepadRBHeld)
+            if (!p.bGamepadLBHeld && !p.bGamepadRBHeld && !p.RestrictInput())
             {
                 root = ControllerRootWindow(p.rootWindow);
                 p.OnGamepadWeaponWheel(true);
@@ -98,7 +98,7 @@ event bool KeyEvent(EInputKey Key, EInputAction Action, FLOAT Delta)
     {
         if (Action == IST_Press)
         {
-            if (!p.bGamepadLBHeld && !p.bGamepadRBHeld)
+            if (!p.bGamepadLBHeld && !p.bGamepadRBHeld && !p.RestrictInput())
             {
                 root = ControllerRootWindow(p.rootWindow);
                 p.OnGamepadAugWheel(true);
