@@ -25,7 +25,8 @@ const WM_Aug    = 2;
 
 const StickDeadzone     = 300.0;    // ~30% of the -1000..1000 axis range
 const DegreesPerRadian  = 57.2957795;
-const ViewLockGrace     = 0.2;      // seconds after close where RS still swallowed
+const ViewLockGrace     = 0.05;     // seconds after close where RS still swallowed
+const FocusGrace        = 0.3;      // seconds after stick recentres where Close still dispatches last-focused slot
 
 const WheelRadius      = 130.0;   // pixels from screen-centre to each icon's centre
 const IconSize         = 48.0;    // base icon edge length, pixels
@@ -52,6 +53,17 @@ var float lastDrawTime;    // for per-frame delta computation in DrawWindow
 // when the user releases LB/RB before re-centring the right stick.
 var float viewLockUntil;
 
+// Sticky version of highlightedSlot used by Close's grace fallback.
+// Updated in UpdateStick whenever the stick is on a real segment;
+// retains its value when the stick re-enters the deadzone so the
+// most recently focused slot can still be dispatched if the button
+// is released within FocusGrace.
+var int   lastFocusedSlot;
+// Level.TimeSeconds at which highlightedSlot most recently transitioned
+// from a real slot back to -1 (deadzone). 0 means the grace clock has
+// never started this open-cycle.
+var float lastFocusTime;
+
 function DebugLog(string msg)
 {
     if (bGamepadDebugLog)
@@ -69,6 +81,8 @@ function Open(int newMode)
     stickX = 0;
     stickY = 0;
     highlightedSlot = -1;
+    lastFocusedSlot = -1;
+    lastFocusTime = 0.0;
     if (mode == WM_Aug)
         PopulateAugSlots();
     DebugLog("DXC-WHEEL OPEN mode=" $ string(newMode));
@@ -137,6 +151,17 @@ function Close(bool bApply)
             bApply = false;
             actionLog = "cancel-ui";
         }
+    }
+
+    // Grace fallback: if the stick is in the deadzone at close time but
+    // a slot was recently focused, dispatch that slot. Covers the
+    // recentre-then-release muscle pattern. Setting highlightedSlot here
+    // also makes the 80 ms fade-out render the dispatched slot as
+    // highlighted — the acknowledgment.
+    if (bApply && highlightedSlot < 0 && lastFocusedSlot >= 0 && player != None
+        && (player.Level.TimeSeconds - lastFocusTime) < FocusGrace)
+    {
+        highlightedSlot = lastFocusedSlot;
     }
 
     if (bApply && highlightedSlot >= 0)
@@ -252,6 +277,18 @@ function UpdateStick(float x, float y)
         // collapse this to a plain integer divide.
         slot = int((angle + 18.0) / 36.0) % 10;
         highlightedSlot = slot;
+    }
+
+    if (highlightedSlot >= 0)
+    {
+        lastFocusedSlot = highlightedSlot;
+    }
+    else if (oldSlot >= 0 && player != None)
+    {
+        // Transition from a real slot into the deadzone — start the
+        // grace clock so Close can resurrect lastFocusedSlot if the
+        // button is released soon after.
+        lastFocusTime = player.Level.TimeSeconds;
     }
 
     if (highlightedSlot != oldSlot)
