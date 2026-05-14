@@ -285,6 +285,9 @@ event bool VirtualKeyPressed(EInputKey key, bool bRepeat)
     // Back (Joy7): always close menu, ignore sub-dialogs (panic exit).
     if (key == IK_Joy7 && !bRepeat)
     {
+        class'DXControllerDebug'.static.DebugLog(
+            "DXC-NAV BACK-RECV p=" $ string(p != None)
+            $ " topPersona=" $ string(PersonaScreenBaseWindow(GetTopWindow()) != None));
         if (p != None)
             p.TogglePlayerMenuWindow();
         return true;

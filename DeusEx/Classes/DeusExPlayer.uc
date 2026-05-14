@@ -12104,7 +12104,15 @@ exec function TogglePlayerMenuWindow()
 
     root = DeusExRootWindow(rootWindow);
     if (root == None)
+    {
+        Log("DXC-NAV TPW root=None");
         return;
+    }
+
+    Log("DXC-NAV TPW LBHeld=" $ string(bGamepadLBHeld)
+        $ " RBHeld=" $ string(bGamepadRBHeld)
+        $ " Restrict=" $ string(RestrictInput())
+        $ " LastPS=" $ string(LastPersonaScreen));
 
     topPersona = FindTopPersonaScreen();
     if (topPersona != None)
