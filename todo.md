@@ -18,9 +18,9 @@ Button pictures have been added to assets/DXControllerBtn.utx (group XboxSeries,
 
 ## Bug to fix
 
-### Inventory screen B button
+### Skills screen B button
 
-The B button does not work on the persona inventory screen. On other persona screens it correctly exits the screen.
+The B button does not work on the persona skills screen. On other persona screens it correctly exits the screen.
 
 ### Main menu controller/mouse focus fighting
 
