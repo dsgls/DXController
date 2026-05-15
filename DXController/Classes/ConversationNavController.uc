@@ -107,10 +107,45 @@ function InitFocus()
 
     focusIndex = 0;
     focused = cwa.conChoices[0];
+    ApplyChoiceHighlight();
 
     class'DXControllerDebug'.static.DebugLog(
         "DXC-CONV INIT-FOCUS focusIndex=0 numChoices="
         $ string(cwa.numChoices));
+}
+
+// Drive vanilla ConChoiceWindow / ButtonWindow's text-color hover
+// highlight via synthesized MouseEnteredWindow / MouseLeftWindow calls.
+// CreateConButton (ConWindowActive:498) wires colConTextFocus as the
+// hover text color, so MouseEnteredWindow flips the text to yellow and
+// MouseLeftWindow restores it to colConTextChoice (blue) or
+// colConTextSkill (red, for skill-gated choices). The same primitive is
+// already used by ControllerRootWindow.ClearHoverRecursive — synthetic
+// hover dispatch is the engine's supported escape hatch.
+//
+// We do this instead of drawing a MenuFocusOverlay frame so the user
+// sees ONE focus indicator (the vanilla one), not two stacked on top
+// of each other. GetFocusedRect returns false below to suppress the
+// frame for conversation screens specifically; other controllers
+// (persona / menu / list / etc.) continue to use the frame overlay.
+function ApplyChoiceHighlight()
+{
+    local ConWindowActive cwa;
+    local int i;
+
+    cwa = ConWindowActive(screen);
+    if (cwa == None)
+        return;
+
+    for (i = 0; i < cwa.numChoices; i++)
+    {
+        if (cwa.conChoices[i] == None)
+            continue;
+        if (i == focusIndex)
+            cwa.conChoices[i].MouseEnteredWindow();
+        else
+            cwa.conChoices[i].MouseLeftWindow();
+    }
 }
 
 // ---- D-pad -----------------------------------------------------------------
@@ -144,6 +179,7 @@ function bool HandleDPad(int dx, int dy)
     // UScript % keeps sign of dividend; add n before mod to handle dy = -1.
     focusIndex = (focusIndex + dy + n) % n;
     focused = cwa.conChoices[focusIndex];
+    ApplyChoiceHighlight();
 
     class'DXControllerDebug'.static.DebugLog(
         "DXC-CONV DPAD dy=" $ string(dy)
@@ -232,10 +268,15 @@ function bool AllowsMenuToggle()
 
 // ---- Focus overlay rect ----------------------------------------------------
 
-// Inherit base implementation. ConChoiceWindow extends ButtonWindow extends
-// Window, so the base GetFocusedRect's ConvertCoordinates path works
-// without override. When focused == None (speech mode, cinematic, mid-flip)
-// the base returns false and MenuFocusOverlay skips drawing.
+// Conversations use the vanilla yellow-text choice highlight (driven
+// by ApplyChoiceHighlight), not the MenuFocusOverlay frame. Returning
+// false here keeps the overlay from drawing a second indicator on top.
+// Other nav controllers inherit the base implementation and keep the
+// frame.
+function bool GetFocusedRect(out float x, out float y, out float w, out float h)
+{
+    return false;
+}
 
 defaultproperties
 {
