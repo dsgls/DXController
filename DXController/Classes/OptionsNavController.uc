@@ -1,17 +1,27 @@
 //=============================================================================
 // OptionsNavController — D-pad navigation for MenuUIScreenWindow subclasses
-// that use the standard choices[] pattern.
+// that use the standard choices[] pattern, plus the bottom action bar.
 //
 // Wired screens: MenuScreenOptions, MenuScreenDisplay, MenuScreenSound,
-// MenuScreenControls, MenuScreenAdjustColors, MenuScreenBrightness.
-// Children (MenuUIChoice instances) live inside screen.winClient, not the
-// screen window itself.
+// MenuScreenControls, MenuScreenAdjustColors, MenuScreenBrightness. All
+// six have identical action-bar layouts (Cancel / OK / Reset Defaults).
 //
-// A button:      activates the focused choice (cycles enum/slider, or
-//                navigates for action choices — same as clicking btnAction).
-// D-pad up/down: moves focus among choices.
-// D-pad left:    CyclePreviousValue on the focused choice (no-op on actions).
-// D-pad right:   CycleNextValue on the focused choice (no-op on actions).
+// Linear focus cycle:
+//   Choice[0] ⇄ Choice[1] ⇄ … ⇄ Choice[last enabled] ⇄ Action bar ⇄ Choice[0]
+//
+// Inside the action bar (state bInActionBar):
+//   D-pad L/R walks [Reset] [OK] [Cancel] in visual order, no wraparound.
+//   A presses the focused button (same path as a mouse click).
+//   D-pad up exits to the last enabled choice.
+//   D-pad down wraps to the first enabled choice.
+//
+// Inside choices (default state):
+//   D-pad up/down moves focus among choices (existing behaviour).
+//   D-pad L/R cycles the focused choice's value (existing behaviour).
+//   A activates the focused choice (existing behaviour).
+//   D-pad down past last enabled choice → enter action bar at primary
+//     (OK by codebase convention; first sensitive in L→R as fallback).
+//   D-pad up at first enabled choice → enter action bar at primary.
 //=============================================================================
 class OptionsNavController extends MenuNavController;
 
@@ -20,6 +30,12 @@ class OptionsNavController extends MenuNavController;
 // ceiling that covers any future expansion.
 var MenuUIChoice choices[32];
 var int          choiceCount;
+
+// Action-bar state. Populated lazily on first transition into the bar.
+var bool                     bInActionBar;
+var MenuUIActionButtonWindow actionBtns[5];
+var int                      actionBtnCount;
+var int                      actionBtnIdx;
 
 function InitFocus()
 {
@@ -80,6 +96,19 @@ function int FindFirstEnabled()
     return -1;
 }
 
+// Walk choices[] from last to first; return the index of the last
+// enabled (sensitive) choice, or -1 if none.
+function int FindLastEnabled()
+{
+    local int i;
+    for (i = choiceCount - 1; i >= 0; i--)
+    {
+        if (IsEnabled(choices[i]))
+            return i;
+    }
+    return -1;
+}
+
 // A choice is enabled if its window is sensitive (can take input).
 // Window.bIsSensitive is a const bool updated by SetSensitivity/EnableWindow.
 function bool IsEnabled(MenuUIChoice w)
@@ -93,17 +122,87 @@ function bool HandleDPad(int dx, int dy)
 {
     local int step, newIdx, i;
 
-    if (choiceCount == 0)
-        return true;    // consume, nothing to do
+    if (choiceCount == 0 && !bInActionBar)
+        return true;        // nothing to do
 
-    // Up/Down: move focus.
+    // ---- L/R inside action bar ----
+    if (bInActionBar && dx != 0)
+    {
+        // Re-collect so dynamic sensitivity changes are honoured
+        // between presses (defensive — options screens don't toggle
+        // their action buttons mid-session, but the cost is trivial).
+        class'ActionBarNav'.static.CollectButtons(
+            MenuUIWindow(screen), actionBtns, actionBtnCount);
+        if (dx < 0)
+            actionBtnIdx = class'ActionBarNav'.static.MoveLeft(
+                actionBtns, actionBtnCount, actionBtnIdx);
+        else
+            actionBtnIdx = class'ActionBarNav'.static.MoveRight(
+                actionBtns, actionBtnCount, actionBtnIdx);
+        if (actionBtnCount > 0)
+            focused = actionBtns[actionBtnIdx];
+        class'DXControllerDebug'.static.DebugLog(
+            "DXC-NAV FOCUS options-ab idx=" $ string(actionBtnIdx));
+        return true;
+    }
+
+    // ---- Up/Down ----
     if (dy != 0)
     {
-        // dy > 0 = d-pad down = move to next (higher-index) choice.
-        if (dy > 0)
-            step = 1;
-        else
-            step = -1;
+        // Down from action bar → wrap to first enabled choice.
+        if (bInActionBar && dy > 0)
+        {
+            bInActionBar = false;
+            focusIndex = FindFirstEnabled();
+            if (focusIndex >= 0)
+                focused = choices[focusIndex];
+            else
+                focused = None;
+            class'DXControllerDebug'.static.DebugLog(
+                "DXC-NAV FOCUS options exit-ab → idx=" $ string(focusIndex));
+            return true;
+        }
+
+        // Up from action bar → last enabled choice.
+        if (bInActionBar && dy < 0)
+        {
+            bInActionBar = false;
+            focusIndex = FindLastEnabled();
+            if (focusIndex >= 0)
+                focused = choices[focusIndex];
+            else
+                focused = None;
+            class'DXControllerDebug'.static.DebugLog(
+                "DXC-NAV FOCUS options exit-ab ↑ idx=" $ string(focusIndex));
+            return true;
+        }
+
+        // Down inside choices: if we're already on the last enabled
+        // choice, transition into the action bar. EnterActionBar
+        // mutates state on success and is a no-op if no sensitive
+        // button exists, so consume unconditionally either way.
+        // Edge note: if no choice is enabled at all, FindLastEnabled()
+        // returns -1 and focusIndex is also -1 — the match still
+        // fires, which is the right outcome (the user has nowhere
+        // else to step, so the action bar is the only useful target).
+        if (dy > 0 && focusIndex == FindLastEnabled())
+        {
+            EnterActionBar();
+            return true;
+        }
+
+        // Up inside choices: if we're on the first enabled choice,
+        // transition into the action bar (wrap upward). Same -1==-1
+        // edge case as above.
+        if (dy < 0 && focusIndex == FindFirstEnabled())
+        {
+            EnterActionBar();
+            return true;
+        }
+
+        // Otherwise: step to next/previous enabled choice (existing
+        // behaviour preserved).
+        if (dy > 0) step = 1; else step = -1;
         newIdx = focusIndex;
         for (i = 0; i < choiceCount; i++)
         {
@@ -113,17 +212,14 @@ function bool HandleDPad(int dx, int dy)
                 focusIndex = newIdx;
                 focused = choices[focusIndex];
                 class'DXControllerDebug'.static.DebugLog(
-                    "DXC-NAV FOCUS idx=" $ string(focusIndex));
+                    "DXC-NAV FOCUS options idx=" $ string(focusIndex));
                 return true;
             }
         }
-        return true;    // no enabled choice found, consume anyway
+        return true;
     }
 
-    // Left/Right: cycle the focused choice's value.
-    // CyclePreviousValue / CycleNextValue are no-ops on MenuUIChoiceAction,
-    // so this is safe to call unconditionally.
-    // Cast `focused` (Window) to MenuUIChoice to reach the cycle methods.
+    // ---- L/R inside choices: cycle the focused choice's value ----
     if (dx != 0 && focused != None && IsEnabled(MenuUIChoice(focused)))
     {
         if (dx < 0)
@@ -136,15 +232,51 @@ function bool HandleDPad(int dx, int dy)
     return true;
 }
 
+// Transition from choices to action-bar focus. Returns true if a
+// sensitive action button was found and focused; false if not (caller
+// stays on the current choice).
+function bool EnterActionBar()
+{
+    local int primaryIdx;
+
+    class'ActionBarNav'.static.CollectButtons(
+        MenuUIWindow(screen), actionBtns, actionBtnCount);
+    if (actionBtnCount == 0)
+        return false;
+
+    primaryIdx = class'ActionBarNav'.static.FindPrimaryIndex(
+        MenuUIWindow(screen), actionBtns, actionBtnCount);
+    if (primaryIdx < 0)
+        return false;
+
+    bInActionBar = true;
+    actionBtnIdx = primaryIdx;
+    focused = actionBtns[actionBtnIdx];
+    class'DXControllerDebug'.static.DebugLog(
+        "DXC-NAV FOCUS options enter-ab idx=" $ string(actionBtnIdx));
+    return true;
+}
+
 function bool HandleActivate(byte button)
 {
     local MenuUIChoice focusedChoice;
 
-    // Only the A button activates the focused choice.
-    // Other face buttons (X=IK_Joy3, Y=IK_Joy4) and R-stick (IK_Joy10):
-    // consume and no-op so they don't fall through to vanilla handling.
-    if (button != 200)    // IK_Joy1 (A) = 0xC8 = 200 — enum not reachable from Object scope
+    // Only the A button activates. X / Y / R-stick consume no-op.
+    // IK_Joy1 (A) = 0xC8 = 200. EInputKey isn't reachable from Object scope.
+    if (button != 200)
         return true;
+
+    if (bInActionBar)
+    {
+        if (focused != None && MenuUIActionButtonWindow(focused) != None
+            && MenuUIActionButtonWindow(focused).bIsSensitive)
+        {
+            MenuUIActionButtonWindow(focused).PressButton();
+            class'DXControllerDebug'.static.DebugLog(
+                "DXC-NAV ACTIVATE options-ab idx=" $ string(actionBtnIdx));
+        }
+        return true;
+    }
 
     focusedChoice = MenuUIChoice(focused);
     if (focusedChoice == None || !IsEnabled(focusedChoice))
@@ -154,11 +286,19 @@ function bool HandleActivate(byte button)
     //   MenuUIChoiceAction  → ProcessMenuAction (navigate to screen/menu)
     //   MenuUIChoiceEnum    → CycleNextValue (cycle enum)
     //   MenuUIChoiceSlider  → CycleNextValue (advance slider one tick)
-    // This mirrors what a left-click on the choice button does.
+    // Same path as a left-click on the choice button.
     if (focusedChoice.btnAction != None)
         focusedChoice.btnAction.PressButton();
 
     return true;
+}
+
+function Detach()
+{
+    bInActionBar = false;
+    actionBtnCount = 0;
+    actionBtnIdx = 0;
+    Super.Detach();
 }
 
 defaultproperties

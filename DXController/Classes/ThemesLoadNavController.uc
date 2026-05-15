@@ -14,6 +14,6 @@ function InitListAndButtons()
         return;
 
     lst        = s.lstThemes;
-    primaryBtn = FindActionBtn(s, "LOAD");
+    primaryBtn = class'ActionBarNav'.static.FindByKey(s, "LOAD");
     // secondaryBtn intentionally None — no delete action.
 }

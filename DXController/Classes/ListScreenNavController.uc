@@ -106,25 +106,6 @@ function bool GetFocusedRect(out float x, out float y, out float w, out float h)
     return false;
 }
 
-// Helper: find an AB_Other action button on `s` by its key string,
-// without needing to reference MenuUIWindow's nested
-// EActionButtonEvents enum (which Object scope can't import).
-// Walks the publicly-accessible actionButtons[] array.
-static function MenuUIActionButtonWindow FindActionBtn(MenuUIWindow s, string actionKey)
-{
-    local int i;
-
-    if (s == None)
-        return None;
-    for (i = 0; i < ArrayCount(s.actionButtons); i++)
-    {
-        if (s.actionButtons[i].key == actionKey
-            && s.actionButtons[i].btn != None)
-            return s.actionButtons[i].btn;
-    }
-    return None;
-}
-
 defaultproperties
 {
     bAllowRepeat=True

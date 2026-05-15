@@ -100,7 +100,12 @@ function RegisterNavControllers()
     RegisterNav(Class'DeusEx.MenuScreenAdjustColors', Class'OptionsNavController');
     RegisterNav(Class'DeusEx.MenuScreenBrightness',   Class'OptionsNavController');
     // Omitted: MenuScreenCustomizeKeys — list-based key binding UI.
-    // Omitted: MenuScreenNewGame      — skill list, text edit fields, portrait buttons.
+
+    // New Game screen — portrait + skills list + action bar.
+    // editName / editCodeName text fields are intentionally excluded
+    // from gamepad nav (no virtual keyboard); keyboard typing into
+    // editName remains independent via the engine's text-focus path.
+    RegisterNav(Class'DeusEx.MenuScreenNewGame', Class'NewGameNavController');
 
     // List-shape menu screens.
     RegisterNav(Class'DeusEx.MenuScreenLoadGame',   Class'LoadGameNavController');

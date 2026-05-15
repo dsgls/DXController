@@ -14,5 +14,5 @@ function InitListAndButtons()
         return;
 
     lst        = s.lstThemes;
-    primaryBtn = FindActionBtn(s, "SAVE");
+    primaryBtn = class'ActionBarNav'.static.FindByKey(s, "SAVE");
 }
