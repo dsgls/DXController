@@ -236,6 +236,19 @@ event bool VirtualKeyPressed(EInputKey key, bool bRepeat)
 			break;
 	}
 
+	// === DXController additions: BEGIN ===
+	// Stock omits the Super chain on the unhandled path, so IK_Escape
+	// (and anything else the base class handles) is silently dropped
+	// here. PersonaScreenInventory.VirtualKeyPressed does chain via
+	// `if (!bKeyHandled) return Super.VirtualKeyPressed(...)` — match
+	// that pattern so B (synthesized Escape from
+	// ControllerRootWindow.VirtualKeyPressed) reaches
+	// PersonaScreenBaseWindow.VirtualKeyPressed's IK_Escape →
+	// SaveSettings/PopWindow handler.
+	if (!bHandled)
+		return Super.VirtualKeyPressed(key, bRepeat);
+	// === DXController additions: END ===
+
 	return bHandled;
 }
 
