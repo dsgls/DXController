@@ -56,9 +56,11 @@ jobs:
           # would land the line under a later section (e.g.
           # [DeusEx.DeusExGameInfo]) and UCC would never see it.
           # Insert immediately after the last existing EditPackages= line.
+          # The ini ships CRLF (buildtools' .gitattributes forces it), so
+          # anchor with [[:space:]]* to absorb the trailing \r.
           INI="$RUNNER_TEMP/build/System/DeusEx.ini"
           if ! grep -qxF 'EditPackages=DXController' "$INI"; then
-            sed -i '/^EditPackages=DeusEx$/a EditPackages=DXController' "$INI"
+            sed -i -E '/^EditPackages=DeusEx[[:space:]]*$/a EditPackages=DXController' "$INI"
           fi
           echo "--- EditPackages block after edit ---"
           grep -n EditPackages "$INI"
