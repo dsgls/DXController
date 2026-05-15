@@ -57,6 +57,13 @@ In `[DeusEx.DeusExPlayer]`:
 bToggleCrouch=True
 ```
 
+In `[WinDrv.WindowsClient]`:
+
+```ini
+UseDirectInput=False
+UseJoystick=False
+```
+
 ### `gamedir/System/User.ini`
 
 **Back up `User.ini` before editing** — the snippet overwrites existing
