@@ -8,16 +8,12 @@ In-world (non-persona) menu screens needing gamepad navigation, grouped
 by natural scope. Scope 1 is being designed/implemented now; the rest
 remain for later sessions.
 
-#### Scope 1 — Conversation family (in progress)
+#### Scope 1 — Conversation family (done)
 
-- `ConWindowActive` — interactive third-person conversations: choice
-  list + speech-advance.
-- `ConWindow` — non-interactive first-person speech (advance-only).
-- Datacubes — ride on the conversation flow (`ConPlay` plays their
-  `Conversation` asset), so come along with the above.
-- `DataLinkPlay` infolinks: intentionally out of scope. They're a
-  non-blocking corner UI during gameplay and we don't want to sacrifice
-  an in-game button just for a skip binding.
+Implemented 2026-05-15 — see `docs/superpowers/specs/2026-05-15-conversation-nav-design.md`
+and the corresponding plan. Covers `ConWindow`, `ConWindowActive`, and
+datacubes (which ride the conversation flow). `DataLinkPlay` infolinks
+are deliberately not bound — non-blocking corner UI, not worth a button.
 
 #### Scope 2 — Standalone modal devices (later session)
 

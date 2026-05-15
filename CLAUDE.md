@@ -277,8 +277,22 @@ Within each modified file, additions live in a banner-delimited block:
 // === DXController additions: END ===
 ```
 
-No edits to stock function bodies — pure additions. See
-`DeusEx/Classes/DeusExPlayer.uc` for the canonical example.
+Pure additions are the default. See `DeusEx/Classes/DeusExPlayer.uc`
+for the canonical example.
+
+**In-place gates are acceptable when surgical.** When a vanilla call
+inside a stock function body needs to be suppressed based on
+controller-side state — and the class can't subclass itself, so the
+method body can't simply be overridden — wrap the offending call in a
+one-line `if (!bSomeFlag)` gate and tag it with an inline
+`// DXController gate` comment. See `DeusEx/Classes/ConWindowActive.uc`
+for the canonical example (four `root.ShowCursor(...)` calls gated on
+`bGamepadMode`). The `git diff <vendor>..<edit>` will still show
+exactly the gate delta. Do **not** restructure function bodies, change
+control flow beyond the gate, or add new function-internal logic — at
+that point the change has outgrown the overlay pattern and should be
+either a subclass-and-ini-swap or a discussion about whether the
+DeusEx side really needs to host the logic.
 
 ### `DeusEx` can't reference `DXController` types
 
