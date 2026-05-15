@@ -114,14 +114,22 @@ function InitFocus()
         $ string(cwa.numChoices));
 }
 
-// Drive vanilla ConChoiceWindow / ButtonWindow's text-color hover
-// highlight via synthesized MouseEnteredWindow / MouseLeftWindow calls.
-// CreateConButton (ConWindowActive:498) wires colConTextFocus as the
-// hover text color, so MouseEnteredWindow flips the text to yellow and
-// MouseLeftWindow restores it to colConTextChoice (blue) or
-// colConTextSkill (red, for skill-gated choices). The same primitive is
-// already used by ControllerRootWindow.ClearHoverRecursive — synthetic
-// hover dispatch is the engine's supported escape hatch.
+// Drive vanilla ConChoiceWindow / ButtonWindow's hover indicator (a
+// solid blue tile + yellow text, wired by DisplayChoice's
+// SetButtonTextures / SetButtonColors / SetTextColors calls) by moving
+// the underlying cursor position to the focused button's centre. The
+// engine's native hover-detection loop polls cursor position each
+// frame and dispatches MouseEnteredWindow / MouseLeftWindow + updates
+// ButtonWindow's curTileColor / curTextColor accordingly. Direct
+// script-side dispatch of those events doesn't update the native
+// state — hover is position-driven, not event-driven.
+//
+// ShowCursor(False) hides the cursor sprite but (per CLAUDE.md
+// "Source overlay model" note about hover detection) does NOT disable
+// position-driven hover, so SetCursorPos still moves the highlight
+// while the cursor remains invisible. The lastCursorX/Y baseline on
+// ControllerRootWindow is updated to match so the Tick cursor-poll
+// doesn't spuriously flip to CM_Mouse on our own teleport.
 //
 // We do this instead of drawing a MenuFocusOverlay frame so the user
 // sees ONE focus indicator (the vanilla one), not two stacked on top
@@ -130,21 +138,34 @@ function InitFocus()
 // (persona / menu / list / etc.) continue to use the frame overlay.
 function ApplyChoiceHighlight()
 {
-    local ConWindowActive cwa;
-    local int i;
+    local Window rootWin;
+    local ControllerRootWindow crw;
+    local float cx, cy;
 
-    cwa = ConWindowActive(screen);
-    if (cwa == None)
+    if (focused == None)
+        return;
+    if (focused.width <= 0 || focused.height <= 0)
+        return;  // layout not settled yet; Tick will retry next frame
+
+    rootWin = focused.GetRootWindow();
+    if (rootWin == None)
         return;
 
-    for (i = 0; i < cwa.numChoices; i++)
+    // Convert button-local centre to root-window coords.
+    focused.ConvertCoordinates(focused,
+        focused.width * 0.5, focused.height * 0.5,
+        rootWin, cx, cy);
+
+    rootWin.SetCursorPos(cx, cy);
+
+    // Keep the cursor-poll baseline in sync — without this, the next
+    // Tick would see (curX, curY) != (lastCursorX, lastCursorY) and
+    // flip to CM_Mouse, fighting the gamepad focus we just set.
+    crw = ControllerRootWindow(rootWin);
+    if (crw != None)
     {
-        if (cwa.conChoices[i] == None)
-            continue;
-        if (i == focusIndex)
-            cwa.conChoices[i].MouseEnteredWindow();
-        else
-            cwa.conChoices[i].MouseLeftWindow();
+        crw.lastCursorX = cx;
+        crw.lastCursorY = cy;
     }
 }
 
