@@ -41,10 +41,13 @@ var MenuFocusOverlay focusOverlay;
 // Nav controller registry. Keyed by screen class via parallel arrays.
 // Entries populated in InitWindow. Concrete classes are instantiated
 // lazily on first attach.
-// Size 32: 8 persona slots + up to ~13 main-menu screen slots + headroom.
-var Class<MenuNavController> navClasses[32];
-var Class<Window>            navScreenKeys[32];
-var MenuNavController        navInstances[32];
+// Size 48: 8 persona + ~19 main-menu/modal + 3 conversation + 5
+// network-terminal slots = 35 in use, plus headroom. RegisterNav
+// silently drops any call past ArrayCount, so this MUST stay >= the
+// number of RegisterNav calls in RegisterNavControllers.
+var Class<MenuNavController> navClasses[48];
+var Class<Window>            navScreenKeys[48];
+var MenuNavController        navInstances[48];
 var int                      navCount;
 
 // Active nav controller (the one whose screen is currently on top).
