@@ -1,8 +1,9 @@
 //=============================================================================
-// MainMenuNavController — D-pad navigation for the main-menu screen family.
+// OptionsNavController — D-pad navigation for MenuUIScreenWindow subclasses
+// that use the standard choices[] pattern.
 //
-// Shared across every MenuUIScreenWindow subclass that uses the standard
-// choices[] pattern (Options, Display, Sound, Controls, AdjustColors, etc.).
+// Wired screens: MenuScreenOptions, MenuScreenDisplay, MenuScreenSound,
+// MenuScreenControls, MenuScreenAdjustColors, MenuScreenBrightness.
 // Children (MenuUIChoice instances) live inside screen.winClient, not the
 // screen window itself.
 //
@@ -12,7 +13,7 @@
 // D-pad left:    CyclePreviousValue on the focused choice (no-op on actions).
 // D-pad right:   CycleNextValue on the focused choice (no-op on actions).
 //=============================================================================
-class MainMenuNavController extends MenuNavController;
+class OptionsNavController extends MenuNavController;
 
 // Collected once on Attach. Re-collected via CollectChoices() if needed.
 // MenuUIScreenWindow supports up to 13 choices[] entries; 32 is a safe
@@ -30,11 +31,19 @@ function InitFocus()
         focused = None;
 }
 
-// Walk winClient's child list and collect MenuUIChoice instances in order.
-// Children are stored in z-order (GetTopChild = top of z-stack = last
-// created); the standard screens add choices in ascending Y order, so
-// this enumerates them bottom-to-top visually. We reverse by walking
-// GetLowerSibling to get the creation/display order correct.
+// Walk winClient's child list and collect MenuUIChoice instances in
+// creation order (== visual top-to-bottom order). MenuUIScreenWindow
+// creates choices via winClient.NewChild in declaration order and
+// positions each at Y = choiceStartY + i * choiceVerticalGap, so the
+// first-created choice sits at the visual top and the last-created at
+// the visual bottom.
+//
+// z-stack ordering is the OPPOSITE: NewChild puts the new child at the
+// top of z (drawn last, on top), so the first-created choice is at the
+// bottom of z. We walk z-bottom → z-top via GetBottomChild +
+// GetHigherSibling to traverse in creation/visual order. (Walking
+// GetTopChild + GetLowerSibling produces reverse order, which makes
+// D-pad-down step visually UP — bug fixed here.)
 function CollectChoices()
 {
     local MenuUIScreenWindow menuScreen;
@@ -44,16 +53,11 @@ function CollectChoices()
     if (screen == None)
         return;
 
-    // Cast to MenuUIScreenWindow to reach winClient. If the screen is not
-    // actually a MenuUIScreenWindow subclass this returns None and we
-    // enumerate nothing (safe no-op).
     menuScreen = MenuUIScreenWindow(screen);
     if (menuScreen == None || menuScreen.winClient == None)
         return;
 
-    // GetTopChild() returns children in reverse-declared (top-of-z-stack) order.
-    // We collect them as-is; navigation is uniform either way.
-    c = menuScreen.winClient.GetTopChild();
+    c = menuScreen.winClient.GetBottomChild();
     while (c != None && choiceCount < ArrayCount(choices))
     {
         if (c.IsA('MenuUIChoice'))
@@ -61,7 +65,7 @@ function CollectChoices()
             choices[choiceCount] = MenuUIChoice(c);
             choiceCount++;
         }
-        c = c.GetLowerSibling();
+        c = c.GetHigherSibling();
     }
 }
 
@@ -136,7 +140,7 @@ function bool HandleActivate(byte button)
 {
     local MenuUIChoice focusedChoice;
 
-    // Only the A button activates in main-menu.
+    // Only the A button activates the focused choice.
     // Other face buttons (X=IK_Joy3, Y=IK_Joy4) and R-stick (IK_Joy10):
     // consume and no-op so they don't fall through to vanilla handling.
     if (button != 200)    // IK_Joy1 (A) = 0xC8 = 200 — enum not reachable from Object scope
