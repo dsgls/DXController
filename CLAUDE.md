@@ -245,6 +245,17 @@ Prefix all such logs with `DXC-<area>`: `DXC-WHEEL`, `DXC-NAV`,
   walk `root.GetTopChild()` siblings looking for a `DeusExBaseWindow`
   match — that's the same predicate `DescendantAdded` uses to drive
   the radial cancel-on-UI-takeover.
+- **`RootWindow.ShowCursor(False)` hides the cursor sprite AND
+  suppresses script-level `MouseMoved` dispatch.** The native (index
+  1522, used by vanilla `MenuScreenCustomizeKeys` /
+  `ConWindowActive`) does both. To detect "user grabbed the mouse"
+  while the cursor is hidden, poll `GetCursorPos(out x, out y)` in
+  `Tick` and compare to a baseline captured at hide time. See
+  `ControllerRootWindow.HideCursorAndClearHover` (baseline capture)
+  and the cursor-poll block at the top of `ControllerRootWindow.Tick`.
+  Corollary: the `event MouseMoved` override on the root window is
+  reached only in `CM_Mouse` (cursor visible); the `CM_Gamepad → CM_Mouse`
+  transition runs from the `Tick` poll, not the event.
 
 ## Source overlay model
 

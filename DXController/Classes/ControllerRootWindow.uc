@@ -27,6 +27,14 @@ const CM_Gamepad = 0;
 const CM_Mouse   = 1;
 var int cursorMode;
 
+// Baseline cursor position captured each time we hide the cursor.
+// ShowCursor(False) suppresses MouseMoved dispatch at the script level
+// (vanilla uses it in modes where mouse motion isn't expected — see
+// MenuScreenCustomizeKeys' "press a key to rebind" mode). To detect
+// the user grabbing the mouse, Tick polls GetCursorPos and compares
+// against this baseline.
+var float lastCursorX, lastCursorY;
+
 // Focus overlay (drawn above all menu content when in CM_Gamepad).
 var MenuFocusOverlay focusOverlay;
 
@@ -186,6 +194,20 @@ function SwitchActiveNav(MenuNavController desired, Window desiredScreen)
         activeNav.Attach(desiredScreen);
         class'DXControllerDebug'.static.DebugLog(
             "DXC-NAV SWITCH attach=" $ string(desiredScreen.Class));
+        // Initial menu open arrives here (mode is already CM_Gamepad from
+        // InitWindow, so NoticeGamepadActivity won't fire). Hide the cursor
+        // unless the user is in CM_Mouse from a prior session.
+        if (cursorMode == CM_Gamepad)
+        {
+            ShowCursor(False);
+            GetCursorPos(lastCursorX, lastCursorY);
+        }
+    }
+    else
+    {
+        // Detached to no registered nav — either gameplay or an unregistered
+        // modal that needs mouse/keyboard. Return cursor to engine default.
+        ShowCursor(True);
     }
 }
 
@@ -266,7 +288,23 @@ event DescendantRemoved(Window descendant)
 // in this codebase (CLAUDE.md flagged it as unverified).
 function Tick(float deltaSeconds)
 {
+    local float curX, curY;
+
     Super.Tick(deltaSeconds);
+
+    // Detect mouse motion while the cursor is hidden. The script-level
+    // MouseMoved event doesn't fire under ShowCursor(False), so polling
+    // GetCursorPos is the only signal that the user grabbed the mouse.
+    if (cursorMode == CM_Gamepad && activeNav != None)
+    {
+        GetCursorPos(curX, curY);
+        if (curX != lastCursorX || curY != lastCursorY)
+        {
+            cursorMode = CM_Mouse;
+            ShowCursor(True);
+            class'DXControllerDebug'.static.DebugLog("DXC-CURSOR mode=mouse (poll)");
+        }
+    }
 
     if (activeNav != None && activeNav.focused == None && activeNav.screen != None)
     {
@@ -291,6 +329,11 @@ function NoticeGamepadActivity()
 function HideCursorAndClearHover()
 {
     local Window top;
+    // Hide the OS cursor sprite. RootWindow.ShowCursor is a native
+    // (index 1522) inherited via DeusExRootWindow — same call vanilla
+    // uses in MenuScreenCustomizeKeys and ConWindowActive.
+    ShowCursor(False);
+    GetCursorPos(lastCursorX, lastCursorY);
     // Clear any active hover state on buttons so vanilla hover visuals
     // don't compete with the gamepad focus highlight.
     top = GetTopWindow();
@@ -320,6 +363,7 @@ event MouseMoved(float newX, float newY)
     if (cursorMode == CM_Gamepad)
     {
         cursorMode = CM_Mouse;
+        ShowCursor(True);
         class'DXControllerDebug'.static.DebugLog("DXC-CURSOR mode=mouse");
     }
     Super.MouseMoved(newX, newY);
@@ -335,6 +379,17 @@ event bool VirtualKeyPressed(EInputKey key, bool bRepeat)
 
     p = DeusExPlayer(parentPawn);
     bkey = key;             // EInputKey IS a byte; assignment (not cast) compiles.
+
+    // Re-hide cursor on gamepad button presses. Console.state Menuing
+    // doesn't forward IST_Press button events to global.KeyEvent (only
+    // axes are forwarded in our override), so the Console-side
+    // NoticeGamepadActivity hook misses every menu button press. Gate
+    // on the gamepad key ranges so keyboard nav (Tab/arrows/Enter)
+    // doesn't trigger an unwanted CM_Gamepad transition.
+    //   200..215 = IK_Joy1..IK_Joy16
+    //   240..243 = D-pad slots (IK_JoyPovUp..Right, 0xF0..0xF3)
+    if ((bkey >= 200 && bkey <= 215) || (bkey >= 240 && bkey <= 243))
+        NoticeGamepadActivity();
 
     // ---- Close-menu buttons ----
 
