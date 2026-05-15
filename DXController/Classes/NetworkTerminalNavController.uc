@@ -229,4 +229,7 @@ defaultproperties
 
     subKeys(5)=Class'DeusEx.ComputerScreenEmail'
     subClasses(5)=Class'DXController.ComputerScreenEmailNav'
+
+    subKeys(6)=Class'DeusEx.ComputerScreenSpecialOptions'
+    subClasses(6)=Class'DXController.ComputerScreenSpecialOptionsNav'
 }
