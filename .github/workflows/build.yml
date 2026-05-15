@@ -36,10 +36,10 @@ jobs:
           wineserver -w
 
       - name: Checkout DXController
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Load buildtools deploy key
-        uses: webfactory/ssh-agent@v0.9.0
+        uses: webfactory/ssh-agent@v0.10.0
         with:
           ssh-private-key: ${{ secrets.BUILDTOOLS_DEPLOY_KEY }}
 
@@ -113,7 +113,7 @@ jobs:
           cp "$RUNNER_TEMP/build/System/DXController.u" .
 
       - name: Upload build artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: dxcontroller-build
           path: |
