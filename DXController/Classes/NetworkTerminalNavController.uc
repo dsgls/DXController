@@ -417,6 +417,54 @@ function bool HandleActivate(byte button)
     return true;
 }
 
+// ---- Focus-rect routing ----------------------------------------------------
+//
+// Routes to the correct widget for MenuFocusOverlay.
+// Computer pane: defer to the active sub (which already enforces the
+//   suppress-frame-on-buttons policy).
+// Hack pane: suppress (only widget is btnHack — button class).
+// HackAccounts pane: suppress on btnChangeAccount (button);
+//   return the list's rect on lstAccounts.
+
+function bool GetFocusedRect(out float x, out float y, out float w, out float h)
+{
+    local NetworkTerminal nt;
+    local Window w_focus;
+    local float lx, ly;
+    local Window rootWin;
+
+    if (activePane == PANE_COMPUTER)
+    {
+        if (activeSub != None)
+            return activeSub.GetFocusedRect(x, y, w, h);
+        return false;
+    }
+
+    if (activePane == PANE_HACK)
+        return false;  // btnHack is a button → frame suppressed
+
+    if (activePane == PANE_HACKACCOUNTS)
+    {
+        // Suppress for btnChangeAccount (button); list keeps the frame.
+        if (paneAccountsRowKind == 1)
+            return false;
+        nt = NetworkTerminal(screen);
+        if (nt == None || nt.winHackAccounts == None || nt.winHackAccounts.lstAccounts == None)
+            return false;
+        w_focus = nt.winHackAccounts.lstAccounts;
+        rootWin = w_focus.GetRootWindow();
+        if (rootWin == None)
+            return false;
+        lx = 0;
+        ly = 0;
+        w_focus.ConvertCoordinates(w_focus, lx, ly, rootWin, x, y);
+        w = w_focus.width;
+        h = w_focus.height;
+        return true;
+    }
+    return false;
+}
+
 defaultproperties
 {
     bAllowRepeat=True
