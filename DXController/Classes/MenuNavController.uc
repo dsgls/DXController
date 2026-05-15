@@ -104,6 +104,16 @@ function bool AllowsMenuToggle()
     return true;
 }
 
+// Per-frame hook, pumped manually by ControllerRootWindow.Tick on the
+// active controller. MenuNavController is Object-scoped, so the engine
+// never ticks it directly — this is the substitute. Default no-op;
+// only controllers that need per-frame work (e.g.
+// NetworkTerminalNavController's winComputer screen-swap detection)
+// override it.
+function NavTick(float deltaSeconds)
+{
+}
+
 defaultproperties
 {
     bAllowRepeat=True
