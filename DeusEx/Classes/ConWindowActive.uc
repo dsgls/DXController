@@ -52,6 +52,8 @@ event InitWindow()
 {
 	Super.InitWindow();
 
+	Log("DXC-CONV-DIAG ConWindowActive.InitWindow fired class=" $ string(Self.Class));  // DXController diagnostic
+
 	if (!bGamepadMode)               // DXController gate
 		root.ShowCursor(False);
 

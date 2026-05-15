@@ -50,6 +50,10 @@ var int                      navCount;
 // Active nav controller (the one whose screen is currently on top).
 var MenuNavController activeNav;
 
+// Diagnostic: last reported top-screen class name from Tick, used to
+// emit a log line only on transitions (avoid per-frame spam).
+var string lastDiagTopName;
+
 event InitWindow()
 {
     Super.InitWindow();
@@ -269,11 +273,25 @@ event DescendantAdded(Window descendant)
 {
     local int idx;
     local bool bIsModalScreen;
+    local string parentName;  // diagnostic
 
     Super.DescendantAdded(descendant);
 
     if (descendant == None)
+    {
+        class'DXControllerDebug'.static.DebugLog("DXC-NAV DESC-ADD descendant=None");  // diagnostic
         return;
+    }
+
+    if (descendant.GetParent() != None)
+        parentName = string(descendant.GetParent().Class);
+    else
+        parentName = "None";
+    class'DXControllerDebug'.static.DebugLog(
+        "DXC-NAV DESC-ADD class=" $ string(descendant.Class)
+        $ " parent=" $ parentName
+        $ " isModal=" $ string(DeusExBaseWindow(descendant) != None)
+        $ " parentIsSelf=" $ string(descendant.GetParent() == Self));  // diagnostic
 
     // Radial cancel-on-UI-takeover. PushWindow only accepts
     // DeusExBaseWindow subclasses, so that cast cleanly excludes the
@@ -290,6 +308,8 @@ event DescendantAdded(Window descendant)
     // walk GetTopChild here — the engine fires this event before the
     // new child is in root's child list.
     idx = FindNavIndex(descendant.Class);
+    class'DXControllerDebug'.static.DebugLog(
+        "DXC-NAV DESC-ADD FindNavIndex result idx=" $ string(idx));  // diagnostic
     if (idx >= 0)
     {
         SwitchActiveNav(GetOrCreateNav(idx), descendant);
@@ -352,6 +372,23 @@ function Tick(float deltaSeconds)
     // 1. activeNav reconciliation. Runs first so the cursor-poll and
     //    focus-retry blocks below see the up-to-date activeNav.
     topNav = FindTopmostModalNav(topScreen);
+
+    // === Diagnostic: log top-screen identity transitions ===
+    if (topScreen != None && string(topScreen.Class) != lastDiagTopName)
+    {
+        class'DXControllerDebug'.static.DebugLog(
+            "DXC-NAV TICK-TOP topScreen=" $ string(topScreen.Class)
+            $ " idx=" $ string(FindNavIndex(topScreen.Class))
+            $ " hasNav=" $ string(topNav != None));
+        lastDiagTopName = string(topScreen.Class);
+    }
+    else if (topScreen == None && lastDiagTopName != "None")
+    {
+        class'DXControllerDebug'.static.DebugLog("DXC-NAV TICK-TOP topScreen=None");
+        lastDiagTopName = "None";
+    }
+    // === End diagnostic ===
+
     SwitchActiveNav(topNav, topScreen);
 
     // 2. Mouse-grab detection while cursor is hidden.
