@@ -223,4 +223,7 @@ defaultproperties
 
     subKeys(3)=Class'DeusEx.ComputerScreenATMDisabled'
     subClasses(3)=Class'DXController.ComputerScreenATMDisabledNav'
+
+    subKeys(4)=Class'DeusEx.ComputerScreenBulletins'
+    subClasses(4)=Class'DXController.ComputerScreenBulletinsNav'
 }
