@@ -90,6 +90,20 @@ function bool GetFocusedRect(out float x, out float y, out float w, out float h)
     return true;
 }
 
+// Returns true if Start/Back may toggle the persona menu while this
+// controller is active. Override to false in in-world modal
+// controllers (conversation, keypad, computer, etc.) so accidental
+// Start/Back presses don't stack the persona menu on top.
+//
+// Also consulted by ControllerRootWindow's B (Joy2) routing: when
+// false, B is offered to HandleActivate instead of being synthesised
+// as Escape on the PushWindow stack (which doesn't see NewChild'd
+// in-world modals like ConWindowActive anyway).
+function bool AllowsMenuToggle()
+{
+    return true;
+}
+
 defaultproperties
 {
     bAllowRepeat=True

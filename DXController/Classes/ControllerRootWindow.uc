@@ -117,6 +117,15 @@ function RegisterNavControllers()
     // AskToTrain, intro/training warnings, etc.).
     RegisterNav(Class'DeusEx.MenuUIMessageBoxWindow', Class'MessageBoxNavController');
 
+    // In-world conversation windows. ConWindowActive is the third-person
+    // interactive conversation (with choice list); ConWindow is the
+    // first-person non-interactive variant. Both are NewChild'd onto
+    // root (not PushWindow'd), so they don't appear in GetTopWindow();
+    // the controller's AllowsMenuToggle=false routes B and gates
+    // Start/Back. See ConversationNavController for binding details.
+    RegisterNav(Class'DeusEx.ConWindow',       Class'ConversationNavController');
+    RegisterNav(Class'DeusEx.ConWindowActive', Class'ConversationNavController');
+
     // Omitted: MenuScreenRGB          — tab-based, complex color picker controls.
 }
 
@@ -445,31 +454,38 @@ event bool VirtualKeyPressed(EInputKey key, bool bRepeat)
 
     // ---- Close-menu buttons ----
 
-    // B (Joy2): cancel one level — either the sub-dialog (if a
-    // controller owns one), or the topmost window. The topmost window
-    // already routes IK_Escape correctly via its own VirtualKeyPressed:
-    //
-    //   - MenuUIWindow-family screens: Escape → CancelScreen() →
-    //     root.PopWindow() (one level back). Per-screen CancelScreen
-    //     overrides (e.g. MenuScreenNewGame restoring skill points)
-    //     run untouched.
-    //   - MenuUIMessageBoxWindow: Escape → PostResult(1) for YesNo
-    //     (the "No" path) or PostResult(0) for OK.
-    //
-    // Synthesizing Escape lets each screen's existing handler win,
-    // without per-screen branching here. Compare with Back (Joy7)
-    // below, which is the explicit "full close" path.
+    // B (Joy2): cancel one level. Three routes, in priority order:
+    //   1. Sub-dialog ownership (radial wheel belt-assign): the active
+    //      controller closes its sub-dialog via HandleActivate.
+    //   2. In-world modal controllers (conversation, future keypad /
+    //      computer): the controller overrides AllowsMenuToggle()
+    //      to false; B routes to its HandleActivate so it can
+    //      decide advance / commit / noop. These windows are
+    //      NewChild'd on root (not PushWindow'd), so GetTopWindow()
+    //      can't see them and Escape synthesis below would no-op.
+    //   3. Default — synthesise IK_Escape on the topmost PushWindow,
+    //      letting each menu screen's CancelScreen() or
+    //      PostResult() handler run untouched:
+    //        - MenuUIWindow-family screens: Escape -> CancelScreen() ->
+    //          root.PopWindow() (per-screen overrides like
+    //          MenuScreenNewGame.CancelScreen restoring skill points
+    //          run as written).
+    //        - MenuUIMessageBoxWindow: Escape -> PostResult(1) for YesNo
+    //          ("No" path) or PostResult(0) for OK.
     //
     // Caveat: GetTopWindow() reflects the PushWindow stack only
     // (CLAUDE.md). Every menu screen and message box in scope is
-    // PushWindow-stacked, so this is correct here.
+    // PushWindow-stacked, so route 3 is correct for them.
     if (key == IK_Joy2 && !bRepeat)
     {
         if (activeNav != None && activeNav.subDialogActive != '')
         {
-            // Sub-dialog ownership (radial wheel assign, aug install):
-            // route B to the active controller so it can close its
-            // sub-dialog cleanly. Unchanged.
+            activeNav.HandleActivate(bkey);
+            return true;
+        }
+
+        if (activeNav != None && !activeNav.AllowsMenuToggle())
+        {
             activeNav.HandleActivate(bkey);
             return true;
         }
@@ -480,9 +496,18 @@ event bool VirtualKeyPressed(EInputKey key, bool bRepeat)
         return true;
     }
 
-    // Back (Joy7): always close menu, ignore sub-dialogs (panic exit).
+    // Back (Joy7): close menu (panic exit, ignores sub-dialogs).
+    // Gated by activeNav.AllowsMenuToggle() so an in-world modal
+    // (conversation, future keypad / computer) can suppress the
+    // toggle and prevent the persona menu stacking on top of itself.
     if (key == IK_Joy7 && !bRepeat)
     {
+        if (activeNav != None && !activeNav.AllowsMenuToggle())
+        {
+            class'DXControllerDebug'.static.DebugLog(
+                "DXC-NAV BLOCK-MENU-TOGGLE key=Joy7");
+            return true;
+        }
         class'DXControllerDebug'.static.DebugLog(
             "DXC-NAV BACK-RECV p=" $ string(p != None)
             $ " topPersona=" $ string(PersonaScreenBaseWindow(GetTopWindow()) != None));
@@ -491,11 +516,19 @@ event bool VirtualKeyPressed(EInputKey key, bool bRepeat)
         return true;
     }
 
-    // Start (Joy8): close menu when a game is running. TogglePlayerMenuWindow
-    // has an internal "are we already at title?" gate, so calling it
-    // unconditionally is safe — the vanilla gate no-ops at the title screen.
+    // Start (Joy8): toggle menu when a game is running.
+    // TogglePlayerMenuWindow has an internal "are we already at title?"
+    // gate, so calling it unconditionally is safe — the vanilla gate
+    // no-ops at the title screen. Gated by AllowsMenuToggle() for the
+    // same reason as Joy7.
     if (key == IK_Joy8 && !bRepeat)
     {
+        if (activeNav != None && !activeNav.AllowsMenuToggle())
+        {
+            class'DXControllerDebug'.static.DebugLog(
+                "DXC-NAV BLOCK-MENU-TOGGLE key=Joy8");
+            return true;
+        }
         if (p != None)
             p.TogglePlayerMenuWindow();
         return true;
