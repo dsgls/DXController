@@ -15,6 +15,9 @@ class MenuFocusOverlay extends HUDBaseWindow;
 const FramePadding = 4.0;
 const FrameThickness = 2;
 
+// Diagnostic: last rect seen by DrawWindow, used to log only on change.
+var float lastDiagX, lastDiagY, lastDiagW, lastDiagH;
+
 event DrawWindow(GC gc)
 {
     local ControllerRootWindow root;
@@ -38,6 +41,21 @@ event DrawWindow(GC gc)
 
     if (!nav.GetFocusedRect(rx, ry, rw, rh))
         return;
+
+    // === Diagnostic: log when the rect changes ===
+    if (rx != lastDiagX || ry != lastDiagY || rw != lastDiagW || rh != lastDiagH)
+    {
+        class'DXControllerDebug'.static.DebugLog(
+            "DXC-FOCUS rect x=" $ string(int(rx))
+            $ " y=" $ string(int(ry))
+            $ " w=" $ string(int(rw))
+            $ " h=" $ string(int(rh)));
+        lastDiagX = rx;
+        lastDiagY = ry;
+        lastDiagW = rw;
+        lastDiagH = rh;
+    }
+    // === End diagnostic ===
 
     fx = rx - FramePadding;
     fy = ry - FramePadding;
