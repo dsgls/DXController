@@ -654,8 +654,15 @@ event bool VirtualKeyPressed(EInputKey key, bool bRepeat)
 
     // ---- A/X/Y/R-stick-click → active controller's HandleActivate ----
     // HandleActivate takes byte; EInputKey auto-coerces to byte in UE1.
+    // LB/RB (Joy5/Joy6) also dispatch here, but only when GetTopWindow
+    // is not a persona screen — the persona-screen LB/RB tab block
+    // above runs first and consumes those keys for persona-tab cycling.
+    // Network-terminal pane cycling uses Joy5/Joy6 via HandleActivate;
+    // existing controllers consume them as no-ops (HandleActivate
+    // returns true for unrecognised bytes).
 
-    if (key == IK_Joy1 || key == IK_Joy3 || key == IK_Joy4 || key == IK_Joy10)
+    if (key == IK_Joy1 || key == IK_Joy3 || key == IK_Joy4 || key == IK_Joy10
+        || key == IK_Joy5 || key == IK_Joy6)
     {
         if (!bRepeat && activeNav != None && activeNav.HandleActivate(bkey))
             return true;
