@@ -17,6 +17,10 @@ remain for later sessions.
   hack progress UI — fundamentally different shape from the
   single-screen modals of Scope 2.
 
+### On screen keyboard
+
+A large feature, but needed to log in to terminals with found usernames/passwords.
+
 ### Scrolling for goals and notes persona screen
 
 Need to play the game enough to go beyond the text area size to test.
