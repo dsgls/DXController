@@ -214,4 +214,7 @@ defaultproperties
 
     subKeys(0)=Class'DeusEx.ComputerScreenLogin'
     subClasses(0)=Class'DXController.ComputerScreenLoginNav'
+
+    subKeys(1)=Class'DeusEx.ComputerScreenATM'
+    subClasses(1)=Class'DXController.ComputerScreenATMLoginNav'
 }
