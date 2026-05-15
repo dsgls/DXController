@@ -145,6 +145,21 @@ function RegisterNavControllers()
     RegisterNav(Class'DeusEx.ConWindowActive',     Class'ConversationNavController');
     RegisterNav(Class'DeusExe.ConWindowActive2',   Class'ConversationNavController');
 
+    // In-world network terminals. Phase 1: shell dispatch + Computer
+    // pane sub-controllers (Login/Bulletins/Email/SpecialOptions/ATM*).
+    // ComputerScreenSecurity sub-controller is Phase 2; Security
+    // terminals still register here so the shell-level B / pane-cycling
+    // / Logout paths work on them.
+    //
+    // NetworkTerminal itself is abstract; registered for defensive
+    // completeness only — FindNavIndex is exact-class-match so each
+    // concrete subclass needs its own line.
+    RegisterNav(Class'DeusEx.NetworkTerminalPersonal', Class'NetworkTerminalNavController');
+    RegisterNav(Class'DeusEx.NetworkTerminalPublic',   Class'NetworkTerminalNavController');
+    RegisterNav(Class'DeusEx.NetworkTerminalATM',      Class'NetworkTerminalNavController');
+    RegisterNav(Class'DeusEx.NetworkTerminalSecurity', Class'NetworkTerminalNavController');
+    RegisterNav(Class'DeusEx.NetworkTerminal',         Class'NetworkTerminalNavController');
+
     // Omitted: MenuScreenRGB          — tab-based, complex color picker controls.
 }
 
