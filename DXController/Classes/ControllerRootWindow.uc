@@ -87,6 +87,13 @@ function RegisterNavControllers()
     // MedBot aug installation screen — separate from the normal aug persona screen.
     RegisterNav(Class'DeusEx.HUDMedBotAddAugsScreen', Class'AugInstallNavController');
 
+    // Standalone modal devices: numeric keypad (coded doors), MedBot
+    // health-only variant of PersonaScreenHealth, and the RepairBot
+    // recharge popup. See docs/superpowers/specs/2026-05-15-modal-devices-nav-design.md.
+    RegisterNav(Class'DeusEx.HUDKeypadWindow',       Class'KeypadNavController');
+    RegisterNav(Class'DeusEx.HUDMedBotHealthScreen', Class'MedBotHealthNavController');
+    RegisterNav(Class'DeusEx.HUDRechargeWindow',     Class'RechargeNavController');
+
     // MenuUIMenuWindow subclasses: title/pause-root MenuMain, the
     // Settings sub-menu opened from MenuMain → Settings, and the
     // difficulty picker opened by the New Game flow. All three share

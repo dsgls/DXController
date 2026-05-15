@@ -8,15 +8,6 @@ In-world (non-persona) menu screens needing gamepad navigation, grouped
 by natural scope. Scope 1 is being designed/implemented now; the rest
 remain for later sessions.
 
-#### Standalone modal devices
-
-- `HUDKeypadWindow` — 4×3 button grid (1-9, *, 0, #).
-- `HUDMedBotHealthScreen` — extends `PersonaScreenHealth` but has a
-  distinct class identity, so the existing `HealthNavController`
-  registry entry doesn't pick it up. Needs registry entry plus
-  "Heal All" action button hookup.
-- `RepairBot` screen (if it has a discrete UI — verify during design).
-
 #### Network terminals
 
 - `NetworkTerminal` and its `ComputerUIWindow` family: Login,
