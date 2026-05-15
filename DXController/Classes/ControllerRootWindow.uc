@@ -242,6 +242,18 @@ function SwitchActiveNav(MenuNavController desired, Window desiredScreen)
         activeNav.Attach(desiredScreen);
         class'DXControllerDebug'.static.DebugLog(
             "DXC-NAV SWITCH attach=" $ string(desiredScreen.Class));
+
+        // Raise the focus overlay so it draws on top of the newly-
+        // attached modal screen. PushWindow / NewChild add the modal
+        // at the top of the z-stack (above focusOverlay's
+        // InitWindow-time position), so without this the focus frame
+        // would render behind the modal. For most persona screens the
+        // backgrounds are translucent enough that the frame shows
+        // through anyway, but ConWindowActive's lowerConWindow draws
+        // an opaque modulated tile that hides the frame entirely.
+        if (focusOverlay != None)
+            focusOverlay.Raise();
+
         // Initial menu open arrives here (mode is already CM_Gamepad from
         // InitWindow, so NoticeGamepadActivity won't fire). Hide the cursor
         // unless the user is in CM_Mouse from a prior session.
