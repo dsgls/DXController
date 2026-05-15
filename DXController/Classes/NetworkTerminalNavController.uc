@@ -220,4 +220,7 @@ defaultproperties
 
     subKeys(2)=Class'DeusEx.ComputerScreenATMWithdraw'
     subClasses(2)=Class'DXController.ComputerScreenATMWithdrawNav'
+
+    subKeys(3)=Class'DeusEx.ComputerScreenATMDisabled'
+    subClasses(3)=Class'DXController.ComputerScreenATMDisabledNav'
 }
