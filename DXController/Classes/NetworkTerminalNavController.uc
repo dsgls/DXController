@@ -217,4 +217,7 @@ defaultproperties
 
     subKeys(1)=Class'DeusEx.ComputerScreenATM'
     subClasses(1)=Class'DXController.ComputerScreenATMLoginNav'
+
+    subKeys(2)=Class'DeusEx.ComputerScreenATMWithdraw'
+    subClasses(2)=Class'DXController.ComputerScreenATMWithdrawNav'
 }
