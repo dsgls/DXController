@@ -37,7 +37,7 @@ function bool HandleDPad(int dx, int dy)
 
 function bool HandleActivate(byte button)
 {
-    if (button != 200)
+    if (button != 200)   // 200 = IK_Joy1 (A)
         return true;
     if (focused != None
         && MenuUIActionButtonWindow(focused) != None
