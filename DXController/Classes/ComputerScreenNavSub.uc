@@ -1,0 +1,87 @@
+//=============================================================================
+// ComputerScreenNavSub — abstract base for per-screen network-terminal
+// sub-controllers. NOT registered with ControllerRootWindow; owned by
+// NetworkTerminalNavController, instantiated lazily on first encounter
+// of each ComputerScreenX class and cached for the dispatcher's lifetime.
+//
+// Narrower than MenuNavController: no Attach/Detach (the dispatcher's
+// own Attach/Detach lifecycle handles registry concerns), no
+// bAllowRepeat / subDialogActive (the dispatcher owns those), no
+// HandleScroll (no R-stick targets on terminal screens).
+//
+// IsButtonClass / GetFocusedRect implement the suppress-frame-on-button
+// policy from the design doc: vanilla colText[1] (yellow) on a focused
+// button is enough cue; the MenuFocusOverlay frame would be a redundant
+// second indicator. Lists keep the frame (it tells the player which
+// list owns the gamepad tab-stop, distinct from the intra-list per-row
+// highlight). Edit fields keep the frame (the in-field blinking
+// insertion point is intra-field; the around-field frame is visually
+// distinct).
+//=============================================================================
+class ComputerScreenNavSub extends Object abstract;
+
+var ComputerUIWindow screen;
+var Window focused;
+var int    focusIndex;
+
+function OnEnter(ComputerUIWindow s)
+{
+    screen = s;
+    focused = None;
+    focusIndex = -1;
+}
+
+function OnLeave()
+{
+    screen = None;
+    focused = None;
+    focusIndex = -1;
+}
+
+// dx/dy in {-1, 0, +1}. Return true to consume.
+function bool HandleDPad(int dx, int dy)
+{
+    return false;
+}
+
+// button is the gamepad byte. Sub-controllers see 200 (A), 202 (X),
+// 203 (Y), 209 (R-stick click). The dispatcher intercepts 201 (B),
+// 204 (LB), 205 (RB) before delegation.
+function bool HandleActivate(byte button)
+{
+    return false;
+}
+
+// Per-frame work. Default: nothing. Sub-controllers that need to
+// re-sync stale state (e.g. failed-login engine-focus reset) override.
+function OnTick()
+{
+}
+
+// True for widgets whose own focus cue (yellow text on buttons) is
+// sufficient and the MenuFocusOverlay frame would double up.
+static function bool IsButtonClass(Window w)
+{
+    return MenuUIBorderButtonWindow(w) != None
+        || PersonaBorderButtonWindow(w) != None;
+}
+
+// Per the design's focus-indicator policy: return false (no frame) when
+// focused is a button widget; otherwise return the focused window's
+// screen-space rect via the standard ConvertCoordinates path.
+function bool GetFocusedRect(out float x, out float y, out float w, out float h)
+{
+    local Window root;
+    local float lx, ly;
+
+    if (focused == None || IsButtonClass(focused))
+        return false;
+
+    root = focused.GetRootWindow();
+    lx = 0;
+    ly = 0;
+    focused.ConvertCoordinates(focused, lx, ly, root, x, y);
+    w = focused.width;
+    h = focused.height;
+    return true;
+}
