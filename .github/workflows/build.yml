@@ -51,10 +51,17 @@ jobs:
 
       - name: Register mod with the compiler
         run: |
+          # Insert EditPackages=DXController *inside* the
+          # [Editor.EditorEngine] EditPackages block — appending to EOF
+          # would land the line under a later section (e.g.
+          # [DeusEx.DeusExGameInfo]) and UCC would never see it.
+          # Insert immediately after the last existing EditPackages= line.
           INI="$RUNNER_TEMP/build/System/DeusEx.ini"
           if ! grep -qxF 'EditPackages=DXController' "$INI"; then
-            echo 'EditPackages=DXController' >> "$INI"
+            sed -i '/^EditPackages=DeusEx$/a EditPackages=DXController' "$INI"
           fi
+          echo "--- EditPackages block after edit ---"
+          grep -n EditPackages "$INI"
 
       - name: Build pass 1 — DeusEx.u
         working-directory: ${{ runner.temp }}/build/System
