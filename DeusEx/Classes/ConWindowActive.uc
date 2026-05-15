@@ -482,6 +482,17 @@ event bool VirtualKeyPressed(EInputKey key, bool bRepeat)
 			case IK_Down:
 				bHandled = False;
 				break;
+
+			// DXController: bubble all other keys (notably gamepad slots
+			// IK_Joy1..16 / IK_JoyPov*) up to root so
+			// ControllerRootWindow.VirtualKeyPressed can route them to
+			// ConversationNavController. Mirrors the persona/menu screen
+			// pattern (PersonaScreenBaseWindow.uc:110-117 and
+			// MenuUIScreenWindow.uc:204-205). Recognised-key behaviour
+			// above (Escape/Enter/Space, Up/Down) unchanged.
+			default:
+				bHandled = False;
+				break;
 		}
 	}
 
