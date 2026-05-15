@@ -221,11 +221,24 @@ function int CyclePane(int from, int direction)
 
 function SwitchPane(int newPane)
 {
+    local NetworkTerminal nt;
     local int oldPane;
     if (newPane == activePane)
         return;
     oldPane = activePane;
     activePane = newPane;
+
+    nt = NetworkTerminal(screen);
+    if (newPane == PANE_HACK && nt != None && nt.winHack != None)
+    {
+        paneHackFocused = nt.winHack.btnHack;
+        nt.winHack.SetFocusWindow(paneHackFocused);
+    }
+    else if (newPane == PANE_HACKACCOUNTS && nt != None && nt.winHackAccounts != None)
+    {
+        // Task 15 sets paneAccountsFocused on entry.
+    }
+
     class'DXControllerDebug'.static.DebugLog(
         "DXC-TERM PANE-SWITCH from=" $ string(oldPane) $ " to=" $ string(newPane));
 }
@@ -302,7 +315,18 @@ function bool HandleActivate(byte button)
         return true;
     }
     if (activePane == PANE_HACK)
-        return true;  // stub — Task 14
+    {
+        if (button == 200    // A
+            && paneHackFocused != None
+            && paneHackFocused.bIsSensitive
+            && PersonaActionButtonWindow(paneHackFocused) != None)
+        {
+            class'DXControllerDebug'.static.DebugLog(
+                "DXC-TERM HACK-PRESS label=" $ PersonaActionButtonWindow(paneHackFocused).buttonText);
+            PersonaActionButtonWindow(paneHackFocused).PressButton();
+        }
+        return true;  // D-pad / X / Y / R-stick all consumed
+    }
     if (activePane == PANE_HACKACCOUNTS)
         return true;  // stub — Task 15
     return true;
