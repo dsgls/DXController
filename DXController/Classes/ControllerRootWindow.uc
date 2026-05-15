@@ -75,24 +75,36 @@ function RegisterNavControllers()
     // MedBot aug installation screen — separate from the normal aug persona screen.
     RegisterNav(Class'DeusEx.HUDMedBotAddAugsScreen', Class'AugInstallNavController');
 
-    // Main-menu family: MenuUIScreenWindow subclasses using the standard
-    // choices[] pattern. Complex screens (list-based, edit controls, etc.)
-    // are omitted — see comments below.
-    RegisterNav(Class'DeusEx.MenuScreenOptions',      Class'MainMenuNavController');
-    RegisterNav(Class'DeusEx.MenuScreenDisplay',      Class'MainMenuNavController');
-    RegisterNav(Class'DeusEx.MenuScreenSound',        Class'MainMenuNavController');
-    RegisterNav(Class'DeusEx.MenuScreenControls',     Class'MainMenuNavController');
-    RegisterNav(Class'DeusEx.MenuScreenAdjustColors', Class'MainMenuNavController');
-    RegisterNav(Class'DeusEx.MenuScreenBrightness',   Class'MainMenuNavController');
+    // MenuUIMenuWindow subclasses: title/pause-root MenuMain, the
+    // Settings sub-menu opened from MenuMain → Settings, and the
+    // difficulty picker opened by the New Game flow. All three share
+    // the winButtons[] shape that MenuMainNavController drives.
+    RegisterNav(Class'DeusEx.MenuMain',             Class'MenuMainNavController');
+    RegisterNav(Class'DeusEx.MenuSettings',         Class'MenuMainNavController');
+    RegisterNav(Class'DeusEx.MenuSelectDifficulty', Class'MenuMainNavController');
+
+    // Options sub-screens: MenuUIScreenWindow subclasses using the
+    // standard choices[] pattern. Driven by OptionsNavController.
+    RegisterNav(Class'DeusEx.MenuScreenOptions',      Class'OptionsNavController');
+    RegisterNav(Class'DeusEx.MenuScreenDisplay',      Class'OptionsNavController');
+    RegisterNav(Class'DeusEx.MenuScreenSound',        Class'OptionsNavController');
+    RegisterNav(Class'DeusEx.MenuScreenControls',     Class'OptionsNavController');
+    RegisterNav(Class'DeusEx.MenuScreenAdjustColors', Class'OptionsNavController');
+    RegisterNav(Class'DeusEx.MenuScreenBrightness',   Class'OptionsNavController');
     // Omitted: MenuScreenCustomizeKeys — list-based key binding UI.
     // Omitted: MenuScreenNewGame      — skill list, text edit fields, portrait buttons.
-    // Omitted: MenuScreenLoadGame     — list-based save file picker.
-    // Omitted: MenuScreenSaveGame     — extends MenuScreenLoadGame, list-based.
+
+    // List-shape menu screens.
+    RegisterNav(Class'DeusEx.MenuScreenLoadGame',   Class'LoadGameNavController');
+    RegisterNav(Class'DeusEx.MenuScreenSaveGame',   Class'SaveGameNavController');
+    RegisterNav(Class'DeusEx.MenuScreenThemesLoad', Class'ThemesLoadNavController');
+    RegisterNav(Class'DeusEx.MenuScreenThemesSave', Class'ThemesSaveNavController');
+
+    // Modal confirmation dialogs (Quit, Overwrite, Delete confirm,
+    // AskToTrain, intro/training warnings, etc.).
+    RegisterNav(Class'DeusEx.MenuUIMessageBoxWindow', Class'MessageBoxNavController');
+
     // Omitted: MenuScreenRGB          — tab-based, complex color picker controls.
-    // Omitted: MenuScreenThemesLoad   — list-based theme picker.
-    // Omitted: MenuScreenThemesSave   — list-based (extends MenuScreenLoadGame).
-    // Note: MenuMain extends MenuUIMenuWindow (not MenuUIScreenWindow); it uses
-    // winButtons[] not choices[], so it requires a separate controller if needed.
 }
 
 function RegisterNav(Class<Window> screenClass, Class<MenuNavController> navClass)
@@ -123,16 +135,77 @@ function int FindNavIndex(Class screenClass)
     return -1;
 }
 
+// Walk root's direct children (top-of-z-stack first) and return
+// the topmost child whose class is in the nav registry, or None.
+// Used by DescendantRemoved to find what's still on top after a
+// modal overlay closes (e.g., MessageBox dismissed → MenuMain
+// underneath should re-attach).
+//
+// NOT used in DescendantAdded: when a new child is just being
+// added, the engine fires DescendantAdded *before* the child is
+// reachable via GetTopChild — the walk would miss it. That path
+// matches descendant.Class directly instead.
+function MenuNavController FindTopmostRegisteredNav(out Window outScreen)
+{
+    local Window c;
+    local int idx;
+
+    outScreen = None;
+    c = GetTopChild();
+    while (c != None)
+    {
+        idx = FindNavIndex(c.Class);
+        if (idx >= 0)
+        {
+            outScreen = c;
+            return GetOrCreateNav(idx);
+        }
+        c = c.GetLowerSibling();
+    }
+    return None;
+}
+
+// Switch activeNav. Detaches the current one, attaches `desired` to
+// `desiredScreen`. Either may be None.
+function SwitchActiveNav(MenuNavController desired, Window desiredScreen)
+{
+    if (activeNav == desired
+        && (desired == None || activeNav.screen == desiredScreen))
+        return;
+
+    if (activeNav != None)
+    {
+        if (activeNav.screen != None)
+            class'DXControllerDebug'.static.DebugLog(
+                "DXC-NAV SWITCH detach=" $ string(activeNav.screen.Class));
+        activeNav.Detach();
+    }
+    activeNav = desired;
+    if (activeNav != None)
+    {
+        activeNav.Attach(desiredScreen);
+        class'DXControllerDebug'.static.DebugLog(
+            "DXC-NAV SWITCH attach=" $ string(desiredScreen.Class));
+    }
+}
+
 // Engine-event-driven nav attach/detach. Fires on every ancestor when
 // a child enters or leaves the native window tree, while the descendant
 // pointer is still valid (vanilla HUDBarkDisplay.DescendantRemoved
-// calls descendant.IsA(...), proving safety). Replaces the lazy
-// MaybeAttachNav polling, which observed dangling pointers after
-// in-band InvokeUIScreen swaps.
+// calls descendant.IsA(...), proving safety).
+//
+// DescendantAdded uses direct descendant.Class lookup because the
+// engine fires this event before the new child is reachable via
+// GetTopChild (verified empirically: a GetTopChild walk here misses
+// the freshly-pushed screen).
+//
+// DescendantRemoved walks GetTopChild to handle the modal-overlay
+// case — when MessageBox is dismissed, ResolveActiveNav re-attaches
+// whichever registered screen is still on top.
 event DescendantAdded(Window descendant)
 {
     local int idx;
-    local MenuNavController nav;
+    local bool bIsModalScreen;
 
     Super.DescendantAdded(descendant);
 
@@ -143,48 +216,45 @@ event DescendantAdded(Window descendant)
     // DeusExBaseWindow subclasses, so that cast cleanly excludes the
     // root's HUD-style children (hud, scopeView, actorDisplay, radial,
     // focusOverlay) and every grandchild built during InitWindow.
-    if (radial != None && radial.bOpen
-        && DeusExBaseWindow(descendant) != None
-        && descendant.GetParent() == Self)
+    bIsModalScreen = DeusExBaseWindow(descendant) != None
+                     && descendant.GetParent() == Self;
+    if (radial != None && radial.bOpen && bIsModalScreen)
     {
         radial.OnTopWindowPushed(descendant);
     }
 
+    // Direct registry match on the just-added descendant. We can't
+    // walk GetTopChild here — the engine fires this event before the
+    // new child is in root's child list.
     idx = FindNavIndex(descendant.Class);
-    if (idx < 0)
+    if (idx >= 0)
+    {
+        SwitchActiveNav(GetOrCreateNav(idx), descendant);
         return;
-
-    // Defensive: a registered screen is appearing and we still have a
-    // controller bound. Normal flow detaches via DescendantRemoved
-    // before we get here; this branch only matters if the engine
-    // ordering ever reverses.
-    if (activeNav != None)
-    {
-        activeNav.Detach();
-        activeNav = None;
     }
 
-    nav = GetOrCreateNav(idx);
-    if (nav != None)
-    {
-        nav.Attach(descendant);
-        activeNav = nav;
-        class'DXControllerDebug'.static.DebugLog(
-            "DXC-NAV ATTACH-EVT screen=" $ string(descendant.Class));
-    }
+    // Unregistered DeusExBaseWindow pushed as a direct child of root
+    // (e.g., MenuScreenNewGame, MenuScreenCustomizeKeys — out of
+    // scope for this controller pass): clear activeNav so the
+    // underlying screen's nav doesn't continue handling D-pad / A /
+    // X under the new visible modal. B still works (synthesises
+    // IK_Escape on top window), so the user can back out.
+    if (bIsModalScreen)
+        SwitchActiveNav(None, None);
 }
 
 event DescendantRemoved(Window descendant)
 {
+    local Window topScreen;
+    local MenuNavController topNav;
+
     Super.DescendantRemoved(descendant);
 
-    if (activeNav != None && activeNav.screen == descendant)
-    {
-        class'DXControllerDebug'.static.DebugLog(
-            "DXC-NAV DETACH-EVT screen=" $ string(descendant.Class));
-        activeNav.Detach();
-        activeNav = None;
-    }
+    // Re-derive activeNav from the current window tree. Handles the
+    // modal-overlay close case (MessageBox popped → MenuMain still
+    // on top → its controller re-attaches).
+    topNav = FindTopmostRegisteredNav(topScreen);
+    SwitchActiveNav(topNav, topScreen);
 }
 
 // Retry deferred focus init. Some screens (PersonaScreenInventory in
@@ -261,24 +331,45 @@ event bool VirtualKeyPressed(EInputKey key, bool bRepeat)
     local int dx, dy;
     local byte bkey;        // byte alias for key — HandleActivate takes byte,
                             // and UE1 rejects EInputKey→byte implicit coercion.
+    local Window top;
 
     p = DeusExPlayer(parentPawn);
     bkey = key;             // EInputKey IS a byte; assignment (not cast) compiles.
 
     // ---- Close-menu buttons ----
 
-    // B (Joy2): close sub-dialog if open; else close the menu.
+    // B (Joy2): cancel one level — either the sub-dialog (if a
+    // controller owns one), or the topmost window. The topmost window
+    // already routes IK_Escape correctly via its own VirtualKeyPressed:
+    //
+    //   - MenuUIWindow-family screens: Escape → CancelScreen() →
+    //     root.PopWindow() (one level back). Per-screen CancelScreen
+    //     overrides (e.g. MenuScreenNewGame restoring skill points)
+    //     run untouched.
+    //   - MenuUIMessageBoxWindow: Escape → PostResult(1) for YesNo
+    //     (the "No" path) or PostResult(0) for OK.
+    //
+    // Synthesizing Escape lets each screen's existing handler win,
+    // without per-screen branching here. Compare with Back (Joy7)
+    // below, which is the explicit "full close" path.
+    //
+    // Caveat: GetTopWindow() reflects the PushWindow stack only
+    // (CLAUDE.md). Every menu screen and message box in scope is
+    // PushWindow-stacked, so this is correct here.
     if (key == IK_Joy2 && !bRepeat)
     {
         if (activeNav != None && activeNav.subDialogActive != '')
         {
-            // Sub-dialog ownership: route B to the active controller so
-            // it can close its own sub-dialog cleanly.
+            // Sub-dialog ownership (radial wheel assign, aug install):
+            // route B to the active controller so it can close its
+            // sub-dialog cleanly. Unchanged.
             activeNav.HandleActivate(bkey);
             return true;
         }
-        if (p != None)
-            p.TogglePlayerMenuWindow();
+
+        top = GetTopWindow();
+        if (top != None)
+            top.VirtualKeyPressed(IK_Escape, false);
         return true;
     }
 
