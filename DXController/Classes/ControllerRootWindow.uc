@@ -453,6 +453,13 @@ function Tick(float deltaSeconds)
             class'DXControllerDebug'.static.DebugLog(
                 "DXC-NAV TICK-INIT screen=" $ string(activeNav.screen.Class));
     }
+
+    // 4. Drive the active controller's per-frame hook. MenuNavController
+    //    is Object-scoped so the engine doesn't tick it directly; this
+    //    is the manual pump. NetworkTerminalNavController uses it for
+    //    winComputer screen-swap detection; most controllers no-op.
+    if (activeNav != None)
+        activeNav.NavTick(deltaSeconds);
 }
 
 // Called by ControllerConsole at the top of every gamepad event handler.

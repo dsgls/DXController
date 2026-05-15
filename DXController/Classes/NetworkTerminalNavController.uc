@@ -73,9 +73,9 @@ function bool AllowsMenuToggle()
     return false;
 }
 
-// ---- Tick: screen-swap detection + sub lifecycle ---------------------------
+// ---- NavTick: screen-swap detection + sub lifecycle ------------------------
 
-function Tick(float deltaSeconds)
+function NavTick(float deltaSeconds)
 {
     local NetworkTerminal nt;
     local ComputerUIWindow newWinComp;
