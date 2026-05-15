@@ -211,4 +211,7 @@ function bool HandleActivate(byte button)
 defaultproperties
 {
     bAllowRepeat=True
+
+    subKeys(0)=Class'DeusEx.ComputerScreenLogin'
+    subClasses(0)=Class'DXController.ComputerScreenLoginNav'
 }
