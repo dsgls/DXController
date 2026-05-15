@@ -143,17 +143,37 @@ function int FindNavIndex(Class screenClass)
     return -1;
 }
 
-// Walk root's direct children (top-of-z-stack first) and return
-// the topmost child whose class is in the nav registry, or None.
-// Used by DescendantRemoved to find what's still on top after a
-// modal overlay closes (e.g., MessageBox dismissed → MenuMain
-// underneath should re-attach).
+// Walk root's direct children (top-of-z-stack first) and stop at the
+// topmost modal screen — a DeusExBaseWindow direct child of root. That
+// predicate cleanly separates modal screens (PushWindow'd menus,
+// conversations, datacubes — all inherit ModalWindow via
+// DeusExBaseWindow) from the always-present HUD-style children
+// (hud, actorDisplay, scopeView, radial, focusOverlay — all extend
+// Window directly, NOT DeusExBaseWindow). Returns:
 //
-// NOT used in DescendantAdded: when a new child is just being
-// added, the engine fires DescendantAdded *before* the child is
-// reachable via GetTopChild — the walk would miss it. That path
-// matches descendant.Class directly instead.
-function MenuNavController FindTopmostRegisteredNav(out Window outScreen)
+//   (controller, screen) when the topmost modal is registered.
+//   (None,       screen) when the topmost modal is not registered
+//                        (e.g., MenuScreenNewGame / CustomizeKeys /
+//                        RGB) — SwitchActiveNav then clears activeNav
+//                        so D-pad/A/X don't drive a screen beneath the
+//                        visible modal.
+//   (None,       None)   when no modal is foregrounded (gameplay).
+//
+// The walk STOPS at the topmost modal; it does not skip an unregistered
+// modal to find a registered screen beneath it.
+//
+// Why this is called from Tick instead of from DescendantRemoved:
+// PopWindow runs `oldWindow.Destroy()` BEFORE `newWindow.Show()`, and
+// Hide() unlinks the parent from root's child list. That means
+// DescendantRemoved fires while the parent is still hidden+unlinked
+// and this walk would return None for the back-nav case (verified by
+// the test 2 log capture for Bug 5 — `DETACH MenuSelectDifficulty`
+// with no matching `ATTACH MenuMain` follow-up). Tick runs between
+// frames, after Show() has relinked the parent into the child list,
+// so the parent is found then. Tick reconciliation is the canonical
+// source of truth; DescendantAdded is retained as a same-frame
+// optimization for the push case (no Hide/Show transition there).
+function MenuNavController FindTopmostModalNav(out Window outScreen)
 {
     local Window c;
     local int idx;
@@ -162,11 +182,13 @@ function MenuNavController FindTopmostRegisteredNav(out Window outScreen)
     c = GetTopChild();
     while (c != None)
     {
-        idx = FindNavIndex(c.Class);
-        if (idx >= 0)
+        if (DeusExBaseWindow(c) != None && c.GetParent() == Self)
         {
             outScreen = c;
-            return GetOrCreateNav(idx);
+            idx = FindNavIndex(c.Class);
+            if (idx >= 0)
+                return GetOrCreateNav(idx);
+            return None;
         }
         c = c.GetLowerSibling();
     }
@@ -219,11 +241,16 @@ function SwitchActiveNav(MenuNavController desired, Window desiredScreen)
 // DescendantAdded uses direct descendant.Class lookup because the
 // engine fires this event before the new child is reachable via
 // GetTopChild (verified empirically: a GetTopChild walk here misses
-// the freshly-pushed screen).
+// the freshly-pushed screen). This stays a same-frame attach for push,
+// which has no Hide/Show transition that would invalidate state.
 //
-// DescendantRemoved walks GetTopChild to handle the modal-overlay
-// case — when MessageBox is dismissed, ResolveActiveNav re-attaches
-// whichever registered screen is still on top.
+// DescendantRemoved cannot re-derive activeNav reliably: when a
+// sub-menu is popped, PopWindow runs Destroy (firing this event) BEFORE
+// Show on the underlying parent, so the parent is still hidden and
+// unlinked from root's child list. The walk would miss it. Instead,
+// DescendantRemoved just clears activeNav defensively if the active
+// screen is going away, and Tick re-resolves on the next frame after
+// Show has settled the tree. See FindTopmostModalNav.
 event DescendantAdded(Window descendant)
 {
     local int idx;
@@ -267,34 +294,53 @@ event DescendantAdded(Window descendant)
 
 event DescendantRemoved(Window descendant)
 {
-    local Window topScreen;
-    local MenuNavController topNav;
-
     Super.DescendantRemoved(descendant);
 
-    // Re-derive activeNav from the current window tree. Handles the
-    // modal-overlay close case (MessageBox popped → MenuMain still
-    // on top → its controller re-attaches).
-    topNav = FindTopmostRegisteredNav(topScreen);
-    SwitchActiveNav(topNav, topScreen);
+    // The active screen is being torn down — drop activeNav now so
+    // VirtualKeyPressed / MenuFocusOverlay don't dereference the
+    // destroyed window during the rest of this frame. Don't try to
+    // re-resolve the new top here: in the back-nav-from-hidden-parent
+    // case the parent is still hidden+unlinked at this moment and the
+    // walk would return None anyway. Tick re-resolves post-Show.
+    if (activeNav != None && activeNav.screen == descendant)
+        SwitchActiveNav(None, None);
 }
 
-// Retry deferred focus init. Some screens (PersonaScreenInventory in
-// particular) populate dynamic children — winItems contents — inside
-// InitWindow AFTER DescendantAdded fires, so InitFocus called from
-// Attach finds an empty container. Tick runs between frames once the
-// screen is fully initialized, so the retry succeeds. The DXC-NAV
-// TICK-INIT log below is the diagnostic that Tick on subclasses fires
-// in this codebase (CLAUDE.md flagged it as unverified).
+// Per-frame work, run between frames after the engine has settled any
+// in-flight Hide/Show / PushWindow / PopWindow transitions. Three jobs:
+//
+//   1. Reconcile activeNav against the visible top-of-stack. The
+//      engine-event-driven attach in DescendantAdded handles the push
+//      case in the same frame, but DescendantRemoved can't reach
+//      a hidden parent that PopWindow has yet to Show. Tick is the
+//      canonical resolver — SwitchActiveNav early-exits when nothing
+//      has changed, so the steady-state cost is one short sibling walk.
+//
+//   2. Detect mouse motion while the cursor is hidden. ShowCursor(False)
+//      suppresses script-level MouseMoved, so polling GetCursorPos is
+//      the only signal that the user grabbed the mouse.
+//
+//   3. Retry deferred focus init. Some screens (PersonaScreenInventory
+//      in particular) populate dynamic children — winItems contents —
+//      inside InitWindow AFTER DescendantAdded fires, so InitFocus
+//      called from Attach finds an empty container. Tick runs once the
+//      screen is fully initialized, so the retry succeeds. The DXC-NAV
+//      TICK-INIT log is the diagnostic that Tick on subclasses fires
+//      in this codebase.
 function Tick(float deltaSeconds)
 {
     local float curX, curY;
+    local Window topScreen;
+    local MenuNavController topNav;
 
     Super.Tick(deltaSeconds);
 
-    // Detect mouse motion while the cursor is hidden. The script-level
-    // MouseMoved event doesn't fire under ShowCursor(False), so polling
-    // GetCursorPos is the only signal that the user grabbed the mouse.
+    // 1. activeNav reconciliation. Runs first so the cursor-poll and
+    //    focus-retry blocks below see the up-to-date activeNav.
+    topNav = FindTopmostModalNav(topScreen);
+    SwitchActiveNav(topNav, topScreen);
+
+    // 2. Mouse-grab detection while cursor is hidden.
     if (cursorMode == CM_Gamepad && activeNav != None)
     {
         GetCursorPos(curX, curY);
@@ -306,6 +352,7 @@ function Tick(float deltaSeconds)
         }
     }
 
+    // 3. Deferred focus init for screens whose children populate lazily.
     if (activeNav != None && activeNav.focused == None && activeNav.screen != None)
     {
         activeNav.InitFocus();
