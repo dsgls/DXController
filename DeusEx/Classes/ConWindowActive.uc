@@ -29,6 +29,19 @@ enum EMoveModes {
 
 var EMoveModes moveMode;
 
+// === DXController additions: BEGIN ===
+// Gamepad-mode flag: when true, suppress the four root.ShowCursor()
+// calls in this class so the cursor doesn't pop into view mid-conversation
+// while the player is using gamepad input. Set by
+// DXController.ConversationNavController.Attach/Detach.
+//
+// State-only addition per CLAUDE.md "Source overlay model"; the
+// orchestration (when to set the flag, when to clear it) lives in
+// DXController/ since DeusEx is built in pass 1 before DXController
+// exists and can't reference DXController types directly.
+var bool bGamepadMode;
+// === DXController additions: END ===
+
 // ----------------------------------------------------------------------
 // InitWindow()
 //
@@ -39,7 +52,8 @@ event InitWindow()
 {
 	Super.InitWindow();
 
-	root.ShowCursor(False);
+	if (!bGamepadMode)               // DXController gate
+		root.ShowCursor(False);
 
 	// Modify lower window
 	lowerConWindow.SetBackgroundStyle(DSTY_Normal);
@@ -60,7 +74,8 @@ event InitWindow()
 event DestroyWindow()
 {
 	// Turn the cursor back on
-	root.ShowCursor(True);
+	if (!bGamepadMode)               // DXController gate
+		root.ShowCursor(True);
 }
 
 // ----------------------------------------------------------------------
@@ -299,9 +314,10 @@ function DisplaySkillChoice( ConChoice choice )
 
 function AddButton( ConChoiceWindow newButton )
 {
-	// Turn the cursor on so the user can use the cursor to 
+	// Turn the cursor on so the user can use the cursor to
 	// select a choice.
-	root.ShowCursor(True);
+	if (!bGamepadMode)               // DXController gate
+		root.ShowCursor(True);
 
 	// Add to our button array
 	conChoices[numChoices++] = newButton;
@@ -359,7 +375,8 @@ function bool ButtonActivated( Window buttonPressed )
 		if (conChoices[buttonIndex] == buttonPressed)
 		{
 			// Turn the cursor back off
-			root.ShowCursor(False);
+			if (!bGamepadMode)           // DXController gate
+				root.ShowCursor(False);
 			conPlay.PlayChoice( ConChoice(conChoices[buttonIndex].GetUserObject()) );
 
 			// Clear the screen
