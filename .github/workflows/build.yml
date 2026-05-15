@@ -55,23 +55,31 @@ jobs:
             git@github.com:dsgls/deusex-buildtools.git \
             "$RUNNER_TEMP/build"
 
-      - name: Overlay DXController and DeusEx sources
+      - name: Overlay DXController, DeusEx, and DeusExe sources
         run: |
           rsync -rt DXController/ "$RUNNER_TEMP/build/DXController/"
           rsync -rt DeusEx/       "$RUNNER_TEMP/build/DeusEx/"
+          rsync -rt DeusExe/      "$RUNNER_TEMP/build/DeusExe/"
 
-      - name: Register mod with the compiler
+      - name: Register mod packages with the compiler
         run: |
-          # Insert EditPackages=DXController *inside* the
-          # [Editor.EditorEngine] EditPackages block — appending to EOF
-          # would land the line under a later section (e.g.
-          # [DeusEx.DeusExGameInfo]) and UCC would never see it.
-          # Insert immediately after the last existing EditPackages= line.
-          # The ini ships CRLF (buildtools' .gitattributes forces it), so
-          # anchor with [[:space:]]* to absorb the trailing \r.
+          # Insert EditPackages=DeusExe and EditPackages=DXController
+          # *inside* the [Editor.EditorEngine] EditPackages block —
+          # appending to EOF would land the lines under a later section
+          # (e.g. [DeusEx.DeusExGameInfo]) and UCC would never see them.
+          # The ini ships CRLF (buildtools' .gitattributes forces it),
+          # so anchor with [[:space:]]* to absorb the trailing \r.
+          #
+          # DXController references Class'DeusExe.ConWindowActive2'
+          # (the DeusExe-XInput launcher's runtime substitution for
+          # ConWindowActive), so DeusExe must be in EditPackages *before*
+          # DXController.
           INI="$RUNNER_TEMP/build/System/DeusEx.ini"
+          if ! grep -qxF 'EditPackages=DeusExe' "$INI"; then
+            sed -i -E '/^EditPackages=DeusEx[[:space:]]*$/a EditPackages=DeusExe' "$INI"
+          fi
           if ! grep -qxF 'EditPackages=DXController' "$INI"; then
-            sed -i -E '/^EditPackages=DeusEx[[:space:]]*$/a EditPackages=DXController' "$INI"
+            sed -i -E '/^EditPackages=DeusExe[[:space:]]*$/a EditPackages=DXController' "$INI"
           fi
           echo "--- EditPackages block after edit ---"
           grep -n EditPackages "$INI"
@@ -79,10 +87,15 @@ jobs:
       - name: Build pass 1 — DeusEx.u
         working-directory: ${{ runner.temp }}/build/System
         run: |
-          rm -f DeusEx.u
+          # Also delete DeusExe.u so pass 2 rebuilds it from the
+          # vendored source instead of using whatever the buildtools
+          # repo ships (which may not exist on a fresh clone).
+          rm -f DeusEx.u DeusExe.u
           # UCC prompts to overwrite DeusEx/Inc/DeusExClasses.h; 'n'
           # lets the build proceed. UCC then GPFs while loading the
           # rebuilt package — DeusEx.u is on disk before the crash.
+          # The GPF happens before UCC reaches the DeusExe / DXController
+          # builds, so pass 2 is responsible for those.
           # `|| true` tolerates the GPF; the size check below is the
           # real success signal.
           echo n | wine UCC.exe make || true
@@ -97,25 +110,31 @@ jobs:
           fi
           echo "DeusEx.u OK ($SIZE bytes)"
 
-      - name: Build pass 2 — DXController.u
+      - name: Build pass 2 — DeusExe.u and DXController.u
         working-directory: ${{ runner.temp }}/build/System
         run: |
           rm -f DXController.u
           wine UCC.exe make
+          if [ ! -f DeusExe.u ]; then
+            echo "::error::DeusExe.u was not produced"
+            exit 1
+          fi
           if [ ! -f DXController.u ]; then
             echo "::error::DXController.u was not produced"
             exit 1
           fi
-          SIZE=$(stat -c%s DXController.u)
-          if [ "$SIZE" -lt 102400 ]; then
-            echo "::error::DXController.u is $SIZE bytes (< 100 KiB) — UCC silent failure"
+          DXSIZE=$(stat -c%s DXController.u)
+          if [ "$DXSIZE" -lt 102400 ]; then
+            echo "::error::DXController.u is $DXSIZE bytes (< 100 KiB) — UCC silent failure"
             exit 1
           fi
-          echo "DXController.u OK ($SIZE bytes)"
+          DESIZE=$(stat -c%s DeusExe.u)
+          echo "DeusExe.u OK ($DESIZE bytes); DXController.u OK ($DXSIZE bytes)"
 
       - name: Stage artifact files
         run: |
           cp "$RUNNER_TEMP/build/System/DeusEx.u" .
+          cp "$RUNNER_TEMP/build/System/DeusExe.u" .
           cp "$RUNNER_TEMP/build/System/DXController.u" .
 
       - name: Upload build artifact
@@ -124,6 +143,7 @@ jobs:
           name: dxcontroller-build
           path: |
             DeusEx.u
+            DeusExe.u
             DXController.u
 
       - name: Stage release contents
@@ -135,12 +155,15 @@ jobs:
           mkdir -p "$REL"
           cp README.md "$REL/"
           cp "$RUNNER_TEMP/build/System/DeusEx.u" "$REL/"
+          cp "$RUNNER_TEMP/build/System/DeusExe.u" "$REL/"
           cp "$RUNNER_TEMP/build/System/DXController.u" "$REL/"
 
-          # Bundle the matching DeusExe-XInput launcher + DeusExe.u.
+          # Bundle the matching DeusExe-XInput launcher executable.
+          # DeusExe.u is built from our vendored source above; only the
+          # native launcher binary comes from the upstream release zip.
           # Upstream zip extracts to DeusExe-XInput-<ver>/{deusex.exe,
-          # DeusExe.u, ...}; we flatten that into $REL so end users get
-          # a single directory. The launcher currently ships as
+          # DeusExe.u, ...}; we flatten the .exe into $REL so end users
+          # get a single directory. The launcher currently ships as
           # lowercase deusex.exe — rename to DeusExe.exe on the way in
           # (case-insensitive find tolerates an upstream fix without a
           # workflow change).
@@ -155,13 +178,11 @@ jobs:
           mkdir -p "$DXX_DIR"
           unzip -q "$DXX_ZIP" -d "$DXX_DIR"
           EXE=$(find "$DXX_DIR" -iname 'deusex.exe' -print -quit)
-          UMOD=$(find "$DXX_DIR" -iname 'DeusExe.u'  -print -quit)
-          if [ -z "$EXE" ] || [ -z "$UMOD" ]; then
-            echo "::error::$DXX_ASSET is missing deusex.exe and/or DeusExe.u"
+          if [ -z "$EXE" ]; then
+            echo "::error::$DXX_ASSET is missing deusex.exe"
             exit 1
           fi
           cp "$EXE"  "$REL/DeusExe.exe"
-          cp "$UMOD" "$REL/DeusExe.u"
 
       - name: Create release zip
         if: startsWith(github.ref, 'refs/tags/v')
