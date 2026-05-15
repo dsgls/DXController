@@ -19,6 +19,12 @@ jobs:
       # Suppress wine's prompt to download mono/gecko on first run — UCC
       # needs neither and the prompt would block the build.
       WINEDLLOVERRIDES: "mscoree,mshtml="
+      # DeusExe-XInput release tag to bundle into the release zip.
+      # Must match a published tag at
+      # https://github.com/dsgls/DeusExe-XInput/releases — the workflow
+      # downloads DeusExe-XInput-${DEUSEXE_XINPUT_VERSION}.zip from
+      # that release.
+      DEUSEXE_XINPUT_VERSION: v1.0.0
 
     steps:
       - name: Install wine
@@ -122,12 +128,40 @@ jobs:
 
       - name: Stage release contents
         if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           REL="$RUNNER_TEMP/release/DXController-${GITHUB_REF_NAME}"
           mkdir -p "$REL"
           cp README.md "$REL/"
           cp "$RUNNER_TEMP/build/System/DeusEx.u" "$REL/"
           cp "$RUNNER_TEMP/build/System/DXController.u" "$REL/"
+
+          # Bundle the matching DeusExe-XInput launcher + DeusExe.u.
+          # Upstream zip extracts to DeusExe-XInput-<ver>/{deusex.exe,
+          # DeusExe.u, ...}; we flatten that into $REL so end users get
+          # a single directory. The launcher currently ships as
+          # lowercase deusex.exe — rename to DeusExe.exe on the way in
+          # (case-insensitive find tolerates an upstream fix without a
+          # workflow change).
+          DXX_ASSET="DeusExe-XInput-${DEUSEXE_XINPUT_VERSION}.zip"
+          DXX_ZIP="$RUNNER_TEMP/$DXX_ASSET"
+          gh release download "$DEUSEXE_XINPUT_VERSION" \
+            --repo dsgls/DeusExe-XInput \
+            --pattern "$DXX_ASSET" \
+            --output "$DXX_ZIP"
+          DXX_DIR="$RUNNER_TEMP/deusexe-xinput"
+          rm -rf "$DXX_DIR"
+          mkdir -p "$DXX_DIR"
+          unzip -q "$DXX_ZIP" -d "$DXX_DIR"
+          EXE=$(find "$DXX_DIR" -iname 'deusex.exe' -print -quit)
+          UMOD=$(find "$DXX_DIR" -iname 'DeusExe.u'  -print -quit)
+          if [ -z "$EXE" ] || [ -z "$UMOD" ]; then
+            echo "::error::$DXX_ASSET is missing deusex.exe and/or DeusExe.u"
+            exit 1
+          fi
+          cp "$EXE"  "$REL/DeusExe.exe"
+          cp "$UMOD" "$REL/DeusExe.u"
 
       - name: Create release zip
         if: startsWith(github.ref, 'refs/tags/v')
