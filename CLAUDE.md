@@ -18,6 +18,47 @@ propagate until you run `./sync-and-build.sh`. The `gamedir/` symlink only
 gives the script a stable path to point at; it doesn't sync anything by
 itself.
 
+### Sister repos and their roles
+
+The full project spans four repos. This one is the script-side mod; the
+others are sibling working trees you can `cd ../<name>` to:
+
+- **`../DeusExe-XInput/`** — fork of [Deus Exe](https://kentie.net/article/dxguide/)
+  that builds the launcher executable (`DeusEx.exe`) used to run the
+  game. This is **the only user-owned native code in the project**. It
+  loads the stock engine DLLs, polls XInput once per engine tick, and
+  feeds events as `EInputKey` / `EInputAction` / float-delta tuples
+  through `UEngine::InputEvent` (so as far as the engine is concerned
+  they came from `WinDrv`). It also runs two in-memory byte patches
+  against `WinDrv.dll` at startup to fix joystick bugs in the stock
+  binary — see "Native input pipeline" below.
+- **`../deusex-native-re/`** — Ghidra reverse-engineering notes for the
+  stock `System/*.dll` binaries. Documentation only; nothing built or
+  shipped from here. **Read this whenever a "but why does the engine do
+  X?" question comes up** — it is the authoritative source for native
+  behaviour. Most relevant docs:
+  - `docs/input-chain.md` — end-to-end event flow from the OS through
+    to player exec functions; what each native stage does, what it
+    drops, what it synthesises.
+  - `docs/windrv-input.md` — `WinDrv.dll`'s per-frame input poll, the
+    two joystick bugs, and the byte-patch fixes the launcher applies.
+  - `docs/extension-classes.md` — `Extension.dll` class catalog
+    (`XInputExt`, `XRootWindow`, `XGameEngineExt`, `APlayerPawnExt`,
+    `XViewportWindow`) with addresses, mangled symbols, field offsets.
+- **`../deusex-scripts/`** — exported `.uc` files for every stock
+  package. Read-only reference — see "Working with the original
+  scripts" below.
+
+**Ownership map** (matters for the "flag, don't compensate" rule):
+
+| Component                          | Repo                       | Modifiable? |
+|------------------------------------|----------------------------|-------------|
+| `DeusEx.exe` launcher / XInput shim / WinDrv runtime patches | `../DeusExe-XInput/` | yes |
+| `DXController.u` (this mod)        | this repo                  | yes |
+| Edits to `DeusEx.u` classes (overlay) | `DeusEx/Classes/` here  | yes (rebuilt) |
+| `Engine.dll`, `Core.dll`, `Extension.dll`, `WinDrv.dll`, `Render.dll`, `*.u` packages other than `DeusEx.u` | stock game install | **no** (in-memory patches only, via the launcher) |
+| Stock `.uc` exports                | `../deusex-scripts/`       | **no** (reference only) |
+
 ### Working with the original scripts
 
 `../deusex-scripts/` is an export of the stock game's `.uc` files. Treat it as
@@ -80,23 +121,38 @@ constraint encountered during development gets written down
 If a finding belongs in both, document concisely in both — the quirk
 form in this file, the user-facing form in `README.md`.
 
-### Suspected bugs in user-owned native code: flag, don't compensate
+### Suspected native-side bugs: flag, don't compensate
 
-The XInput shim and `Extension.InputDrv` are code the user owns and can
-fix at the source. If a behaviour looks like a bug there (events that
+**User-owned native code:** the launcher executable and its XInput shim
+in `../DeusExe-XInput/`, plus the runtime byte patches it applies to
+`WinDrv.dll` at startup (`DeusExe/WinDrvPatch.cpp`). These can be fixed
+at the source.
+
+**Stock native code:** `Engine.dll`, `Core.dll`, `Extension.dll`
+(including `XInputExt` aka `Extension.InputExt`), `WinDrv.dll`,
+`Render.dll`. Not user-owned — but `../deusex-native-re/` documents
+their behaviour from RE, and the launcher can ship more in-memory
+patches if a stock-side fix is needed.
+
+If a behaviour looks like a bug in *either* category — events that
 shouldn't fire, events that should fire but don't, values in the wrong
-range, missing edges, etc.), **do not build a UScript workaround.**
+range, missing edges, etc. — **do not build a UScript workaround.**
 Surface the observation explicitly:
 
 - What the script-side sees, with concrete event sequences / values
   from `DeusEx.log` if available.
-- Which native component is the likely owner (shim DLL, `Extension.dll`,
-  `InputDrv`, etc.) so the user knows where to look.
+- Which native component is the likely owner (XInput shim, WinDrv
+  runtime patch, `Extension.dll`'s `XInputExt`, stock `WinDrv.dll`,
+  etc.) so the right repo can be opened. When in doubt about which
+  stage drops or transforms an event, check
+  `../deusex-native-re/docs/input-chain.md` — it traces every stage
+  from the OS to the player exec function.
 - What the *expected* behaviour would be.
 
-Then stop and let the user fix it natively. A UScript band-aid hides
-the real defect, accumulates compensating complexity in the mod, and
-can mask further changes the user makes on the native side.
+Then stop. For user-owned code the user fixes it directly; for stock
+code the user decides whether to add a runtime patch. A UScript
+band-aid hides the real defect, accumulates compensating complexity in
+the mod, and can mask further changes on the native side.
 
 ### Debug logging
 
@@ -295,6 +351,28 @@ stock `Console.state Typing.KeyEvent`'s use of `global.KeyEvent` at
 
 ## Input flow (for the XInput work)
 
+```
+[OS / XInput pad]
+       │
+       ▼
+[XInput shim in ../DeusExe-XInput/DeusExe/XInput.cpp]
+   per-tick poll, deadzone + response curve, edge dedup,
+   focus-loss synthetic releases
+       │  IK_Joy*/IK_JoyPov*/IK_JoyX/Y/U/V/Z/R + IST_Press/Release/Axis
+       ▼
+UEngine::InputEvent (Engine.dll)
+       ├──► Console::Key  ─►  Console.KeyEvent (script — first chance)
+       │                          ↑ this is where DXController hooks
+       └──► XInputExt::Process (Extension.dll, == Extension.InputExt)
+              ├──► XRootWindow::Process (UI capture? if yes, swallow + sweep releases)
+              └──► binding dispatch via Bindings[Key] in [Extension.InputExt]
+```
+
+Authoritative reference for stage-by-stage native behaviour:
+`../deusex-native-re/docs/input-chain.md`. The summary below is what
+script authors need to know; chase that doc when something doesn't
+match expectations.
+
 The engine's first script-side entry point for any key/axis event is
 `Console.KeyEvent(EInputKey Key, EInputAction Action, float Delta)` in
 `../deusex-scripts/Engine/Classes/Console.uc`. Axes arrive there with
@@ -305,12 +383,44 @@ arrive with `IST_Press` / `IST_Release`. State-scoped overrides exist
 rebuilding `Engine.u`, subclass `Console` per the "Packages that can't
 be rebuilt" section above.
 
-### Native input handler: `Extension.InputExt`
+### Native input pipeline (legacy joystick path is OFF)
 
-The active `UInput` is `Extension.InputExt` (native, in `Extension.dll`),
-wired via `[Engine.Engine] Input=Extension.InputExt` in `DeusEx.ini`.
-It is *not* stock UE1 `UInput`; its `Process` override changes what
-reaches the binding system:
+`UseJoystick=False` in `[Engine.Engine]` of `DeusEx.ini`. This disables
+`WinDrv.dll`'s legacy `joyGetPosEx` poll path entirely — the XInput
+shim is the *only* source of joystick events in this build. Don't
+re-enable `UseJoystick`: the legacy path has known bugs (see
+`../deusex-native-re/docs/windrv-input.md`) and would race the shim for
+the same `IK_Joy*` slots.
+
+The launcher (`../DeusExe-XInput/`) also applies in-memory byte
+patches to `WinDrv.dll` at startup that fix two stock bugs:
+
+- **Bug 1**: `joyGetPosEx`-loop bitmap-index off-by-`0xc8`, which would
+  otherwise produce a press storm at frame rate on `Console.KeyEvent`
+  for any held joy button.
+- **Bug 2**: trailer reconciliation pass synthesises an `IST_Release`
+  every frame for joy buttons whose `IK_Joy*` keycode falls in the
+  reserved-VK range (all of them, in practice). Without the patch, any
+  press injected through `WM_KEYDOWN` (which is how some virtual-pad
+  wrappers — though *not* this project's XInput shim — surface
+  buttons) would be released the same tick.
+
+Both fixes are documented in `../deusex-native-re/docs/windrv-input.md`
+("Bug 1" and "Bug 2") and applied by `DeusExe/WinDrvPatch.cpp`. With
+`UseJoystick=False` the joy-loop path is dead anyway, so Bug 1 is moot
+for current behaviour, but the patches are present for defence in
+depth (and for the case where someone flips the ini back). If you see
+`WinDrvPatch: fingerprint MISMATCH` in the launcher log, that's the
+patcher refusing to write into a `WinDrv.dll` it doesn't recognise —
+ask the user to confirm their `WinDrv.dll` matches the GOG / Steam
+build the patch was authored against.
+
+### Script-visible input handler: `Extension.InputExt`
+
+The active `UInput` is `Extension.InputExt` (native class `XInputExt`
+in `Extension.dll`, wired via `[Engine.Engine] Input=Extension.InputExt`
+in `DeusEx.ini`). It is *not* stock UE1 `UInput`; its `Process`
+override changes what reaches the binding system:
 
 1. **UI gets first refusal.** If the current pawn is an
    `Extension.PlayerPawnExt` with a non-null `rootWindow`, every event
@@ -357,7 +467,9 @@ its own edge filter.
 
 ### XInput → UE event mapping
 
-The C++-side XInput shim feeds these `EInputKey` slots into
+The C++-side XInput shim
+(`../DeusExe-XInput/DeusExe/XInput.cpp`, see `kButtonMap` at the top of
+the file for the source of truth) feeds these `EInputKey` slots into
 `Console.KeyEvent`:
 
 | XInput source              | UE `EInputKey`        | Byte        | Action          |
@@ -415,6 +527,36 @@ Implication for script-side thresholds: scale them against the
 the `-1000..1000` scale — anything past the shim's deadzone clears
 it trivially. The threshold is doing "any value at all" duty; the
 shim's deadzone is what really decides held-state.
+
+#### Deadzone, response curve, edge events: all done in the shim
+
+The shim already applies a configurable radial deadzone, a power-curve
+response shape (`XInputLeftStickExponent` / `XInputRightStickExponent`,
+default `2.0`), and edge-emits `IST_Axis(0.0)` exactly once when an
+axis crosses from non-zero to zero. It also synthesises `IST_Release`
+for held buttons / `IST_Axis(0.0)` for held axes on focus loss and on
+controller disconnect (`CXInput::FlushHeldAxes` /
+`ReleaseHeldButtons`). Implications:
+
+- **Don't add a script-side deadzone or response curve.** Re-tune the
+  shim's ini settings (`XInputLeftStickDeadzone`, `*Exponent`) instead.
+  Stacking a second deadzone in script means the user has two knobs
+  that interact non-linearly.
+- **Don't add a "stuck input on alt-tab" workaround in script.** The
+  shim already flushes held state on `bHasFocus == false`. If you
+  observe a stuck axis after focus loss, that's a defect in the shim
+  or in the focus-detection path — flag it (per "flag, don't
+  compensate") rather than building a per-tick zero-write loop in
+  UScript.
+- **Trust the zero-edge `IST_Axis`.** When the stick re-enters the
+  deadzone the shim emits one final `IST_Axis(0.0)` for that channel
+  and stops sending. Script-side code can rely on "received `0.0`
+  means the player let go" and clear accumulators on that edge — see
+  the R-stick scroll accumulator in `LogsNavController.uc`.
+
+Active-controller selection is also shim-side: whichever XInput slot
+most recently produced input becomes the active slot, and only that
+slot's events are forwarded. Script code does not need to demux pads.
 
 ## Menu nav controllers
 
