@@ -21,6 +21,23 @@
 //=============================================================================
 class NetworkTerminalNavController extends MenuNavController;
 
+// ---- Sub-controller registry -----------------------------------------------
+//
+// Keyed by ComputerScreenX class via parallel arrays. Populated in
+// defaultproperties. Each entry is lazy-instantiated on first encounter
+// in LookupOrCreateSub and cached for the dispatcher's lifetime.
+//
+// Size 16: 8 concrete ComputerScreen classes in scope this phase
+// (Login, ATMLogin/Withdraw/Disabled, Bulletins, Email, SpecialOptions
+// — and Security in Phase 2) + headroom.
+var Class<ComputerUIWindow>     subKeys[16];
+var Class<ComputerScreenNavSub> subClasses[16];
+var ComputerScreenNavSub        subInstances[16];
+
+// ---- Active-sub state ------------------------------------------------------
+var ComputerScreenNavSub activeSub;       // sub for the current Computer-pane screen
+var ComputerUIWindow     lastWinComputer; // identity check for Tick-based screen-swap detection
+
 // ---- Lifecycle -------------------------------------------------------------
 
 function Attach(Window s)
@@ -35,6 +52,14 @@ function Detach()
     if (screen != None)
         class'DXControllerDebug'.static.DebugLog(
             "DXC-TERM DETACH terminal=" $ string(screen.Class));
+
+    if (activeSub != None)
+    {
+        activeSub.OnLeave();
+        activeSub = None;
+    }
+    lastWinComputer = None;
+
     Super.Detach();
 }
 
@@ -48,32 +73,138 @@ function bool AllowsMenuToggle()
     return false;
 }
 
+// ---- Tick: screen-swap detection + sub lifecycle ---------------------------
+
+function Tick(float deltaSeconds)
+{
+    local NetworkTerminal nt;
+    local ComputerUIWindow newWinComp;
+    local Class<ComputerUIWindow> oldClass, newClass;
+
+    nt = NetworkTerminal(screen);
+    if (nt == None)
+        return;
+
+    // Pane availability check + auto-fallback (Hack/HackAccounts) and
+    // pane-2/3 cycling arrive in Task 13. Phase 1 Tick handles only the
+    // Computer-pane sub-controller lifecycle.
+
+    newWinComp = nt.winComputer;
+
+    if (newWinComp != lastWinComputer)
+    {
+        if (lastWinComputer != None)
+            oldClass = lastWinComputer.Class;
+        if (newWinComp != None)
+            newClass = newWinComp.Class;
+
+        class'DXControllerDebug'.static.DebugLog(
+            "DXC-TERM SCREEN-SWAP from=" $ string(oldClass)
+            $ " to=" $ string(newClass));
+
+        if (activeSub != None)
+            activeSub.OnLeave();
+
+        lastWinComputer = newWinComp;
+        if (newWinComp != None)
+        {
+            activeSub = LookupOrCreateSub(newWinComp.Class);
+            if (activeSub != None)
+                activeSub.OnEnter(newWinComp);
+        }
+        else
+        {
+            activeSub = None;
+        }
+    }
+
+    // Deferred-init retry. Some screens populate action-bar children
+    // inside SetNetworkTerminal AFTER NewChild fires, so OnEnter may
+    // run before the children exist. Retry while activeSub has no
+    // focused element.
+    if (activeSub != None && activeSub.focused == None && newWinComp != None)
+        activeSub.OnEnter(newWinComp);
+
+    if (activeSub != None)
+        activeSub.OnTick();
+}
+
+// ---- Sub-controller registry helpers ---------------------------------------
+
+function int FindSubIndex(Class<ComputerUIWindow> screenClass)
+{
+    local int i;
+    if (screenClass == None)
+        return -1;
+    for (i = 0; i < ArrayCount(subKeys); i++)
+    {
+        if (subKeys[i] == screenClass)
+            return i;
+    }
+    return -1;
+}
+
+function ComputerScreenNavSub LookupOrCreateSub(Class<ComputerUIWindow> screenClass)
+{
+    local int idx;
+
+    idx = FindSubIndex(screenClass);
+    if (idx < 0)
+        return None;
+    if (subInstances[idx] == None && subClasses[idx] != None)
+        subInstances[idx] = new(None) subClasses[idx];
+    return subInstances[idx];
+}
+
+// ---- D-pad delegation ------------------------------------------------------
+
+function bool HandleDPad(int dx, int dy)
+{
+    // Phase 1: only the Computer pane is active. Pane-cycling (Task 13)
+    // will dispatch to Hack / HackAccounts inline handlers based on
+    // activePane.
+    if (activeSub != None)
+        return activeSub.HandleDPad(dx, dy);
+    return true;  // unknown-screen fallback: consume so D-pad doesn't fall through
+}
+
 function bool HandleActivate(byte button)
 {
     local NetworkTerminal nt;
     local Window winComp;
 
-    // Phase 1 skeleton: only B is wired. Pane cycling (Joy5/Joy6) and
-    // A delegation to active sub arrive in Tasks 13 and 6 respectively.
-    if (button != 201)   // 201 = IK_Joy2 (B)
-        return true;
-
-    nt = NetworkTerminal(screen);
-    if (nt == None)
-        return true;
-
-    winComp = nt.winComputer;
-    if (winComp != None)
+    // B (201): Computer-pane Escape synthesis. Pane-back routing for
+    // Hack/HackAccounts arrives in Task 13.
+    if (button == 201)
     {
-        // Computer pane: synthesize Escape into winComputer.
-        // Vanilla ComputerUIWindow.VirtualKeyPressed handles IK_Escape
-        // by calling CloseScreen(escapeAction) — each screen's
-        // escapeAction determines whether this exits the terminal
-        // (EXIT) or routes through the terminal's LOGOUT path.
-        class'DXControllerDebug'.static.DebugLog(
-            "DXC-TERM B-ESCAPE screen=" $ string(winComp.Class));
-        winComp.VirtualKeyPressed(IK_Escape, false);
+        nt = NetworkTerminal(screen);
+        if (nt == None)
+            return true;
+        winComp = nt.winComputer;
+        if (winComp != None)
+        {
+            class'DXControllerDebug'.static.DebugLog(
+                "DXC-TERM B-ESCAPE screen=" $ string(winComp.Class));
+            winComp.VirtualKeyPressed(IK_Escape, false);
+        }
+        return true;
     }
+
+    // LB/RB (204/205): pane cycling. Stubbed in Phase 1 skeleton —
+    // consume so they don't fall through; real cycling lands in Task 13.
+    if (button == 204 || button == 205)
+        return true;
+
+    // A/X/Y/R-stick-click: delegate to the active Computer-pane sub.
+    if (activeSub != None)
+    {
+        class'DXControllerDebug'.static.DebugLog(
+            "DXC-TERM SUB-ACTIVATE screen=" $ string(activeSub.screen.Class)
+            $ " button=" $ string(button));
+        return activeSub.HandleActivate(button);
+    }
+
+    // Unknown screen fallback: consume so A/X/Y don't fall through.
     return true;
 }
 
