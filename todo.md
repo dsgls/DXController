@@ -8,14 +8,7 @@ In-world (non-persona) menu screens needing gamepad navigation, grouped
 by natural scope. Scope 1 is being designed/implemented now; the rest
 remain for later sessions.
 
-#### Scope 1 — Conversation family (done)
-
-Implemented 2026-05-15 — see `docs/superpowers/specs/2026-05-15-conversation-nav-design.md`
-and the corresponding plan. Covers `ConWindow`, `ConWindowActive`, and
-datacubes (which ride the conversation flow). `DataLinkPlay` infolinks
-are deliberately not bound — non-blocking corner UI, not worth a button.
-
-#### Scope 2 — Standalone modal devices (later session)
+#### Standalone modal devices
 
 - `HUDKeypadWindow` — 4×3 button grid (1-9, *, 0, #).
 - `HUDMedBotHealthScreen` — extends `PersonaScreenHealth` but has a
@@ -24,7 +17,7 @@ are deliberately not bound — non-blocking corner UI, not worth a button.
   "Heal All" action button hookup.
 - `RepairBot` screen (if it has a discrete UI — verify during design).
 
-#### Scope 3 — Network terminals (later session)
+#### Network terminals
 
 - `NetworkTerminal` and its `ComputerUIWindow` family: Login,
   Bulletins, Email, Security (cameras / doors / turrets), Hack
@@ -44,10 +37,6 @@ Show xbox controller button pictures with their mapping in UI contexts. For menu
 Button pictures have been added to assets/DXControllerBtn.utx (group XboxSeries, texture names match the base names of the source pictures in assets/xbox-buttons-png/).
 
 ## Bug to fix
-
-### Skills screen B button
-
-The B button does not work on the persona skills screen. On other persona screens it correctly exits the screen.
 
 ### Main menu controller/mouse focus fighting
 
