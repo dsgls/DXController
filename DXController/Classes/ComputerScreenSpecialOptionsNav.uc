@@ -77,7 +77,6 @@ function OnEnter(ComputerUIWindow s)
 function MoveToActionBar()
 {
     local ComputerScreenSpecialOptions sScr;
-    local string preferredLabel;
 
     sScr = ComputerScreenSpecialOptions(screen);
     if (sScr == None)
@@ -86,16 +85,22 @@ function MoveToActionBar()
     class'ComputerButtonBarNav'.static.CollectButtons(
         sScr.winButtonBar, barBtns, barCount);
 
-    // Primary is btnReturn when present (Personal/Security terminals),
-    // else btnLogout (Public/ATM). btnReturn is HALIGN_Left so it lands
-    // at barBtns[0] via CollectButtons; FindPrimaryIndex's first-sensitive
-    // fallback naturally selects it. Pass ButtonLabelLogout as the
-    // preferred label so we match btnLogout on Public/ATM terminals where
-    // btnReturn is absent; on Personal/Security the first-sensitive
-    // fallback will pick btnReturn (index 0) before reaching btnLogout.
-    preferredLabel = sScr.ButtonLabelLogout;
-    actionBarIndex = class'ComputerButtonBarNav'.static.FindPrimaryIndex(
-        sScr.winButtonBar, barBtns, barCount, preferredLabel);
+    // ActionBarRow primary: btnReturn when the screen has one
+    // (Personal/Security terminals), else btnLogout (Public/ATM).
+    // btnReturn must be selected by identity, not by label-preference:
+    // CollectButtons orders btnReturn (HALIGN_Left) ahead of btnLogout
+    // (HALIGN_Right), so a label-preference search for "Logout" would
+    // match the present, sensitive btnLogout and never fall through.
+    if (sScr.btnReturn != None)
+    {
+        actionBarIndex = class'ComputerButtonBarNav'.static.IndexOf(
+            barBtns, barCount, sScr.btnReturn);
+    }
+    else
+    {
+        actionBarIndex = class'ComputerButtonBarNav'.static.FindPrimaryIndex(
+            sScr.winButtonBar, barBtns, barCount, sScr.ButtonLabelLogout);
+    }
     if (actionBarIndex < 0)
         actionBarIndex = 0;
 
