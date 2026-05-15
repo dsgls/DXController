@@ -293,27 +293,27 @@ function bool HandleHackAccountsDPad(int dx, int dy)
         newRowId = ha.lstAccounts.GetFocusRow();
         if (newRowId == prevRowId)
         {
-            if (dy > 0)
-            {
-                // At bottom edge — advance to btnChangeAccount.
-                paneAccountsRowKind = 1;
-                paneAccountsFocused = ha.btnChangeAccount;
-            }
-            else
-            {
-                // At top edge — wrap up to btnChangeAccount.
-                paneAccountsRowKind = 1;
-                paneAccountsFocused = ha.btnChangeAccount;
-            }
+            // Edge in either direction advances to btnChangeAccount.
+            // SetFocusWindow gives the button engine focus so its
+            // vanilla yellow-text cue lights up (the focus-frame
+            // overlay suppresses the frame for button-class widgets).
+            paneAccountsRowKind = 1;
+            paneAccountsFocused = ha.btnChangeAccount;
+            if (ha.btnChangeAccount != None)
+                ha.SetFocusWindow(ha.btnChangeAccount);
         }
         return true;
     }
 
     if (paneAccountsRowKind == 1)
     {
-        // Both wrap directions go to the list.
+        // Both wrap directions go back to the list. Move engine focus
+        // onto the list so btnChangeAccount's yellow-text cue clears
+        // (the list shows its own frame + per-row highlight instead).
         paneAccountsRowKind = 0;
         paneAccountsFocused = ha.lstAccounts;
+        if (ha.lstAccounts != None)
+            ha.SetFocusWindow(ha.lstAccounts);
         return true;
     }
     return true;
