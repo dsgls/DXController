@@ -236,7 +236,11 @@ function SwitchPane(int newPane)
     }
     else if (newPane == PANE_HACKACCOUNTS && nt != None && nt.winHackAccounts != None)
     {
-        // Task 15 sets paneAccountsFocused on entry.
+        // Vanilla SetCompOwner already selects the current-user row;
+        // anchor gamepad focus on the list (the list itself is the
+        // tab-stop; the per-row highlight is intra-list).
+        paneAccountsFocused = nt.winHackAccounts.lstAccounts;
+        paneAccountsRowKind = 0;  // list
     }
 
     class'DXControllerDebug'.static.DebugLog(
@@ -260,8 +264,87 @@ function bool HandleDPad(int dx, int dy)
     }
     if (activePane == PANE_HACKACCOUNTS)
     {
-        // Stub. Task 15 implements list + btnChangeAccount navigation.
+        return HandleHackAccountsDPad(dx, dy);
+    }
+    return true;
+}
+
+function bool HandleHackAccountsDPad(int dx, int dy)
+{
+    local NetworkTerminal nt;
+    local ComputerScreenHackAccounts ha;
+    local int prevRowId, newRowId;
+
+    nt = NetworkTerminal(screen);
+    if (nt == None || nt.winHackAccounts == None)
         return true;
+    ha = nt.winHackAccounts;
+
+    if (dy == 0)
+        return true;  // single-column list, single-button row — L/R no-op
+
+    if (paneAccountsRowKind == 0 && ha.lstAccounts != None)
+    {
+        prevRowId = ha.lstAccounts.GetFocusRow();
+        if (dy > 0)
+            ha.lstAccounts.MoveRow(MOVELIST_Down, True, True);
+        else
+            ha.lstAccounts.MoveRow(MOVELIST_Up, True, True);
+        newRowId = ha.lstAccounts.GetFocusRow();
+        if (newRowId == prevRowId)
+        {
+            if (dy > 0)
+            {
+                // At bottom edge — advance to btnChangeAccount.
+                paneAccountsRowKind = 1;
+                paneAccountsFocused = ha.btnChangeAccount;
+            }
+            else
+            {
+                // At top edge — wrap up to btnChangeAccount.
+                paneAccountsRowKind = 1;
+                paneAccountsFocused = ha.btnChangeAccount;
+            }
+        }
+        return true;
+    }
+
+    if (paneAccountsRowKind == 1)
+    {
+        // Both wrap directions go to the list.
+        paneAccountsRowKind = 0;
+        paneAccountsFocused = ha.lstAccounts;
+        return true;
+    }
+    return true;
+}
+
+function bool HandleHackAccountsActivate(byte button)
+{
+    local NetworkTerminal nt;
+    local ComputerScreenHackAccounts ha;
+
+    if (button != 200)
+        return true;
+
+    nt = NetworkTerminal(screen);
+    if (nt == None || nt.winHackAccounts == None)
+        return true;
+    ha = nt.winHackAccounts;
+
+    if (paneAccountsRowKind == 0)
+    {
+        // A on list row: explicit activation — vanilla's
+        // ListRowActivated wires ChangeSelectedAccount.
+        ha.ChangeSelectedAccount();
+        class'DXControllerDebug'.static.DebugLog("DXC-TERM HACKACCOUNTS-LIST-ACTIVATE");
+    }
+    else if (paneAccountsRowKind == 1 && ha.btnChangeAccount != None && ha.btnChangeAccount.bIsSensitive)
+    {
+        // A on btnChangeAccount: PressButton → ButtonActivated →
+        // ChangeSelectedAccount (vanilla).
+        ha.btnChangeAccount.PressButton();
+        class'DXControllerDebug'.static.DebugLog("DXC-TERM HACKACCOUNTS-BTN-ACTIVATE");
     }
     return true;
 }
@@ -328,7 +411,9 @@ function bool HandleActivate(byte button)
         return true;  // D-pad / X / Y / R-stick all consumed
     }
     if (activePane == PANE_HACKACCOUNTS)
-        return true;  // stub — Task 15
+    {
+        return HandleHackAccountsActivate(button);
+    }
     return true;
 }
 
