@@ -162,6 +162,13 @@ function RegisterNavControllers()
     RegisterNav(Class'DeusEx.NetworkTerminalATM',      Class'NetworkTerminalNavController');
     RegisterNav(Class'DeusEx.NetworkTerminalSecurity', Class'NetworkTerminalNavController');
     RegisterNav(Class'DeusEx.NetworkTerminal',         Class'NetworkTerminalNavController');
+    // The ATM actor hardcodes InvokeUIScreen(Class'ATMWindow') —
+    // ATMWindow is a "dummy" backwards-compat subclass of
+    // NetworkTerminalATM and is the class actually pushed for every
+    // ATM. NetworkTerminalATM itself is never instantiated. Since
+    // FindNavIndex is exact-class-match, ATMWindow needs its own
+    // entry (cf. the ConWindowActive / ConWindowActive2 pair above).
+    RegisterNav(Class'DeusEx.ATMWindow',               Class'NetworkTerminalNavController');
 
     // Omitted: MenuScreenRGB          — tab-based, complex color picker controls.
 }
