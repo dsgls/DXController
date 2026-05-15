@@ -9,6 +9,11 @@ jobs:
   build:
     runs-on: ubuntu-latest
 
+    permissions:
+      # Default GITHUB_TOKEN is read-only on public repos; the release
+      # step needs write access to push assets + create releases.
+      contents: write
+
     env:
       WINEDEBUG: -all
       # Suppress wine's prompt to download mono/gecko on first run — UCC
