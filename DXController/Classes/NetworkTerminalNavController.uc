@@ -38,11 +38,35 @@ var ComputerScreenNavSub        subInstances[16];
 var ComputerScreenNavSub activeSub;       // sub for the current Computer-pane screen
 var ComputerUIWindow     lastWinComputer; // identity check for Tick-based screen-swap detection
 
+// ---- Pane model ------------------------------------------------------------
+//
+// A terminal session can have up to three coexisting focusable regions:
+//   Computer     — always present (winTerm.winComputer)
+//   Hack         — winTerm.winHack       (present when player can hack)
+//   HackAccounts — winTerm.winHackAccounts (post-hack on multi-user email)
+//
+// LB cycles previous, RB cycles next, skipping absent panes.
+const PANE_COMPUTER     = 0;
+const PANE_HACK         = 1;
+const PANE_HACKACCOUNTS = 2;
+
+var int activePane;
+
+// Inline pane state — set in Task 14/15. Declared here so vars stay
+// before any function bodies per UE1 strict ordering.
+var Window paneHackFocused;          // points at winHack.btnHack
+var Window paneAccountsFocused;      // lstAccounts or btnChangeAccount
+var int    paneAccountsRowKind;      // 0 = list, 1 = btnChangeAccount
+
 // ---- Lifecycle -------------------------------------------------------------
 
 function Attach(Window s)
 {
     Super.Attach(s);
+    activePane = PANE_COMPUTER;
+    paneHackFocused = None;
+    paneAccountsFocused = None;
+    paneAccountsRowKind = 0;
     class'DXControllerDebug'.static.DebugLog(
         "DXC-TERM ATTACH terminal=" $ string(s.Class));
 }
@@ -85,9 +109,16 @@ function NavTick(float deltaSeconds)
     if (nt == None)
         return;
 
-    // Pane availability check + auto-fallback (Hack/HackAccounts) and
-    // pane-2/3 cycling arrive in Task 13. Phase 1 Tick handles only the
-    // Computer-pane sub-controller lifecycle.
+    // Pane availability check + auto-fallback. If the active pane's
+    // owning window vanishes mid-session (Hack pressed → winHack.Destroy,
+    // or HackAccounts torn down on Email screen-swap), revert to
+    // Computer. Focus state on Computer survives across these transitions.
+    if (activePane != PANE_COMPUTER && !IsPanePresent(activePane))
+    {
+        class'DXControllerDebug'.static.DebugLog(
+            "DXC-TERM PANE-AUTO-FALLBACK pane=" $ string(activePane));
+        activePane = PANE_COMPUTER;
+    }
 
     newWinComp = nt.winComputer;
 
@@ -156,16 +187,70 @@ function ComputerScreenNavSub LookupOrCreateSub(Class<ComputerUIWindow> screenCl
     return subInstances[idx];
 }
 
+// ---- Pane availability & cycling -------------------------------------------
+
+function bool IsPanePresent(int pane)
+{
+    local NetworkTerminal nt;
+
+    nt = NetworkTerminal(screen);
+    if (nt == None)
+        return false;
+
+    if (pane == PANE_COMPUTER)
+        return nt.winComputer != None;
+    if (pane == PANE_HACK)
+        return nt.winHack != None;
+    if (pane == PANE_HACKACCOUNTS)
+        return nt.winHackAccounts != None;
+    return false;
+}
+
+function int CyclePane(int from, int direction)
+{
+    local int cur, i;
+    cur = from;
+    for (i = 0; i < 3; i++)
+    {
+        cur = (cur + direction + 3) % 3;
+        if (IsPanePresent(cur))
+            return cur;
+    }
+    return PANE_COMPUTER;  // fallback (Computer always present)
+}
+
+function SwitchPane(int newPane)
+{
+    local int oldPane;
+    if (newPane == activePane)
+        return;
+    oldPane = activePane;
+    activePane = newPane;
+    class'DXControllerDebug'.static.DebugLog(
+        "DXC-TERM PANE-SWITCH from=" $ string(oldPane) $ " to=" $ string(newPane));
+}
+
 // ---- D-pad delegation ------------------------------------------------------
 
 function bool HandleDPad(int dx, int dy)
 {
-    // Phase 1: only the Computer pane is active. Pane-cycling (Task 13)
-    // will dispatch to Hack / HackAccounts inline handlers based on
-    // activePane.
-    if (activeSub != None)
-        return activeSub.HandleDPad(dx, dy);
-    return true;  // unknown-screen fallback: consume so D-pad doesn't fall through
+    if (activePane == PANE_COMPUTER)
+    {
+        if (activeSub != None)
+            return activeSub.HandleDPad(dx, dy);
+        return true;
+    }
+    if (activePane == PANE_HACK)
+    {
+        // Single-button pane (btnHack). D-pad consumed no-op.
+        return true;
+    }
+    if (activePane == PANE_HACKACCOUNTS)
+    {
+        // Stub. Task 15 implements list + btnChangeAccount navigation.
+        return true;
+    }
+    return true;
 }
 
 function bool HandleActivate(byte button)
@@ -173,10 +258,16 @@ function bool HandleActivate(byte button)
     local NetworkTerminal nt;
     local Window winComp;
 
-    // B (201): Computer-pane Escape synthesis. Pane-back routing for
-    // Hack/HackAccounts arrives in Task 13.
+    // B (201). Pane-aware:
+    //   - non-Computer pane: step back to Computer.
+    //   - Computer pane:     synthesize Escape into winComputer.
     if (button == 201)
     {
+        if (activePane != PANE_COMPUTER)
+        {
+            SwitchPane(PANE_COMPUTER);
+            return true;
+        }
         nt = NetworkTerminal(screen);
         if (nt == None)
             return true;
@@ -190,21 +281,30 @@ function bool HandleActivate(byte button)
         return true;
     }
 
-    // LB/RB (204/205): pane cycling. Stubbed in Phase 1 skeleton —
-    // consume so they don't fall through; real cycling lands in Task 13.
-    if (button == 204 || button == 205)
-        return true;
-
-    // A/X/Y/R-stick-click: delegate to the active Computer-pane sub.
-    if (activeSub != None)
+    // LB (204) = previous pane, RB (205) = next pane. Skips absent panes.
+    if (button == 204)
     {
-        class'DXControllerDebug'.static.DebugLog(
-            "DXC-TERM SUB-ACTIVATE screen=" $ string(activeSub.screen.Class)
-            $ " button=" $ string(button));
-        return activeSub.HandleActivate(button);
+        SwitchPane(CyclePane(activePane, -1));
+        return true;
+    }
+    if (button == 205)
+    {
+        SwitchPane(CyclePane(activePane, +1));
+        return true;
     }
 
-    // Unknown screen fallback: consume so A/X/Y don't fall through.
+    // A/X/Y/R-stick-click: dispatch by active pane. Stubs for
+    // Hack/HackAccounts panes — Tasks 14 and 15 add real handlers.
+    if (activePane == PANE_COMPUTER)
+    {
+        if (activeSub != None)
+            return activeSub.HandleActivate(button);
+        return true;
+    }
+    if (activePane == PANE_HACK)
+        return true;  // stub — Task 14
+    if (activePane == PANE_HACKACCOUNTS)
+        return true;  // stub — Task 15
     return true;
 }
 
