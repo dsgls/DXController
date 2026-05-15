@@ -74,8 +74,8 @@ Joy1=Jump
 Joy2=ReloadWeapon
 Joy3=ParseRightClick
 Joy4=
-Joy5=LeanLeft
-Joy6=LeanRight
+Joy5=
+Joy6=
 Joy7=TogglePlayerMenuWindow
 Joy8=ShowMainMenu
 Joy9=
@@ -103,7 +103,7 @@ JoyR=
 | X              | Use / interact                  |
 | Y              | unbound                         |
 | LB             | Inventory equip wheel           |
-| RB             | Augmentation equip wheel        |
+| RB             | Augmentation equip wheelt        |
 | Back           | Toggle inventory / persona menu |
 | Start          | Main menu                       |
 | L-stick click  | Crouch                          |
