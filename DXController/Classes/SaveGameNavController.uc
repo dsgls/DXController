@@ -22,6 +22,6 @@ function InitListAndButtons()
         return;
 
     lst          = s.lstGames;
-    primaryBtn   = FindActionBtn(s, "SAVE");
-    secondaryBtn = FindActionBtn(s, "DELETE");
+    primaryBtn   = class'ActionBarNav'.static.FindByKey(s, "SAVE");
+    secondaryBtn = class'ActionBarNav'.static.FindByKey(s, "DELETE");
 }

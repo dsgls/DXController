@@ -20,6 +20,6 @@ function InitListAndButtons()
         return;
 
     lst          = s.lstGames;
-    primaryBtn   = FindActionBtn(s, "LOAD");
-    secondaryBtn = FindActionBtn(s, "DELETE");
+    primaryBtn   = class'ActionBarNav'.static.FindByKey(s, "LOAD");
+    secondaryBtn = class'ActionBarNav'.static.FindByKey(s, "DELETE");
 }
