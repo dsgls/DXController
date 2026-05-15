@@ -256,6 +256,27 @@ Prefix all such logs with `DXC-<area>`: `DXC-WHEEL`, `DXC-NAV`,
   Corollary: the `event MouseMoved` override on the root window is
   reached only in `CM_Mouse` (cursor visible); the `CM_Gamepad → CM_Mouse`
   transition runs from the `Tick` poll, not the event.
+- **Vanilla `VirtualKeyPressed` overrides may silently swallow
+  unrecognised keys.** UE1 event dispatch bubbles `VirtualKeyPressed`
+  up the *window* tree only while each window's handler returns
+  `false`. The persona/menu screen pattern is
+  `bHandled = True; switch (key) { case …; default: bHandled = False; }
+  if (!bHandled) return Super.VirtualKeyPressed(...);` —
+  see `PersonaScreenBaseWindow.uc:95-118`, `MenuUIScreenWindow.uc:174-212`.
+  But **older / less-trafficked window classes lack the `default:` case
+  and just return `True`** — vanilla never needed gamepad routing so
+  the bug was never visible. Concrete instance: stock
+  `ConWindowActive.VirtualKeyPressed` (vendored at
+  `DeusEx/Classes/ConWindowActive.uc`) consumes every gamepad slot
+  unless the overlay adds `default: bHandled = False;` to its inner
+  switch (commit `56914c2`). When adding a gamepad controller for any
+  new in-world window (keypad, medbot, computer, ATM, hack…),
+  **always read its `VirtualKeyPressed` first** and check whether
+  unrecognised keys reach root. If not, add a default-bubble in the
+  overlay; otherwise `ControllerRootWindow.VirtualKeyPressed` is dead
+  code and no `DXC-*` log will fire from any gamepad press in that
+  window. Same trap likely applies to `ConWindow`, `HUDKeypadWindow`,
+  `ComputerUIWindow`, etc. — verify per-class before designing.
 
 ## Source overlay model
 
