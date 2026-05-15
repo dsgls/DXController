@@ -150,14 +150,41 @@ function MenuNavController GetOrCreateNav(int idx)
     return navInstances[idx];
 }
 
-function int FindNavIndex(Class screenClass)
+// Two-pass lookup against the registry:
+//   1. Exact class match — fast path; most screens hit here.
+//   2. IsA fallback — catches subclass substitutions. The DeusExe
+//      launcher silently swaps DeusEx.ConWindowActive for its own
+//      DeusExe.ConWindowActive2 inside its native NewChild hook
+//      (../DeusExe-XInput/DeusExe/SubTitleFix.cpp), so the runtime
+//      class is the subclass but our registry only knows the base
+//      class (DeusExe isn't in EditPackages, can't reference it from
+//      UScript). Similar substitutions may exist for other launchers
+//      or mods. IsA walks the class hierarchy and returns true for
+//      any subclass of a registered base.
+//
+// Exact-match-first is load-bearing: HUDMedBotAddAugsScreen extends
+// PersonaScreenAugmentations and both are registered with DIFFERENT
+// controllers. Pass 1 picks the specific one; pass 2 would otherwise
+// route HUDMedBotAddAugsScreen to AugsNavController (wrong).
+function int FindNavIndex(Window w)
 {
     local int i;
+
+    if (w == None)
+        return -1;
+
     for (i = 0; i < navCount; i++)
     {
-        if (navScreenKeys[i] == screenClass)
+        if (navScreenKeys[i] == w.Class)
             return i;
     }
+
+    for (i = 0; i < navCount; i++)
+    {
+        if (navScreenKeys[i] != None && w.IsA(navScreenKeys[i].Name))
+            return i;
+    }
+
     return -1;
 }
 
@@ -203,7 +230,7 @@ function MenuNavController FindTopmostModalNav(out Window outScreen)
         if (DeusExBaseWindow(c) != None && c.GetParent() == Self)
         {
             outScreen = c;
-            idx = FindNavIndex(c.Class);
+            idx = FindNavIndex(c);
             if (idx >= 0)
                 return GetOrCreateNav(idx);
             return None;
@@ -307,7 +334,7 @@ event DescendantAdded(Window descendant)
     // Direct registry match on the just-added descendant. We can't
     // walk GetTopChild here — the engine fires this event before the
     // new child is in root's child list.
-    idx = FindNavIndex(descendant.Class);
+    idx = FindNavIndex(descendant);
     class'DXControllerDebug'.static.DebugLog(
         "DXC-NAV DESC-ADD FindNavIndex result idx=" $ string(idx));  // diagnostic
     if (idx >= 0)
@@ -378,7 +405,7 @@ function Tick(float deltaSeconds)
     {
         class'DXControllerDebug'.static.DebugLog(
             "DXC-NAV TICK-TOP topScreen=" $ string(topScreen.Class)
-            $ " idx=" $ string(FindNavIndex(topScreen.Class))
+            $ " idx=" $ string(FindNavIndex(topScreen))
             $ " hasNav=" $ string(topNav != None));
         lastDiagTopName = string(topScreen.Class);
     }
