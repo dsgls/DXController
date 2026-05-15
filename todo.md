@@ -14,6 +14,8 @@ Need to play the game enough to go beyond the text area size to test.
 
 Show xbox controller button pictures with their mapping in UI contexts. For menus where a controller button activates an UI button, show the controller button picture on the UI button. In other cases (e.g., inventory screen A=use,X=equip wheel) show buttons and their effect below the dialog.
 
+Button pictures have been added to assets/DXControllerBtn.utx (group XboxSeries, texture names match the base names of the source pictures in assets/xbox-buttons-png/).
+
 ## Bug to fix
 
 ### Inventory screen B button
