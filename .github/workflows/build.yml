@@ -94,13 +94,18 @@ jobs:
           fi
           echo "DXController.u OK ($SIZE bytes)"
 
+      - name: Stage artifact files
+        run: |
+          cp "$RUNNER_TEMP/build/System/DeusEx.u" .
+          cp "$RUNNER_TEMP/build/System/DXController.u" .
+
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
           name: dxcontroller-build
           path: |
-            ${{ runner.temp }}/build/System/DeusEx.u
-            ${{ runner.temp }}/build/System/DXController.u
+            DeusEx.u
+            DXController.u
 
       - name: Stage release contents
         if: startsWith(github.ref, 'refs/tags/v')
@@ -118,12 +123,16 @@ jobs:
           zip -r "DXController-${GITHUB_REF_NAME}.zip" \
             "DXController-${GITHUB_REF_NAME}/"
 
-      - name: Create GitHub release
+      - name: Create or update GitHub release
         if: startsWith(github.ref, 'refs/tags/v')
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release create "$GITHUB_REF_NAME" \
-            "$RUNNER_TEMP/release/DXController-${GITHUB_REF_NAME}.zip" \
-            --title "DXController $GITHUB_REF_NAME" \
-            --generate-notes
+          ZIP="$RUNNER_TEMP/release/DXController-${GITHUB_REF_NAME}.zip"
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" "$ZIP" --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" "$ZIP" \
+              --title "DXController $GITHUB_REF_NAME" \
+              --generate-notes
+          fi
