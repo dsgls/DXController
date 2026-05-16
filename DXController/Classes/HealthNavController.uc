@@ -1,74 +1,83 @@
 //=============================================================================
-// HealthNavController — body-region buttons + Heal All.
+// HealthNavController — per-region Heal buttons + Heal All.
 //
-// partButtons[6] indices (from PersonaScreenHealth.uc):
-//   0: Head
-//   1: Torso
-//   2: Right Arm
-//   3: Left Arm
-//   4: Right Leg
-//   5: Left Leg
+// Targets the actual heal buttons, NOT the body-part description icons
+// (partButtons[], whose only effect is to show body-part lore in winInfo):
+//   regionWindows[0..5].btnHeal  (Head, Torso, R-Arm, L-Arm, R-Leg, L-Leg)
+//   btnHealAll
 //
-// D-pad up/down walks an anatomical order:
-//   head → torso → arms → legs.
-// D-pad left/right moves between paired regions (right/left arm, right/left leg).
+// focusIndex 0..5 = body region (= partButtons / regionWindows index),
+// focusIndex 6    = Heal All.
+//
+// D-pad up/down walks head -> torso -> arms -> legs -> Heal All (cyclic).
+// D-pad left/right toggles between paired regions (R/L arm, R/L leg).
+// On each focus change the matching body-part icon is selected so the
+// region highlight and description panel track gamepad focus.
 //=============================================================================
 class HealthNavController extends MenuNavController;
 
-// Order used for D-pad up/down traversal (top to bottom of the body).
-var int vOrder[6];
-
-function InitFocus()
+// Sets `focused` from the current focusIndex and drives the region
+// selection so the highlight + description panel follow gamepad focus.
+function ApplyFocus()
 {
     local PersonaScreenHealth s;
+
     s = PersonaScreenHealth(screen);
     if (s == None)
         return;
-    vOrder[0] = 0;  // Head
-    vOrder[1] = 1;  // Torso
-    vOrder[2] = 2;  // Right Arm
-    vOrder[3] = 3;  // Left Arm
-    vOrder[4] = 4;  // Right Leg
-    vOrder[5] = 5;  // Left Leg
+
+    if (focusIndex == 6)   // Heal All
+    {
+        focused = s.btnHealAll;
+        return;
+    }
+
+    if (s.regionWindows[focusIndex] != None)
+        focused = s.regionWindows[focusIndex].btnHeal;
+
+    if (s.partButtons[focusIndex] != None && s.partButtons[focusIndex].bIsSensitive)
+        s.partButtons[focusIndex].PressButton();
+}
+
+function InitFocus()
+{
+    if (PersonaScreenHealth(screen) == None)
+        return;
     focusIndex = 0;
-    focused = s.partButtons[vOrder[0]];
+    ApplyFocus();
 }
 
 function bool HandleDPad(int dx, int dy)
 {
-    local PersonaScreenHealth s;
-    local int newIdx, step;
-
-    s = PersonaScreenHealth(screen);
-    if (s == None)
+    if (PersonaScreenHealth(screen) == None)
         return true;
 
     if (dy != 0)
     {
         if (dy > 0)
-            step = 1;
+            focusIndex = (focusIndex + 1) % 7;   // down the body, toward legs
         else
-            step = -1;
-        newIdx = (focusIndex + step + 6) % 6;
-        focusIndex = newIdx;
-        focused = s.partButtons[vOrder[newIdx]];
-        class'DXControllerDebug'.static.DebugLog("DXC-NAV FOCUS body=" $ string(vOrder[newIdx]));
+            focusIndex = (focusIndex + 6) % 7;
+        ApplyFocus();
+        class'DXControllerDebug'.static.DebugLog("DXC-NAV FOCUS heal=" $ string(focusIndex));
         return true;
     }
 
-    if (dx != 0 && s != None)
+    if (dx != 0)
     {
-        // Pair toggle: leave vOrder intact, just swap focused between paired sides.
-        // Identify the current side from `focused` directly, not vOrder.
-        if (focused == s.partButtons[2])
-            focused = s.partButtons[3];
-        else if (focused == s.partButtons[3])
-            focused = s.partButtons[2];
-        else if (focused == s.partButtons[4])
-            focused = s.partButtons[5];
-        else if (focused == s.partButtons[5])
-            focused = s.partButtons[4];
-        // head/torso (partButtons[0]/[1]): no pair, fall through to no-op.
+        // Pair toggle between paired sides; head/torso/Heal All have no pair.
+        if (focusIndex == 2)
+            focusIndex = 3;
+        else if (focusIndex == 3)
+            focusIndex = 2;
+        else if (focusIndex == 4)
+            focusIndex = 5;
+        else if (focusIndex == 5)
+            focusIndex = 4;
+        else
+            return true;
+        ApplyFocus();
+        class'DXControllerDebug'.static.DebugLog("DXC-NAV FOCUS heal=" $ string(focusIndex));
         return true;
     }
     return true;
