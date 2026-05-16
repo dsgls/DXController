@@ -1,14 +1,20 @@
 #!/usr/bin/env python3
-"""Convert PNGs in assets/xbox-buttons-png/ to 64x64 8-bit PCX with palette
-index 0 = magenta key for UE1 masked-texture import."""
+"""Convert a directory of PNGs to 64x64 8-bit PCX with palette index 0 =
+magenta key for UE1 masked-texture import.
 
+Usage: png-to-pcx.py [SRC_DIR] [DST_DIR]
+
+SRC_DIR and DST_DIR are optional and default to the xbox-buttons-png/ and
+xbox-buttons-pcx/ directories next to this script."""
+
+import argparse
 from pathlib import Path
 from PIL import Image
 
 KEY = (255, 0, 255)  # UE1 magenta transparency key at palette index 0
 ALPHA_THRESHOLD = 128
-SRC_DIR = Path(__file__).parent / "xbox-buttons-png"
-DST_DIR = Path(__file__).parent / "xbox-buttons-pcx"
+DEFAULT_SRC_DIR = Path(__file__).parent / "xbox-buttons-png"
+DEFAULT_DST_DIR = Path(__file__).parent / "xbox-buttons-pcx"
 SIZE = (64, 64)
 
 
@@ -53,13 +59,29 @@ def convert(src: Path, dst: Path) -> None:
 
 
 def main() -> None:
-    DST_DIR.mkdir(parents=True, exist_ok=True)
-    pngs = sorted(SRC_DIR.glob("*.png"))
+    parser = argparse.ArgumentParser(
+        description="Convert a directory of PNGs to UE1 masked-texture PCX files."
+    )
+    parser.add_argument(
+        "src_dir", nargs="?", type=Path, default=DEFAULT_SRC_DIR,
+        help="directory of source .png files (default: xbox-buttons-png/)",
+    )
+    parser.add_argument(
+        "dst_dir", nargs="?", type=Path, default=DEFAULT_DST_DIR,
+        help="directory for output .pcx files (default: xbox-buttons-pcx/)",
+    )
+    args = parser.parse_args()
+
+    if not args.src_dir.is_dir():
+        parser.error(f"source directory does not exist: {args.src_dir}")
+
+    args.dst_dir.mkdir(parents=True, exist_ok=True)
+    pngs = sorted(args.src_dir.glob("*.png"))
     for src in pngs:
-        dst = DST_DIR / (src.stem + ".pcx")
+        dst = args.dst_dir / (src.stem + ".pcx")
         convert(src, dst)
         print(f"{src.name} -> {dst.name}")
-    print(f"\n{len(pngs)} files converted to {DST_DIR}")
+    print(f"\n{len(pngs)} files converted to {args.dst_dir}")
 
 
 if __name__ == "__main__":
