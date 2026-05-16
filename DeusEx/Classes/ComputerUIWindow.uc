@@ -273,7 +273,10 @@ event bool VirtualKeyPressed(EInputKey key, bool bRepeat)
 	switch( key ) 
 	{	
 		case IK_Escape:
-			CloseScreen(escapeAction);	
+			// DXController gate: when the gamepad on-screen keyboard is
+			// open, Escape dismisses it instead of closing the screen.
+			if (!DeusExRootWindow(GetRootWindow()).CloseGamepadKeyboard())
+				CloseScreen(escapeAction);
 			break;
 
 		default:

@@ -277,6 +277,27 @@ Prefix all such logs with `DXC-<area>`: `DXC-WHEEL`, `DXC-NAV`,
   code and no `DXC-*` log will fire from any gamepad press in that
   window. Same trap likely applies to `ConWindow`, `HUDKeypadWindow`,
   `ComputerUIWindow`, etc. — verify per-class before designing.
+- **`Window.SetFocusWindow(w)` does not make a HUD-style root child the
+  first key handler.** Setting engine focus to a persistent child of
+  the root (a `HUDBaseWindow` such as `OnScreenKeyboardWindow` or
+  `RadialMenuWindow`) does *not* route `VirtualKeyPressed` to it first —
+  keys still bubble up the window tree to
+  `ControllerRootWindow.VirtualKeyPressed` as normal. Verified by
+  play-test: `OnScreenKeyboardWindow.Open` called
+  `GetRootWindow().SetFocusWindow(Self)` and D-pad/A still reached the
+  terminal nav underneath. To make a drawn overlay window modal-capture
+  input, intercept in `ControllerRootWindow.VirtualKeyPressed` — gate on
+  a flag and route to the window (see the `keyboard.bOpen` block, which
+  calls `OnScreenKeyboardWindow.HandleKey`). Caveat: a physical-keyboard
+  key that a *lower* window consumes before it can bubble to root —
+  notably `IK_Escape`, eaten by `ComputerUIWindow.VirtualKeyPressed` —
+  never reaches that intercept. Such keys need a separate path: a gated
+  overlay of the consuming class calling back up. The on-screen keyboard
+  routes Esc via a `// DXController gate` in `ComputerUIWindow` that
+  calls the `DeusExRootWindow.CloseGamepadKeyboard` virtual hook
+  (overridden in `ControllerRootWindow`) — a DeusEx-side class can't
+  name a `DXController` type, so the hook is declared on the rebuildable
+  `DeusExRootWindow` base.
 
 ## Source overlay model
 

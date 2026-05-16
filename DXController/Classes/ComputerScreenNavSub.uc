@@ -38,6 +38,20 @@ function OnLeave()
     focusIndex = -1;
 }
 
+// Open the gamepad on-screen keyboard for a text field on this screen.
+// Called from sub-controllers' A-on-text-field handlers; `label` is the
+// keyboard panel's prompt text (e.g. "ENTER USERNAME").
+function OpenKeyboardFor(MenuUIEditWindow field, string label)
+{
+    local ControllerRootWindow root;
+
+    if (field == None || screen == None)
+        return;
+    root = ControllerRootWindow(screen.GetRootWindow());
+    if (root != None)
+        root.OpenKeyboard(field, screen, label);
+}
+
 // dx/dy in {-1, 0, +1}. Return true to consume.
 function bool HandleDPad(int dx, int dy)
 {

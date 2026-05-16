@@ -27,14 +27,16 @@
 #   1. rsync DXController/ -> $BUILD_DIR/DXController/
 #   2. rsync DeusEx/       -> $BUILD_DIR/DeusEx/
 #   3. rsync DeusExe/      -> $BUILD_DIR/DeusExe/
-#   4. insert EditPackages=DeusExe into DeusEx.ini (idempotent)
-#   5. delete DeusEx.u + DeusExe.u; `echo n | UCC.exe make`. UCC prompts
+#   4. copy DXControllerBtn.u (pre-built texture package) into
+#      $BUILD_DIR/System/
+#   5. insert EditPackages=DeusExe into DeusEx.ini (idempotent)
+#   6. delete DeusEx.u + DeusExe.u; `echo n | UCC.exe make`. UCC prompts
 #      to overwrite DeusEx/Inc/DeusExClasses.h; we answer 'n'. UCC
 #      subsequently GPFs while loading the freshly-rebuilt DeusEx.u (the
 #      load happens before DeusExe and DXController compile). DeusEx.u
 #      is written before the crash. `|| true` swallows the exit code;
 #      the `-f` check is the real success signal.
-#   6. delete DXController.u; fresh `UCC.exe make`. DeusEx.u exists
+#   7. delete DXController.u; fresh `UCC.exe make`. DeusEx.u exists
 #      (no rebuild, no GPF), DeusExe.u is built from the synced source,
 #      then DXController.u is built against both.
 #
@@ -64,6 +66,17 @@ rsync "${RSYNC_FLAGS[@]}" "$REPO_DIR/DXController/" "$BUILD_DIR/DXController/"
 rsync "${RSYNC_FLAGS[@]}" "$REPO_DIR/DeusEx/"       "$BUILD_DIR/DeusEx/"
 rsync "${RSYNC_FLAGS[@]}" "$REPO_DIR/DeusExe/"      "$BUILD_DIR/DeusExe/"
 
+# Stage the pre-built controller-button texture package. It is a
+# binary package committed at the repo root (not compiled from
+# source); DXController references Texture'DXControllerBtn.*' so it
+# must be in System/ before the pass-2 compile and at runtime.
+if (( DRY_RUN )); then
+    echo "sync-and-build: (dry-run) would copy DXControllerBtn.u -> $BUILD_DIR/System/"
+else
+    cp "$REPO_DIR/DXControllerBtn.u" "$BUILD_DIR/System/DXControllerBtn.u"
+    echo "sync-and-build: copied DXControllerBtn.u -> $BUILD_DIR/System/"
+fi
+
 # Insert EditPackages=DeusExe between DeusEx and DXController in
 # DeusEx.ini (idempotent). The ini ships with CRLF line endings, so
 # anchor on [[:space:]]*$ to absorb the trailing \r — same pattern the
@@ -76,6 +89,15 @@ fi
 if ! grep -qE '^EditPackages=DeusExe[[:space:]]*$' "$INI"; then
     sed -i -E '/^EditPackages=DeusEx[[:space:]]*$/a EditPackages=DeusExe' "$INI"
     echo "sync-and-build: inserted EditPackages=DeusExe into $INI"
+fi
+
+# Insert EditPackages=DXControllerBtn before DXController so UCC can
+# resolve Texture'DXControllerBtn.*' literals during the pass-2 compile.
+# DXControllerBtn is a pre-built texture-only package; it has no UScript
+# source and is never rebuilt by UCC (it's already on disk in System/).
+if ! grep -qE '^EditPackages=DXControllerBtn[[:space:]]*$' "$INI"; then
+    sed -i -E '/^EditPackages=DXController[[:space:]]*$/i EditPackages=DXControllerBtn' "$INI"
+    echo "sync-and-build: inserted EditPackages=DXControllerBtn into $INI"
 fi
 
 if (( DRY_RUN )); then

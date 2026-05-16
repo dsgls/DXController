@@ -11,9 +11,8 @@
 // D-pad up/down moves between rows with end-to-end wrap. D-pad left/right
 // walks the action-bar row (no-op on the text field row and at row edges).
 //
-// A on editWithdraw: consumed no-op (reserved for future on-screen keyboard
-// per feedback-text-field-a-reserved memory). Form commit requires D-pad to
-// btnWithdraw + A.
+// A on editWithdraw: opens the gamepad on-screen keyboard for that
+// field. Form commit still requires D-pad to btnWithdraw + A.
 //
 // No OnTick needed: vanilla doesn't reset engine focus after a withdrawal in
 // a way that would desync the gamepad cursor.
@@ -160,10 +159,11 @@ function bool HandleActivate(byte button)
     if (button != 200)
         return true;
 
-    // A on a text field: reserved for future on-screen keyboard (no-op).
+    // A on a text field: open the gamepad on-screen keyboard.
     if (rowIndex == ROW_WITHDRAW)
     {
-        class'DXControllerDebug'.static.DebugLog("DXC-TERM A-TEXTFIELD-NOOP");
+        OpenKeyboardFor(ComputerScreenATMWithdraw(screen).editWithdraw,
+                        "WITHDRAW AMOUNT");
         return true;
     }
 
