@@ -12162,8 +12162,11 @@ function OnGamepadLeftTrigger(float value)
         ToggleScopeOrLaser();
 }
 
-// Called by ControllerConsole on every IK_JoyR axis event. Mirrors
-// "Button bFire | Fire": held-fire bit + initial Fire kick on press.
+// Called by ControllerConsole on every IK_JoyR axis event. Mirrors the
+// full mouse left-button binding "ParseLeftClick|Fire": ParseLeftClick
+// on the press edge (uses lockpicks/multitools/keys and activatable
+// items — tools are not weapons, so Fire alone ignores them), plus the
+// held-fire bit + Fire kick for actual weapons.
 function OnGamepadRightTrigger(float value)
 {
     local bool nowHeld;
@@ -12173,6 +12176,7 @@ function OnGamepadRightTrigger(float value)
     bGamepadRightTriggerHeld = nowHeld;
     if (nowHeld)
     {
+        ParseLeftClick();
         bFire = 1;
         Fire(0.0);
     }
