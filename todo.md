@@ -10,16 +10,64 @@ remain for later sessions.
 
 #### Network terminals
 
-- `NetworkTerminal` and its `ComputerUIWindow` family: Login,
-  Bulletins, Email, Security (cameras / doors / turrets), Hack
-  Accounts, ATM (read balance + withdraw), Special Options.
-- Multi-screen tabbed nav, text-entry fields (Login), camera viewing,
-  hack progress UI — fundamentally different shape from the
-  single-screen modals of Scope 2.
+Split into two phases. Phase 1 covers the terminal shell, the pane
+model (LB/RB cycling between `winComputer` / `winHack` /
+`winHackAccounts`), and every screen except Security. Phase 2 covers
+the Security screen, which is dense enough to warrant its own design
+pass.
+
+##### Phase 1 — terminal foundation + non-Security screens — IN PROGRESS
+
+Designed at
+`docs/superpowers/specs/2026-05-15-network-terminal-nav-phase1-design.md`,
+implemented per
+`docs/superpowers/plans/2026-05-15-network-terminal-nav-phase1.md`.
+All 12 nav classes build clean. Two attach bugs found and fixed: the
+nav-registry array overflowed at [32] (dropping terminal registrations),
+and the ATM pushes `ATMWindow` (a subclass of `NetworkTerminalATM`)
+which exact-match registration missed. ATM controls verified working.
+Personal/Public/Security terminals pending playtest (wiring audited OK;
+Security's post-login screen is the Phase 2 unknown-screen fallback).
+
+- `NetworkTerminal` + `NetworkTerminalPersonal` / `Public` / `ATM` /
+  `Security` shell (Security's per-screen sub-controller comes in
+  Phase 2; Phase 1 covers the shell and the unknown-screen fallback).
+- `ComputerScreenLogin`, `ComputerScreenATM`,
+  `ComputerScreenATMWithdraw`, `ComputerScreenATMDisabled` —
+  text-entry forms; gamepad navigates around text fields but can't
+  type into them (on-screen keyboard deferred).
+- `ComputerScreenBulletins`, `ComputerScreenEmail` — list-and-detail
+  screens with auto-display side panel.
+- `ComputerScreenSpecialOptions` — dynamic 1–4 choice buttons.
+- `ComputerScreenHack` overlay pane (`btnHack` only).
+- `ComputerScreenHackAccounts` side pane (account list + change
+  button).
+
+##### Phase 2 — `ComputerScreenSecurity`
+
+Densest screen in the terminal family. Builds on Phase 1's pane
+model and dispatcher; only adds the Security-screen-specific
+sub-controller.
+
+- Three internal regions: camera-selector row (3 cameras), choice
+  rows (4 vertical action choices for Camera/Door Access/Door
+  Open/Turret), pan/zoom button cluster (6 buttons) + pan/zoom-speed
+  slider.
+- Probably maps R-stick → continuous camera pan, triggers → zoom
+  (instead of D-pad on the 6-button cluster). D-pad → choice rows.
+  Camera selection mechanism TBD (numeric hotkey, Y-cycles, or
+  in-row).
+- Pan/zoom-speed slider intentionally left mouse/keyboard-only.
+- Tick-driven camera/door/turret status updates (vanilla
+  `NetworkRefreshTimer` / `DoorRefreshTimer`); controller is
+  read-only with respect to these.
 
 ### On screen keyboard
 
-A large feature, but needed to log in to terminals with found usernames/passwords.
+A large feature, but needed to log in to terminals with found
+usernames/passwords. Reserved A-on-text-field binding will trigger
+this when implemented (see
+`feedback-text-field-a-reserved` memory).
 
 ### Scrolling for goals and notes persona screen
 
@@ -31,7 +79,23 @@ Show xbox controller button pictures with their mapping in UI contexts. For menu
 
 Button pictures have been added to assets/DXControllerBtn.utx (group XboxSeries, texture names match the base names of the source pictures in assets/xbox-buttons-png/).
 
+### Implement a way to apply weapon mods through inventory screen
+
+Done through click-dragging the mod onto the weapon. Use/equip is useless, so probably best to special-case it for weapon mods to start modding.
+
 ## Bug to fix
+
+### Can't use lockpicks
+
+RT with lockpick doesn't do anything, even though the mouse LB works. Are we sending a different event? Probably applies to multitools as well.
+
+### Can't heal through heal menu
+
+The focus spots are on the body parts themselves, they only show a description of the bodypart when activated. Need to focus the actual heal buttons.
+
+### ATM screens (and probably other devices) don't suppress gameplay actions
+
+Pulling RT fires while interacting with terminal.
 
 ### Main menu controller/mouse focus fighting
 
