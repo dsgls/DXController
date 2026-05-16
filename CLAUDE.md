@@ -256,6 +256,24 @@ Prefix all such logs with `DXC-<area>`: `DXC-WHEEL`, `DXC-NAV`,
   Corollary: the `event MouseMoved` override on the root window is
   reached only in `CM_Mouse` (cursor visible); the `CM_Gamepad → CM_Mouse`
   transition runs from the `Tick` poll, not the event.
+- **`Console.KeyEvent` is the first script entry point for *all*
+  input — mouse and keyboard included, not just the gamepad.** Mouse
+  motion arrives as `IK_MouseX`/`IK_MouseY` `IST_Axis` events; mouse
+  buttons as `IK_LeftMouse` etc. Any cursor-mode / "gamepad is active"
+  signal driven from `KeyEvent` MUST whitelist the gamepad key slots
+  (buttons `0xC8-0xD7`, D-pad `0xF0-0xF3`, axes `0xE0-0xE3`+`0xE8/E9`)
+  first — see `ControllerConsole.IsGamepadKey`. An unfiltered hook
+  misreads the mouse's own `IK_MouseX/Y` stream as gamepad activity:
+  one mouse motion fires both `MouseMoved` (→`CM_Mouse`) and the axis
+  events (→`CM_Gamepad`), so the cursor mode oscillates every frame
+  and the focus highlight flickers. This bites on the **title-screen**
+  main menu specifically: `DeusExRootWindow.UIPauseGame` skips
+  `parentPawn.ShowMenu()` when `AtIntroMap()` is true, so the console
+  never enters `state Menuing` there — every event (mouse axes
+  included) reaches the class-scoped `ControllerConsole.KeyEvent`. The
+  in-game pause menu *is* in `Menuing`, where the state override
+  forwards only `JoyX/Y/U/V` to `global.KeyEvent`, so mouse axes never
+  reach the hook and the bug doesn't show.
 - **Vanilla `VirtualKeyPressed` overrides may silently swallow
   unrecognised keys.** UE1 event dispatch bubbles `VirtualKeyPressed`
   up the *window* tree only while each window's handler returns

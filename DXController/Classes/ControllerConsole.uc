@@ -11,6 +11,25 @@
 //=============================================================================
 class ControllerConsole extends Console;
 
+// True if Key is one of the gamepad slots fed by the XInput shim:
+// buttons IK_Joy1..16 (0xC8-0xD7), D-pad (0xF0-0xF3), and the stick /
+// trigger axes JoyX/Y/Z/R (0xE0-0xE3) + JoyU/V (0xE8-0xE9). KeyEvent is
+// the first script entry point for ALL input — mouse (IK_MouseX/Y,
+// IK_LeftMouse) and keyboard events arrive here too — so the
+// NoticeGamepadActivity hook must whitelist gamepad slots before
+// flipping the cursor mode. Mirrors the byte-range gate in
+// ControllerRootWindow.VirtualKeyPressed.
+function bool IsGamepadKey(EInputKey Key)
+{
+    local int k;
+    k = Key;                                  // EInputKey->int widening assignment
+    if (k >= 0xC8 && k <= 0xD7) return true;  // IK_Joy1..IK_Joy16
+    if (k >= 0xF0 && k <= 0xF3) return true;  // D-pad slots
+    if (k >= 0xE0 && k <= 0xE3) return true;  // JoyX/Y/Z/R (sticks + triggers)
+    if (k == 0xE8 || k == 0xE9) return true;  // JoyU/JoyV (right stick)
+    return false;
+}
+
 event bool KeyEvent(EInputKey Key, EInputAction Action, FLOAT Delta)
 {
     local DeusExPlayer p;
@@ -21,8 +40,13 @@ event bool KeyEvent(EInputKey Key, EInputAction Action, FLOAT Delta)
     if (p == None)
         return Super.KeyEvent(Key, Action, Delta);
 
-    // Notify root window so it can flip from CM_Mouse → CM_Gamepad.
-    if (p.rootWindow != None)
+    // Notify root window so it can flip from CM_Mouse → CM_Gamepad —
+    // but ONLY for genuine gamepad events. KeyEvent also carries mouse
+    // and keyboard input; treating mouse-movement axes (IK_MouseX/Y) as
+    // gamepad activity makes the title-screen main menu flicker between
+    // cursor modes (one mouse motion fires both MouseMoved → CM_Mouse
+    // and IK_MouseX/Y axes → here → CM_Gamepad). See IsGamepadKey.
+    if (p.rootWindow != None && IsGamepadKey(Key))
     {
         if (ControllerRootWindow(p.rootWindow) != None)
             ControllerRootWindow(p.rootWindow).NoticeGamepadActivity();
