@@ -212,7 +212,7 @@ event DrawWindow(GC gc)
 {
     local float panelW, panelH, panelX, panelY;
     local float gridW, gridX, y;
-    local Color dark, accent, lightText;
+    local Color modDark, floorLift, accent, lightText;
 
     Super.DrawWindow(gc);
 
@@ -228,14 +228,28 @@ event DrawWindow(GC gc)
     panelX = (width  - panelW) * 0.5;
     panelY = (height - panelH) * 0.5;
 
-    dark      = MakeColor(8, 8, 8, 235);
+    // Panel fill: a uniform dark veil over whatever is behind the
+    // keyboard. Neither GC blend style gives a uniform translucent fill
+    // on its own — DSTY_Translucent over Texture'Solid' is purely
+    // additive (a dark tint adds ~nothing; the panel stays see-through)
+    // and DSTY_Modulated is purely multiplicative (it darkens lit areas
+    // but leaves black areas pure black, so the panel looks blotchy).
+    // Two passes combine into an even veil: modulate the scene down
+    // toward black, then add a flat dark floor back. modDark sets how
+    // much underlying context still bleeds through; floorLift sets the
+    // minimum darkness (raise it if the panel looks uneven).
+    modDark   = MakeColor(24, 24, 24, 255);   // multiply: ~0.19x
+    floorLift = MakeColor(26, 26, 26, 255);   // additive dark floor
     accent    = colBorder;
     accent.A  = 255;
     lightText = MakeColor(200, 198, 170, 255);
 
-    // Panel: translucent dark fill + accent border.
+    // Panel: modulate-down then lift to a flat floor, + accent border.
+    gc.SetStyle(DSTY_Modulated);
+    gc.SetTileColor(modDark);
+    gc.DrawPattern(panelX, panelY, panelW, panelH, 0, 0, Texture'Solid');
     gc.SetStyle(DSTY_Translucent);
-    gc.SetTileColor(dark);
+    gc.SetTileColor(floorLift);
     gc.DrawPattern(panelX, panelY, panelW, panelH, 0, 0, Texture'Solid');
     gc.SetStyle(DSTY_Masked);
     gc.SetTileColor(accent);
@@ -277,7 +291,9 @@ function DrawEcho(GC gc, float x, float y, float w, float h, Color textCol)
     if (target != None)
         shown = target.GetText();
 
-    gc.SetStyle(DSTY_Translucent);
+    // Echo field: modulated black knocks the panel out to a solid black
+    // inset. Translucent black would be additive and draw nothing.
+    gc.SetStyle(DSTY_Modulated);
     gc.SetTileColor(MakeColor(0, 0, 0, 255));
     gc.DrawPattern(x, y, w, h, 0, 0, Texture'Solid');
 

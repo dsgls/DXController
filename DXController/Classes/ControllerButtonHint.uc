@@ -15,7 +15,9 @@
 class ControllerButtonHint extends ExtensionObject;
 
 const ICON_SIZE = 16.0;
-const ICON_GAP  = 4.0;   // gap between an icon and its label
+const ICON_GAP  = 4.0;    // gap between an icon and its label
+const ICON_SRC  = 64.0;   // native edge length of the DXControllerBtn
+                          // textures (assets/png-to-pcx.py SIZE)
 
 // Resolve a logical button id to its texture. id is one of:
 //   a, b, x, y, back, share, start,
@@ -51,22 +53,42 @@ static function float DrawHint(GC gc, float x, float y, string id, string label)
 {
     local Texture icon;
     local float xExt, yExt, textX;
+    local Color iconCol, textCol;
 
     icon = GetButtonTexture(id);
     gc.SetStyle(DSTY_Masked);
+
+    // GC.SetTileColorRGB / SetTextColorRGB build a Color but leave the
+    // alpha byte at 0. Under DSTY_Masked the text renderer honours that
+    // alpha, so an RGB-only text colour draws the label fully
+    // transparent. Build both colours with an explicit opaque alpha.
+    iconCol.R = 255;
+    iconCol.G = 255;
+    iconCol.B = 255;
+    iconCol.A = 255;
+    textCol.R = 200;
+    textCol.G = 198;
+    textCol.B = 170;
+    textCol.A = 255;
 
     // textX trails the icon when one resolved; for an unrecognised id
     // (icon == None) the label sits at x with no phantom icon gap.
     textX = x;
     if (icon != None)
     {
-        gc.SetTileColorRGB(255, 255, 255);
-        gc.DrawTexture(x, y, ICON_SIZE, ICON_SIZE, 0, 0, icon);
+        gc.SetTileColor(iconCol);
+        // DrawTexture blits 1:1 — destWidth/Height only clip, they do
+        // not scale (the call takes a source *origin*, not a source
+        // rect), so a 64x64 glyph in a 16x16 box shows only its
+        // transparent corner. DrawStretchedTexture takes a source rect
+        // and scales it to the destination rect.
+        gc.DrawStretchedTexture(x, y, ICON_SIZE, ICON_SIZE,
+                                0, 0, ICON_SRC, ICON_SRC, icon);
         textX = x + ICON_SIZE + ICON_GAP;
     }
 
     gc.SetFont(Font'DeusExUI.FontMenuSmall');
-    gc.SetTextColorRGB(200, 198, 170);
+    gc.SetTextColor(textCol);
     gc.SetAlignments(HALIGN_Left, VALIGN_Center);
     gc.DrawText(textX, y, 200.0, ICON_SIZE, label);
 
