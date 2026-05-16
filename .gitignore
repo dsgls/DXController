@@ -2,5 +2,8 @@ gamedir
 *.swp
 .superpowers/
 
+/docs/superpowers
+/docs/tmp
+
 # Generated files, run assets/png-to-pcx.py to create from source PNGs
 assets/xbox-buttons-pcx/
