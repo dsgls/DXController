@@ -62,13 +62,6 @@ sub-controller.
   `NetworkRefreshTimer` / `DoorRefreshTimer`); controller is
   read-only with respect to these.
 
-### On screen keyboard
-
-A large feature, but needed to log in to terminals with found
-usernames/passwords. Reserved A-on-text-field binding will trigger
-this when implemented (see
-`feedback-text-field-a-reserved` memory).
-
 ### Scrolling for goals and notes persona screen
 
 Need to play the game enough to go beyond the text area size to test.
@@ -85,11 +78,11 @@ Done through click-dragging the mod onto the weapon. Use/equip is useless, so pr
 
 ## Bug to fix
 
-### Can't use lockpicks
+### Can't use lockpicks - fix applied, needs testing
 
 RT with lockpick doesn't do anything, even though the mouse LB works. Are we sending a different event? Probably applies to multitools as well.
 
-### Can't heal through heal menu
+### Can't heal through heal menu - fix applied, needs testing
 
 The focus spots are on the body parts themselves, they only show a description of the bodypart when activated. Need to focus the actual heal buttons.
 
@@ -97,9 +90,18 @@ The focus spots are on the body parts themselves, they only show a description o
 
 Pulling RT fires while interacting with terminal.
 
-### Main menu controller/mouse focus fighting
+### Main menu controller/mouse focus fighting - fix applied, needs testing
 
 When the mouse is moved in main menu, the controller selection highlight disappears as it should. But then it starts flickering in and out, as if the mouse and controller focus are fighting. There should be a clear mode switch, mouse moved -> controller mode disabled, no focus highlight drawn. On controller input, controller mode enabled, mouse cursor hidden and controller focus highlight restored to previous selection.
+
+Root cause: `ControllerConsole.KeyEvent` called `NoticeGamepadActivity()`
+for every event, including the `IK_MouseX/Y` axis events that mouse
+motion generates. On the title-screen menu the console isn't in
+`state Menuing` (`UIPauseGame` skips `ShowMenu` on the intro map), so
+those mouse axes reached the hook and flipped the cursor back to
+`CM_Gamepad` while `MouseMoved` flipped it to `CM_Mouse` — oscillation.
+Fix: `ControllerConsole.IsGamepadKey` whitelist gates the hook to real
+gamepad slots only.
 
 ## Nitpicks
 
