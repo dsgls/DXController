@@ -60,6 +60,9 @@ jobs:
           rsync -rt DXController/ "$RUNNER_TEMP/build/DXController/"
           rsync -rt DeusEx/       "$RUNNER_TEMP/build/DeusEx/"
           rsync -rt DeusExe/      "$RUNNER_TEMP/build/DeusExe/"
+          # Pre-built texture package — staged into System/ for the
+          # pass-2 compile to resolve Texture'DXControllerBtn.*'.
+          cp DXControllerBtn.u "$RUNNER_TEMP/build/System/"
 
       - name: Register mod packages with the compiler
         run: |
@@ -80,6 +83,13 @@ jobs:
           fi
           if ! grep -qxF 'EditPackages=DXController' "$INI"; then
             sed -i -E '/^EditPackages=DeusExe[[:space:]]*$/a EditPackages=DXController' "$INI"
+          fi
+          # DXControllerBtn is a pre-built texture-only package (no UScript
+          # source, never rebuilt by UCC). It must be in EditPackages
+          # *before* DXController so UCC can resolve Texture'DXControllerBtn.*'
+          # literals during the pass-2 compile.
+          if ! grep -qxF 'EditPackages=DXControllerBtn' "$INI"; then
+            sed -i -E '/^EditPackages=DXController[[:space:]]*$/i EditPackages=DXControllerBtn' "$INI"
           fi
           echo "--- EditPackages block after edit ---"
           grep -n EditPackages "$INI"
@@ -145,6 +155,7 @@ jobs:
             DeusEx.u
             DeusExe.u
             DXController.u
+            DXControllerBtn.u
 
       - name: Stage release contents
         if: startsWith(github.ref, 'refs/tags/v')
@@ -154,6 +165,7 @@ jobs:
           REL="$RUNNER_TEMP/release/DXController-${GITHUB_REF_NAME}"
           mkdir -p "$REL"
           cp README.md "$REL/"
+          cp DXControllerBtn.u "$REL/"
           cp "$RUNNER_TEMP/build/System/DeusEx.u" "$REL/"
           cp "$RUNNER_TEMP/build/System/DeusExe.u" "$REL/"
           cp "$RUNNER_TEMP/build/System/DXController.u" "$REL/"

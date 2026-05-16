@@ -1080,6 +1080,18 @@ function S_ColorScheme GetCurrentHUDColorScheme()
 }
 
 
+// === DXController additions: BEGIN ===
+// Hook for the DXController gamepad on-screen keyboard. Base impl is a
+// no-op; ControllerRootWindow overrides it to dismiss an open keyboard.
+// ComputerUIWindow calls this on IK_Escape so a physical-keyboard Esc
+// dismisses the keyboard instead of closing the terminal screen.
+// Returns true if a keyboard was open and has now been closed.
+function bool CloseGamepadKeyboard()
+{
+    return false;
+}
+// === DXController additions: END ===
+
 // ----------------------------------------------------------------------
 // ----------------------------------------------------------------------
 

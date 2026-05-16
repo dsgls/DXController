@@ -10,9 +10,8 @@
 // D-pad up/down moves between rows with end-to-end wrap. D-pad left/right
 // walks the action-bar row (no-op on text fields and at row edges).
 //
-// A on a text field: consumed no-op (reserved for future on-screen keyboard
-// per feedback-text-field-a-reserved memory). Form commit requires D-pad
-// to btnLogin + A.
+// A on a text field: opens the gamepad on-screen keyboard for that
+// field. Form commit still requires D-pad to btnLogin + A.
 //
 // SetFocusWindow is called for text fields and action-bar buttons so
 // keyboard typing reaches the gamepad-focused field and the vanilla
@@ -169,10 +168,15 @@ function bool HandleActivate(byte button)
     if (button != 200)
         return true;
 
-    // A on a text field: reserved for future on-screen keyboard (no-op).
-    if (rowIndex == ROW_ACCOUNT || rowIndex == ROW_PIN)
+    // A on a text field: open the gamepad on-screen keyboard.
+    if (rowIndex == ROW_ACCOUNT)
     {
-        class'DXControllerDebug'.static.DebugLog("DXC-TERM A-TEXTFIELD-NOOP");
+        OpenKeyboardFor(ComputerScreenATM(screen).editAccount, "ENTER ACCOUNT");
+        return true;
+    }
+    if (rowIndex == ROW_PIN)
+    {
+        OpenKeyboardFor(ComputerScreenATM(screen).editPIN, "ENTER PIN");
         return true;
     }
 

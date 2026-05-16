@@ -21,6 +21,7 @@ class ControllerRootWindow extends DeusExRootWindow;
 // buttons created in reverse to render left-to-right).
 var Class<PersonaScreenBaseWindow> PersonaScreens[8];
 var RadialMenuWindow radial;
+var OnScreenKeyboardWindow keyboard;
 
 // Cursor mode.
 const CM_Gamepad = 0;
@@ -66,6 +67,9 @@ event InitWindow()
 
     focusOverlay = MenuFocusOverlay(NewChild(Class'MenuFocusOverlay'));
     focusOverlay.SetWindowAlignments(HALIGN_Full, VALIGN_Full, 0, 0);
+
+    keyboard = OnScreenKeyboardWindow(NewChild(Class'OnScreenKeyboardWindow'));
+    keyboard.SetWindowAlignments(HALIGN_Full, VALIGN_Full, 0, 0);
 
     RegisterNavControllers();
     cursorMode = CM_Gamepad;
@@ -206,8 +210,8 @@ function int FindNavIndex(Class screenClass)
 // predicate cleanly separates modal screens (PushWindow'd menus,
 // conversations, datacubes — all inherit ModalWindow via
 // DeusExBaseWindow) from the always-present HUD-style children
-// (hud, actorDisplay, scopeView, radial, focusOverlay — all extend
-// Window directly, NOT DeusExBaseWindow). Returns:
+// (hud, actorDisplay, scopeView, radial, focusOverlay, keyboard —
+// all extend Window directly, NOT DeusExBaseWindow). Returns:
 //
 //   (controller, screen) when the topmost modal is registered.
 //   (None,       screen) when the topmost modal is not registered
@@ -303,6 +307,30 @@ function SwitchActiveNav(MenuNavController desired, Window desiredScreen)
     }
 }
 
+// Open the gamepad on-screen keyboard targeting `target`. `label` is
+// drawn at the top of the keyboard panel (e.g. "ENTER USERNAME").
+// Invoked by nav controllers from their A-on-text-field handlers.
+function OpenKeyboard(MenuUIEditWindow target, Window ownerScreen, string label)
+{
+    if (keyboard == None || target == None)
+        return;
+    keyboard.Open(target, ownerScreen, label);
+}
+
+// Override of the DeusExRootWindow.CloseGamepadKeyboard hook. Called
+// from ComputerUIWindow's IK_Escape handler so a physical-keyboard Esc
+// dismisses the on-screen keyboard. Returns true if the keyboard was
+// open and has now been closed.
+function bool CloseGamepadKeyboard()
+{
+    if (keyboard != None && keyboard.bOpen)
+    {
+        keyboard.CloseKbd("Esc");
+        return true;
+    }
+    return false;
+}
+
 // Engine-event-driven nav attach/detach. Fires on every ancestor when
 // a child enters or leaves the native window tree, while the descendant
 // pointer is still valid (vanilla HUDBarkDisplay.DescendantRemoved
@@ -382,6 +410,16 @@ event DescendantRemoved(Window descendant)
 {
     Super.DescendantRemoved(descendant);
 
+    // Force the keyboard closed when the screen owning its target
+    // field is torn down. This catches an inner ComputerScreenX swap
+    // (e.g. a successful login), where the removed descendant is the
+    // inner screen — not activeNav.screen, which is the NetworkTerminal
+    // shell. Whole-terminal teardown also destroys the inner screen
+    // first, so this check covers that case too; the activeNav block
+    // below is defence in depth.
+    if (keyboard != None && keyboard.bOpen && keyboard.targetScreen == descendant)
+        keyboard.ForceClose();
+
     // The active screen is being torn down — drop activeNav now so
     // VirtualKeyPressed / MenuFocusOverlay don't dereference the
     // destroyed window during the rest of this frame. Don't try to
@@ -389,7 +427,14 @@ event DescendantRemoved(Window descendant)
     // case the parent is still hidden+unlinked at this moment and the
     // walk would return None anyway. Tick re-resolves post-Show.
     if (activeNav != None && activeNav.screen == descendant)
+    {
+        // The screen owning any open on-screen keyboard target is
+        // going away — force the keyboard closed before its target
+        // field is destroyed.
+        if (keyboard != None && keyboard.bOpen)
+            keyboard.ForceClose();
         SwitchActiveNav(None, None);
+    }
 }
 
 // Per-frame work, run between frames after the engine has settled any
@@ -547,6 +592,21 @@ event bool VirtualKeyPressed(EInputKey key, bool bRepeat)
     //   240..243 = D-pad slots (IK_JoyPovUp..Right, 0xF0..0xF3)
     if ((bkey >= 200 && bkey <= 215) || (bkey >= 240 && bkey <= 243))
         NoticeGamepadActivity();
+
+    // ---- On-screen keyboard owns input while open ----
+    // The keyboard window does not reliably receive engine focus
+    // (verified by play-test — SetFocusWindow on a root-child window
+    // does not capture key dispatch). Gamepad keys do bubble up to this
+    // root VirtualKeyPressed, the same path every nav controller relies
+    // on, so intercept them here: D-pad / A / X / B all route into the
+    // keyboard, and every key is consumed so nothing leaks to the
+    // terminal beneath. (Physical-keyboard Esc is handled separately —
+    // it is swallowed by ComputerUIWindow below the root.)
+    if (keyboard != None && keyboard.bOpen)
+    {
+        keyboard.HandleKey(key, bRepeat);
+        return true;
+    }
 
     // ---- Close-menu buttons ----
 

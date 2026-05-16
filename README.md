@@ -34,6 +34,11 @@ ucc.exe batchexport DeusEx.u Class uc ..\DeusEx\Classes
 
 Output: `gamedir/System/DeusEx.u` and `gamedir/System/DXController.u`.
 
+`DXControllerBtn.u` — a pre-built controller-button texture package
+committed at the repo root — is also required at runtime. `sync-and-build.sh`
+copies it into `gamedir/System/` automatically; it must sit alongside the
+built `.u` files there for the mod to load.
+
 ## Configuration (one-time)
 
 ### `gamedir/System/DeusEx.ini`
