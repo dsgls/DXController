@@ -316,6 +316,53 @@ Prefix all such logs with `DXC-<area>`: `DXC-WHEEL`, `DXC-NAV`,
   (overridden in `ControllerRootWindow`) — a DeusEx-side class can't
   name a `DXController` type, so the hook is declared on the rebuildable
   `DeusExRootWindow` base.
+- **No GC blend style gives a uniform translucent fill — combine two.**
+  `GC` has only `DSTY_None/Normal/Masked/Translucent/Modulated`
+  (`../deusex-scripts/Extension/Classes/ExtensionObject.uc:202`); there
+  is no alpha blend. `DSTY_Translucent` over `Texture'Solid'` is purely
+  *additive* — it *adds* `texel * tileColor` into the framebuffer and
+  ignores the tile-colour alpha entirely, so a near-black tint (the
+  obvious "dark translucent panel") adds ~nothing and the panel reads as
+  fully transparent. `DSTY_Modulated` is purely *multiplicative*
+  (`dest * 2 * tileColor`, so tile colour `128` is identity) — a dark
+  tint darkens lit areas but leaves black areas pure black, so a panel
+  over mixed content looks blotchy. For an *even* dark veil, draw the
+  fill twice: a `DSTY_Modulated` pass to pull the scene down toward
+  black, then a `DSTY_Translucent` pass to add a flat dark floor back.
+  `OnScreenKeyboardWindow.DrawWindow` does this for its panel (the echo
+  field stays single-pass `DSTY_Modulated` black — an inset is meant to
+  be the darkest element). The same additive-`DSTY_Translucent`-over-
+  `Solid` pattern is still present in `RadialMenuWindow.uc` (empty-slot
+  placeholder ~472, panel dim ~613) — likely also drawing ~nothing;
+  unverified, not yet changed.
+- **`GC.SetTextColorRGB` / `SetTileColorRGB` leave `Color.A == 0`.**
+  Both helpers (`../deusex-scripts/Extension/Classes/GC.uc:157,172`)
+  build a `Color` from R/G/B only and never touch the alpha byte, so it
+  defaults to 0. Under `DSTY_Masked` the *text* renderer honours that
+  alpha — text set via `SetTextColorRGB` draws fully transparent
+  (masked *tile/texture* draws ignore tile-colour alpha, which is why
+  `SetTileColorRGB(255,255,255)` works for icons but `SetTextColorRGB`
+  silently eats labels). This bit `ControllerButtonHint.DrawHint` (the
+  on-screen-keyboard footer hints rendered with no visible text). Build
+  the `Color` with an explicit `A = 255` and use `SetTextColor` /
+  `SetTileColor` instead. Vanilla code gets away with `SetTextColorRGB`
+  only because it pairs it with `DSTY_Normal`, which draws text opaque.
+- **`GC.DrawTexture` is a 1:1 blit — it does not scale.** Its signature
+  (`../deusex-scripts/Extension/Classes/GC.uc:114`) is
+  `DrawTexture(destX, destY, destWidth, destHeight, srcX, srcY, tx)` —
+  it takes a source *origin* (`srcX/srcY`) but no source *size*, so
+  `destWidth/destHeight` only **clip** the blit; the texture is drawn at
+  native pixel scale. Drawing a 64×64 texture into a 16×16 box shows
+  only the top-left 16×16 texels (for the masked button glyphs, that
+  corner is the transparent key colour — i.e. nothing). To scale a
+  texture, use `DrawStretchedTexture(destX, destY, destW, destH, srcX,
+  srcY, srcWidth, srcHeight, tx)` (`GC.uc:129`), which takes a source
+  *rect* and maps it onto the destination rect. This bit
+  `ControllerButtonHint.DrawHint` (the 64×64 DXControllerBtn glyphs
+  drew invisibly at 16px until switched to `DrawStretchedTexture`). Note
+  `RadialMenuWindow` draws inventory/aug icons with `DrawTexture` at
+  `IconSize` (~48) — fine only as long as those icons are ≤ that size;
+  larger stock icons would be silently cropped.
 
 ## Source overlay model
 
