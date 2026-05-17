@@ -7,7 +7,8 @@
 // Narrower than MenuNavController: no Attach/Detach (the dispatcher's
 // own Attach/Detach lifecycle handles registry concerns), no
 // bAllowRepeat / subDialogActive (the dispatcher owns those), no
-// HandleScroll (no R-stick targets on terminal screens).
+// HandleScroll/HandleScrollX/HandleTrigger (R-stick + triggers, used by
+// the Security screen for analog camera pan/zoom; no-op elsewhere).
 //
 // IsButtonClass / GetFocusedRect implement the suppress-frame-on-button
 // policy from the design doc: vanilla colText[1] (yellow) on a focused
@@ -66,10 +67,48 @@ function bool HandleActivate(byte button)
     return false;
 }
 
-// Per-frame work. Default: nothing. Sub-controllers that need to
-// re-sync stale state (e.g. failed-login engine-focus reset) override.
-function OnTick()
+// Per-frame work, pumped by NetworkTerminalNavController.NavTick with
+// the frame delta. Default: nothing. Sub-controllers that need
+// per-frame work (failed-login re-sync, analog camera integration)
+// override.
+function OnTick(float deltaSeconds)
 {
+}
+
+// R-stick Y-axis (camera pitch on the Security screen). Return true to
+// consume. No-op default.
+function bool HandleScroll(float v)
+{
+    return false;
+}
+
+// R-stick X-axis (camera yaw on the Security screen). Return true to
+// consume. No-op default.
+function bool HandleScrollX(float v)
+{
+    return false;
+}
+
+// Analog trigger (camera zoom on the Security screen). side: 0 = LT,
+// 1 = RT. Return true to consume. No-op default.
+function bool HandleTrigger(int side, float value)
+{
+    return false;
+}
+
+// Zero any cached analog deflection. Called by the dispatcher when the
+// active pane leaves Computer and on teardown, so a stale stick value
+// can't keep driving the camera. No-op default.
+function ClearAxisCache()
+{
+}
+
+// Contribute screen-specific button-legend hints by calling
+// nav.AddHint(...). Return true if hints were added (the dispatcher
+// then skips its generic legend), false to fall through. No-op default.
+function bool BuildHints(MenuNavController nav)
+{
+    return false;
 }
 
 // True for widgets whose own focus cue (yellow text on buttons) is

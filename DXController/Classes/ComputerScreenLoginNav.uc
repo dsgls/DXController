@@ -194,7 +194,7 @@ function bool HandleActivate(byte button)
 
 // ---- OnTick: re-sync gamepad focus after vanilla failed-login reset --------
 
-function OnTick()
+function OnTick(float deltaSeconds)
 {
     local ComputerScreenLogin loginScr;
 

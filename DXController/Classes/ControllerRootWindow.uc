@@ -394,6 +394,29 @@ event DescendantAdded(Window descendant)
         radial.OnTopWindowPushed(descendant);
     }
 
+    // Computer-pane screen swap inside a network terminal. The inner
+    // ComputerScreenX windows are children of the NetworkTerminal, not
+    // of root, so they don't match the nav registry and aren't modal —
+    // they would otherwise fall through unnoticed. Hand the genuine
+    // new-screen pointer to the active terminal dispatcher so it does
+    // not have to detect swaps by an unreliable pointer compare: UE1
+    // reuses the freed object slot when ShowScreen destroys the old
+    // screen and allocates the new one, so the new winComputer can be
+    // pointer-equal to the old (see
+    // NetworkTerminalNavController.OnComputerScreenChanged).
+    //
+    // ComputerUIWindow cleanly isolates the Computer-pane screen:
+    // winHack / winHackAccounts extend HUDBaseWindow, not ComputerUIWindow.
+    if (ComputerUIWindow(descendant) != None
+        && NetworkTerminalNavController(activeNav) != None
+        && activeNav.screen != None
+        && activeNav.screen == descendant.GetParent())
+    {
+        NetworkTerminalNavController(activeNav).OnComputerScreenChanged(
+            ComputerUIWindow(descendant));
+        return;
+    }
+
     // Direct registry match on the just-added descendant. We can't
     // walk GetTopChild here — the engine fires this event before the
     // new child is in root's child list.
