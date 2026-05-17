@@ -33,10 +33,16 @@ that class-scoped wheel handler active, and it consumed LB/RB before
 the window system / `NetworkTerminalNavController.HandleActivate` ever
 saw them. Fixed: under `IsAnyUIForeground()` the LB/RB branches now
 fall through to `Super.KeyEvent` (same path A/D-pad already take).
-ATM login-screen controls verified working; LB/RB pane switching
-pending playtest. Personal/Public/Security terminals pending playtest
-(wiring audited OK; Security's post-login screen is the Phase 2
-unknown-screen fallback).
+A fourth bug: after hacking a terminal from the Hack pane the
+Computer-pane screen swaps (login → post-login), but `activePane`
+stayed `PANE_HACK` — a successful hack keeps `winHack` alive as a
+"Return" button so the `IsPanePresent` auto-fallback never fired, and
+the new screen was unreachable. Fixed: `NavTick`'s screen-swap
+detection now resets `activePane` to `PANE_COMPUTER`.
+ATM login-screen + LB/RB pane switching verified working; ATM withdraw
+screen after hack-login pending re-playtest. Personal/Public/Security
+terminals pending playtest (wiring audited OK; Security's post-login
+screen is the Phase 2 unknown-screen fallback).
 
 - `NetworkTerminal` + `NetworkTerminalPersonal` / `Public` / `ATM` /
   `Security` shell (Security's per-screen sub-controller comes in
