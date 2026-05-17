@@ -7,13 +7,12 @@
 // the wheel — see CLAUDE.md "Input flow" section).
 //
 // State machine:
-//   - bOpen = false, bClosing = false : window invisible, ticks idle.
-//   - Open(WM_Weapon)    : begin showing the weapon wheel (fades in).
-//   - Open(WM_Aug)       : begin showing the aug wheel (fades in).
-//   - UpdateStick(x, y)  : called every right-stick axis event while open.
-//   - Close(bApply)      : dispatch selection at button-release time, then
-//                          fade out. bOpen becomes false immediately;
-//                          bClosing stays true until openAlpha reaches 0.
+//   - bOpen = false : window invisible, ticks idle.
+//   - Open(WM_Weapon)   : show the weapon wheel immediately (no fade).
+//   - Open(WM_Aug)      : show the aug wheel immediately (no fade).
+//   - UpdateStick(x, y) : called every right-stick axis event while open.
+//   - Close(bApply)     : dispatch selection at button-release time, hide
+//                         immediately. bOpen becomes false right away.
 //=============================================================================
 class RadialMenuWindow extends HUDBaseWindow;
 
@@ -25,13 +24,15 @@ const WM_BeltAssign = 3;
 
 const StickDeadzone     = 300.0;    // ~30% of the -1000..1000 axis range
 const DegreesPerRadian  = 57.2957795;
-const ViewLockGrace     = 0.05;     // seconds after close where RS still swallowed
+const ViewLockGrace     = 0.2;     // seconds after close where RS still swallowed
 const FocusGrace        = 0.3;      // seconds after stick recentres where Close still dispatches last-focused slot
 
 const WheelRadius      = 130.0;   // pixels from screen-centre to each icon's centre
 const IconSize         = 48.0;    // base icon edge length, pixels
 const IconSelScale     = 1.15;    // size multiplier for the selected slot
 const FramePadding     = 8.0;     // selection frame is icon size + 2 * this
+const PlateDiameter    = 360.0;   // backplate draw size, pixels (encloses the icon ring)
+const PlateTexSize     = 1024.0;  // WheelPlate source texture edge length
 
 var bool  bOpen;
 var bool  bSticky;
@@ -43,11 +44,6 @@ var int   highlightedSlot; // 0..9 or -1 if in deadzone / wheel closed
 var Augmentation augSlots[10];  // null where slot is empty
 var Color colAugActive;
 var Color colAugInactive;
-
-// Fade state.
-var float openAlpha;       // 0..1
-var bool  bClosing;        // true while fading out (bOpen is already false)
-var float lastDrawTime;    // for per-frame delta computation in DrawWindow
 
 // Level.TimeSeconds value until which RS axis events should still be
 // swallowed after the wheel has closed. Prevents the camera from jerking
@@ -70,8 +66,6 @@ function Open(int newMode, optional Inventory item, optional bool bStickyMode, o
     if (bOpen)
         return;
     bOpen = true;
-    bClosing = false;
-    openAlpha = 0.0;
     mode = newMode;
     stickX = 0.0;
     stickY = 0.0;
@@ -81,6 +75,15 @@ function Open(int newMode, optional Inventory item, optional bool bStickyMode, o
     bSticky = bStickyMode;
     sourceItem = item;
     stickySourceScreen = sourceScreen;
+
+    // Draw above any pushed UI. The wheel is a persistent InitWindow-time
+    // child of the root, so a later-pushed persona screen — e.g. the
+    // inventory screen behind a belt-assign wheel — renders on top of it
+    // unless we raise. Without this the opaque backplate is occluded and
+    // the wheel ghosts through the screen's translucent background. Same
+    // pattern as OnScreenKeyboardWindow.Open and the focus/hint overlays.
+    Raise();
+
     if (mode == WM_Aug)
         PopulateAugSlots();
     class'DXControllerDebug'.static.DebugLog("DXC-WHEEL OPEN mode=" $ string(newMode));
@@ -160,9 +163,7 @@ function Close(bool bApply)
 
     // Grace fallback: if the stick is in the deadzone at close time but
     // a slot was recently focused, dispatch that slot. Covers the
-    // recentre-then-release muscle pattern. Setting highlightedSlot here
-    // also makes the 80 ms fade-out render the dispatched slot as
-    // highlighted — the acknowledgment.
+    // recentre-then-release muscle pattern.
     if (!bSticky && bApply && highlightedSlot < 0 && lastFocusedSlot >= 0 && player != None
         && (player.Level.TimeSeconds - lastFocusTime) < FocusGrace)
     {
@@ -228,12 +229,9 @@ function Close(bool bApply)
         $ " action=" $ actionLog);
 
     bOpen = false;
-    bClosing = true;
     highlightedSlot = -1;
     if (player != None)
         viewLockUntil = player.Level.TimeSeconds + ViewLockGrace;
-    // mode stays set until fade-out completes — so DrawWindow can still
-    // render the right wheel type during the fade.
 }
 
 // True while RS events should still bypass the camera-look binding —
@@ -340,8 +338,7 @@ event DrawWindow(GC gc)
 {
     local int i;
     local float cx, cy;
-    local float now, delta;
-    local Color tintFrame, tintWhite, tintDim, tintAug;
+    local Color tintFrame, tintWhite, tintAug;
     local DeusExRootWindow root;
     local HUDObjectBelt belt;
     local Inventory inv;
@@ -349,39 +346,8 @@ event DrawWindow(GC gc)
 
     Super.DrawWindow(gc);
 
-    if (!bOpen && !bClosing)
+    if (!bOpen)
         return;
-
-    // Per-frame fade animation. Use Level.TimeSeconds because RefreshHUDDisplay
-    // is throttled to 4 Hz upstream and would produce a step-jump rather than
-    // a smooth fade.
-    if (player != None)
-    {
-        now = player.Level.TimeSeconds;
-        if (lastDrawTime <= 0.0)
-            delta = 0.0;          // first frame since open/reopen
-        else
-            delta = now - lastDrawTime;
-        lastDrawTime = now;
-
-        // Long delta = wheel was closed for a while, reset cleanly.
-        if (delta > 0.5)
-            delta = 0.0;
-
-        if (bOpen && !bClosing)
-            openAlpha = FMin(1.0, openAlpha + delta / 0.08);
-        else if (bClosing)
-        {
-            openAlpha = FMax(0.0, openAlpha - delta / 0.08);
-            if (openAlpha <= 0.0)
-            {
-                bClosing = false;
-                mode = WM_None;
-                lastDrawTime = 0.0;
-                return;  // fade-out done, nothing to draw
-            }
-        }
-    }
 
     root = DeusExRootWindow(GetRootWindow());
     if (root == None)
@@ -390,11 +356,12 @@ event DrawWindow(GC gc)
     cx = width  * 0.5;
     cy = height * 0.5;
 
+    DrawBackplate(gc, cx, cy);
+
     // Pull the HUD theme colour for our accent (colBorder is maintained by
     // HUDBaseWindow.StyleChanged and stays in sync with theme changes).
     tintFrame = colBorder;
     tintWhite = ColorAlpha(255, 255, 255, 255);
-    tintDim   = ColorAlpha(80, 80, 80, 255);
 
     if (mode == WM_Weapon || mode == WM_BeltAssign)
     {
@@ -404,8 +371,7 @@ event DrawWindow(GC gc)
         for (i = 0; i < 10; i++)
         {
             inv = belt.objects[i].GetItem();
-            DrawSlot(gc, i, cx, cy, inv, (i == highlightedSlot),
-                     tintFrame, tintWhite, tintDim, openAlpha);
+            DrawSlot(gc, i, cx, cy, inv, (i == highlightedSlot), tintFrame);
         }
     }
     else if (mode == WM_Aug)
@@ -418,22 +384,36 @@ event DrawWindow(GC gc)
             else
                 tintAug = colAugInactive;
             DrawAugSlot(gc, i, cx, cy, aug, (i == highlightedSlot),
-                        tintFrame, tintAug, tintDim, openAlpha);
+                        tintFrame, tintAug);
         }
     }
 
-    DrawCentreReadout(gc, cx, cy, tintFrame, tintWhite, openAlpha);
+    DrawCentreReadout(gc, cx, cy, tintWhite);
+}
+
+// Opaque circular backplate behind the wheel. The WheelPlate texture
+// bakes the dark disc, the 10 segment spokes, the steel rim and the
+// inset hub; everything outside the circle is the magenta key, so a
+// masked draw keys it out. Drawn before any slot. It does not fade —
+// an opaque masked texture cannot alpha-fade — so the whole wheel
+// hard-snaps (see the design doc).
+function DrawBackplate(GC gc, float cx, float cy)
+{
+    gc.SetStyle(DSTY_Masked);
+    gc.SetTileColorRGB(255, 255, 255);
+    gc.DrawStretchedTexture(cx - PlateDiameter * 0.5, cy - PlateDiameter * 0.5,
+                            PlateDiameter, PlateDiameter,
+                            0, 0, PlateTexSize, PlateTexSize,
+                            Texture'DXControllerTex.WheelPlate');
 }
 
 function DrawSlot(GC gc, int slotIdx, float cx, float cy,
-                  Inventory inv, bool bSelected,
-                  Color tintFrame, Color tintIcon, Color tintDim,
-                  float alpha)
+                  Inventory inv, bool bSelected, Color tintFrame)
 {
     local float angleDeg, angleRad;
     local float sx, sy;             // slot centre
     local float size, x, y;         // icon rect
-    local float frameSize, fx, fy;  // frame rect
+    local float frameSize, fx, fy;  // keycap rect
 
     angleDeg = slotIdx * 36.0;
     angleRad = angleDeg / DegreesPerRadian;
@@ -447,15 +427,19 @@ function DrawSlot(GC gc, int slotIdx, float cx, float cy,
     x = sx - size * 0.5;
     y = sy - size * 0.5;
 
-    // Selection frame: a thin outline around the icon (drawn before the icon
-    // itself so the icon overlays the outline cleanly).
+    // Selected slot: a dark keycap fill behind the icon plus a
+    // theme-coloured border — the same keycap aesthetic as the
+    // on-screen keyboard.
     if (bSelected)
     {
         frameSize = size + 2.0 * FramePadding;
         fx = sx - frameSize * 0.5;
         fy = sy - frameSize * 0.5;
         gc.SetStyle(DSTY_Masked);
-        gc.SetTileColor(ScaleAlpha(tintFrame, alpha));
+        gc.SetTileColor(ColorAlpha(60, 70, 88, 255));
+        gc.DrawPattern(fx, fy, frameSize, frameSize, 0, 0, Texture'Solid');
+        gc.SetStyle(DSTY_Masked);
+        gc.SetTileColor(tintFrame);
         gc.DrawBox(fx, fy, frameSize, frameSize, 0, 0, 2, Texture'Solid');
     }
 
@@ -467,18 +451,13 @@ function DrawSlot(GC gc, int slotIdx, float cx, float cy,
     }
     else
     {
-        // Empty slot — subtle filled placeholder so the wheel still shows
-        // the slot exists.
-        gc.SetStyle(DSTY_Translucent);
-        gc.SetTileColor(ScaleAlpha(tintDim, alpha));
-        gc.DrawPattern(x, y, size, size, 0, 0, Texture'Solid');
+        DrawEmptyMark(gc, sx, sy);
     }
 }
 
 function DrawAugSlot(GC gc, int slotIdx, float cx, float cy,
                      Augmentation aug, bool bSelected,
-                     Color tintFrame, Color tintAug, Color tintDim,
-                     float alpha)
+                     Color tintFrame, Color tintAug)
 {
     local float angleDeg, angleRad;
     local float sx, sy, size, x, y;
@@ -502,7 +481,10 @@ function DrawAugSlot(GC gc, int slotIdx, float cx, float cy,
         fx = sx - frameSize * 0.5;
         fy = sy - frameSize * 0.5;
         gc.SetStyle(DSTY_Masked);
-        gc.SetTileColor(ScaleAlpha(tintFrame, alpha));
+        gc.SetTileColor(ColorAlpha(60, 70, 88, 255));
+        gc.DrawPattern(fx, fy, frameSize, frameSize, 0, 0, Texture'Solid');
+        gc.SetStyle(DSTY_Masked);
+        gc.SetTileColor(tintFrame);
         gc.DrawBox(fx, fy, frameSize, frameSize, 0, 0, 2, Texture'Solid');
     }
 
@@ -514,20 +496,45 @@ function DrawAugSlot(GC gc, int slotIdx, float cx, float cy,
         if (iconTex != None)
         {
             gc.SetStyle(DSTY_Masked);
-            gc.SetTileColor(ScaleAlpha(tintAug, alpha));
+            gc.SetTileColor(tintAug);
             gc.DrawTexture(x, y, size, size, 0, 0, iconTex);
         }
     }
     else
     {
-        gc.SetStyle(DSTY_Translucent);
-        gc.SetTileColor(ScaleAlpha(tintDim, alpha));
-        gc.DrawPattern(x, y, size, size, 0, 0, Texture'Solid');
+        DrawEmptyMark(gc, sx, sy);
     }
 }
 
-function DrawCentreReadout(GC gc, float cx, float cy,
-                           Color tintFrame, Color tintText, float alpha)
+// Empty-slot marker: a thin dim outline box with a "+" inside, drawn at
+// the slot's icon position. The "+" is two thin filled rectangles —
+// GC has no DrawLine primitive, and a thin DrawPattern rect is the
+// idiom for an axis-aligned line. All geometric, no texture, so it
+// stays visually consistent with the DrawBox outline.
+function DrawEmptyMark(GC gc, float sx, float sy)
+{
+    local Color dim;
+    local float boxSize, bx, by;
+    local float armLen, armThick;
+
+    dim     = ColorAlpha(74, 81, 96, 255);
+    boxSize = IconSize;
+    bx      = sx - boxSize * 0.5;
+    by      = sy - boxSize * 0.5;
+
+    gc.SetStyle(DSTY_Masked);
+    gc.SetTileColor(dim);
+    gc.DrawBox(bx, by, boxSize, boxSize, 0, 0, 1, Texture'Solid');
+
+    armLen   = 14.0;
+    armThick = 2.0;
+    gc.DrawPattern(sx - armLen * 0.5, sy - armThick * 0.5,
+                   armLen, armThick, 0, 0, Texture'Solid');
+    gc.DrawPattern(sx - armThick * 0.5, sy - armLen * 0.5,
+                   armThick, armLen, 0, 0, Texture'Solid');
+}
+
+function DrawCentreReadout(GC gc, float cx, float cy, Color tintText)
 {
     local DeusExRootWindow root;
     local HUDObjectBelt belt;
@@ -604,18 +611,16 @@ function DrawCentreReadout(GC gc, float cx, float cy,
         }
     }
 
-    // Background panel: subtle dark fill so the text reads against busy
-    // gameplay underneath.
+    // The readout text sits on the inset hub baked into the backplate
+    // texture, so no separate panel fill is drawn. panelW/panelH/panelX/
+    // panelY are kept purely as the text layout rect.
     panelW = 180;
     panelH = 40;
     panelX = cx - panelW * 0.5;
     panelY = cy - panelH * 0.5;
-    gc.SetStyle(DSTY_Translucent);
-    gc.SetTileColor(ScaleAlpha(ColorAlpha(0, 0, 0, 255), alpha));
-    gc.DrawPattern(panelX, panelY, panelW, panelH, 0, 0, Texture'Solid');
 
     gc.SetStyle(DSTY_Masked);
-    gc.SetTextColor(ScaleAlpha(tintText, alpha));
+    gc.SetTextColor(tintText);
     gc.SetFont(Font'DeusExUI.FontMenuSmall');
     gc.SetAlignments(HALIGN_Center, VALIGN_Top);
     gc.DrawText(panelX, panelY + 4, panelW, 16, nameLine);
@@ -632,20 +637,11 @@ function Color ColorAlpha(int r, int g, int b, int a)
     return c;
 }
 
-function Color ScaleAlpha(Color c, float scale)
-{
-    c.A = int(float(c.A) * scale);
-    return c;
-}
-
 defaultproperties
 {
     bOpen=False
     mode=0
     highlightedSlot=-1
-    openAlpha=0.0
-    bClosing=False
-    lastDrawTime=0.0
     colAugActive=(R=255,G=255,B=0,A=255)
     colAugInactive=(R=100,G=100,B=100,A=255)
 }

@@ -358,7 +358,7 @@ Prefix all such logs with `DXC-<area>`: `DXC-WHEEL`, `DXC-NAV`,
   texture, use `DrawStretchedTexture(destX, destY, destW, destH, srcX,
   srcY, srcWidth, srcHeight, tx)` (`GC.uc:129`), which takes a source
   *rect* and maps it onto the destination rect. This bit
-  `ControllerButtonHint.DrawHint` (the 64×64 DXControllerBtn glyphs
+  `ControllerButtonHint.DrawHint` (the 64×64 DXControllerTex glyphs
   drew invisibly at 16px until switched to `DrawStretchedTexture`). Note
   `RadialMenuWindow` draws inventory/aug icons with `DrawTexture` at
   `IconSize` (~48) — fine only as long as those icons are ≤ that size;
@@ -380,6 +380,16 @@ Prefix all such logs with `DXC-<area>`: `DXC-WHEEL`, `DXC-NAV`,
   context-expression *intermediate*, not the `var` itself — a large
   array as a plain `var` is fine; it is `obj.arr[i].field` chains that
   trip it.
+- **`GC` has no line primitive.** The draw natives are `DrawText`,
+  `DrawIcon`, `DrawTexture`, `DrawPattern`, `DrawBox`,
+  `DrawStretchedTexture`, `DrawActor`, `DrawBorders`
+  (`../deusex-scripts/Extension/Classes/GC.uc:108-140`) — there is no
+  `DrawLine`. Draw an axis-aligned line as a 1–2 px `DrawPattern`
+  rectangle on `Texture'Solid'` — a degenerate filled rect.
+  Non-axis-aligned lines (e.g. the radial spokes on the weapon wheel)
+  have no primitive at all and must be baked into a texture.
+  `RadialMenuWindow.DrawEmptyMark` draws its `+` as two thin
+  `DrawPattern` rects for exactly this reason.
 
 ## Source overlay model
 

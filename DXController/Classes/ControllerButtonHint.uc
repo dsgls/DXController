@@ -2,7 +2,7 @@
 // ControllerButtonHint — static helpers for drawing controller-button
 // icon + label hints.
 //
-// Owns the logical-id -> texture map for the DXControllerBtn package
+// Owns the logical-id -> texture map for the DXControllerTex package
 // (textures live in Group=XboxSeries; each object is named after its
 // logical id). Callers pass a logical id ("a", "dpad_down", ...) and
 // never a texture path.
@@ -16,7 +16,7 @@ class ControllerButtonHint extends ExtensionObject;
 
 const ICON_SIZE = 16.0;
 const ICON_GAP  = 4.0;    // gap between an icon and its label
-const ICON_SRC  = 64.0;   // native edge length of the DXControllerBtn
+const ICON_SRC  = 64.0;   // native edge length of the DXControllerTex
                           // textures (assets/png-to-pcx.py SIZE)
 
 // Resolve a logical button id to its texture. id is one of:
@@ -26,24 +26,24 @@ const ICON_SRC  = 64.0;   // native edge length of the DXControllerBtn
 // Returns None for an unrecognised id.
 static function Texture GetButtonTexture(string id)
 {
-    if (id == "a")          return Texture'DXControllerBtn.a';
-    if (id == "b")          return Texture'DXControllerBtn.b';
-    if (id == "x")          return Texture'DXControllerBtn.x';
-    if (id == "y")          return Texture'DXControllerBtn.y';
-    if (id == "back")       return Texture'DXControllerBtn.back';
-    if (id == "share")      return Texture'DXControllerBtn.share';
-    if (id == "start")      return Texture'DXControllerBtn.start';
-    if (id == "dpad")       return Texture'DXControllerBtn.dpad';
-    if (id == "dpad_up")    return Texture'DXControllerBtn.dpad_up';
-    if (id == "dpad_down")  return Texture'DXControllerBtn.dpad_down';
-    if (id == "dpad_left")  return Texture'DXControllerBtn.dpad_left';
-    if (id == "dpad_right") return Texture'DXControllerBtn.dpad_right';
-    if (id == "lb")         return Texture'DXControllerBtn.lb';
-    if (id == "ls")         return Texture'DXControllerBtn.ls';
-    if (id == "lt")         return Texture'DXControllerBtn.lt';
-    if (id == "rb")         return Texture'DXControllerBtn.rb';
-    if (id == "rs")         return Texture'DXControllerBtn.rs';
-    if (id == "rt")         return Texture'DXControllerBtn.rt';
+    if (id == "a")          return Texture'DXControllerTex.a';
+    if (id == "b")          return Texture'DXControllerTex.b';
+    if (id == "x")          return Texture'DXControllerTex.x';
+    if (id == "y")          return Texture'DXControllerTex.y';
+    if (id == "back")       return Texture'DXControllerTex.back';
+    if (id == "share")      return Texture'DXControllerTex.share';
+    if (id == "start")      return Texture'DXControllerTex.start';
+    if (id == "dpad")       return Texture'DXControllerTex.dpad';
+    if (id == "dpad_up")    return Texture'DXControllerTex.dpad_up';
+    if (id == "dpad_down")  return Texture'DXControllerTex.dpad_down';
+    if (id == "dpad_left")  return Texture'DXControllerTex.dpad_left';
+    if (id == "dpad_right") return Texture'DXControllerTex.dpad_right';
+    if (id == "lb")         return Texture'DXControllerTex.lb';
+    if (id == "ls")         return Texture'DXControllerTex.ls';
+    if (id == "lt")         return Texture'DXControllerTex.lt';
+    if (id == "rb")         return Texture'DXControllerTex.rb';
+    if (id == "rs")         return Texture'DXControllerTex.rs';
+    if (id == "rt")         return Texture'DXControllerTex.rt';
     return None;
 }
 

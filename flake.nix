@@ -13,10 +13,12 @@
         nixpkgs.legacyPackages.${system}.python3.withPackages (ps: [ ps.pillow ]);
     in
     {
-      # `nix run .#png-to-pcx` — convert assets/xbox-buttons-png/*.png to
-      # 8-bit PCX in assets/xbox-buttons-pcx/. Run from the repo root.
-      # Optional args override the source/destination directories:
-      #   nix run .#png-to-pcx -- SRC_DIR DST_DIR
+      # `nix run .#png-to-pcx` — convert a directory of PNGs to 8-bit PCX
+      # via assets/png-to-pcx.py. Run from the repo root. All arguments are
+      # forwarded to the script:
+      #   nix run .#png-to-pcx -- [SRC_DIR] [DST_DIR] [--size N]
+      # With no arguments the script's own defaults apply (assets/XboxSeries
+      # -> assets/XboxSeries-pcx).
       apps = forAllSystems (system:
         let
           pkgs = nixpkgs.legacyPackages.${system};
@@ -24,9 +26,7 @@
             name = "png-to-pcx";
             runtimeInputs = [ (pythonFor system) ];
             text = ''
-              src="''${1:-assets/xbox-buttons-png}"
-              dst="''${2:-assets/xbox-buttons-pcx}"
-              exec python3 ${./assets/png-to-pcx.py} "$src" "$dst"
+              exec python3 ${./assets/png-to-pcx.py} "$@"
             '';
           };
         in
