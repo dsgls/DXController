@@ -60,13 +60,6 @@ UseDirectInput=False
 UseJoystick=False
 ```
 
-Add one line to the `EditPackages` list under `[Editor.EditorEngine]`,
-after the existing `EditPackages=DeusEx` line:
-
-```ini
-EditPackages=DXController
-```
-
 ### `System\User.ini`
 
 Paste the block below into **both** the `[Engine.Input]` and the
