@@ -66,11 +66,24 @@ sub-controller.
 
 Need to play the game enough to go beyond the text area size to test.
 
-### Controller button legend in UI contexts
+### Controller button legend in UI contexts - implemented, needs testing
 
 Show xbox controller button pictures with their mapping in UI contexts. For menus where a controller button activates an UI button, show the controller button picture on the UI button. In other cases (e.g., inventory screen A=use,X=equip wheel) show buttons and their effect below the dialog.
 
 Button pictures have been added to DXControllerBtn.utx (group XboxSeries, texture names match the base names of the source pictures in assets/xbox-buttons-png/). Helper functions have been written to implement this in ControllerButtonHint.uc. The on screen keyboard currently implements this, other contexts remain.
+
+Implemented as a `ControllerHintOverlay` window owned by
+`ControllerRootWindow`, which each frame pulls the active nav
+controller's hints via `MenuNavController.BuildHints()` and draws a
+centred bottom legend strip. Per-button anchored glyphs were
+deliberately dropped in favour of a single uniform bottom legend
+(per-button placement needs per-button special-casing and many UI
+buttons are too small). Designed at
+`docs/superpowers/specs/2026-05-17-controller-button-legend-design.md`,
+plan at `docs/superpowers/plans/2026-05-17-controller-button-legend.md`.
+Four controllers wired (MessageBox, Inv, Images, NetworkTerminal); the
+remaining ~21 nav controllers inherit the no-op `BuildHints` default
+and need a later content-only pass.
 
 ### Implement a way to apply weapon mods through inventory screen - implemented, needs testing
 
