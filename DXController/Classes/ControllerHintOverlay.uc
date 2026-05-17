@@ -90,7 +90,8 @@ event DrawWindow(GC gc)
     {
         fx = class'ControllerButtonHint'.static.DrawHint(
             gc, fx, y, nav.hints[i].id, nav.hints[i].label);
-        fx += HINT_GAP;
+        if (i < n - 1)
+            fx += HINT_GAP;
     }
 }
 
@@ -111,8 +112,8 @@ function float ResolveStripY(MenuNavController nav)
     if (rootWin == None)
         return defaultY;
 
-    lx = 0;
-    ly = 0;
+    lx = 0.0;
+    ly = 0.0;
     nav.screen.ConvertCoordinates(nav.screen, lx, ly, rootWin, ox, oy);
     yPos = oy + nav.screen.height + STRIP_MARGIN;
 
