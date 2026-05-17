@@ -33,6 +33,14 @@ var string hintIds[16];     // 16 is more than any screen needs; AddHint drops p
 var string hintLabels[16];  // parallel to hintIds
 var int    hintCount;       // number of populated hints; valid indices 0..hintCount-1
 
+// Legend placement, read each frame by ControllerHintOverlay:
+//   'BottomCenter'   — centred strip at the active screen's bottom edge (default).
+//   'ScreenTopRight' — strip pinned to the viewport's top-right corner,
+//                      ignoring the active screen's bounds. Used by
+//                      ConversationNavController so the legend never
+//                      overlaps choice options that reach the screen edge.
+var name hintPlacement;
+
 function Attach(Window s)
 {
     screen = s;
@@ -164,4 +172,5 @@ function BuildHints()
 defaultproperties
 {
     bAllowRepeat=True
+    hintPlacement=BottomCenter
 }

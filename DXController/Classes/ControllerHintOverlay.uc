@@ -61,13 +61,30 @@ event DrawWindow(GC gc)
             totalW += HINT_GAP;
     }
 
-    y = ResolveStripY(nav);
+    // Placement: BottomCenter (default) centres the strip at the active
+    // screen's bottom edge; ScreenTopRight pins it to the viewport's
+    // top-right corner, independent of the active screen's bounds.
+    if (nav.hintPlacement == 'ScreenTopRight')
+    {
+        // Right edge of the veil (startX + totalW + STRIP_PADX) sits
+        // STRIP_MARGIN in from the viewport's right edge.
+        startX = width - totalW - STRIP_PADX - STRIP_MARGIN;
+        if (startX < STRIP_PADX)
+            startX = STRIP_PADX;
+        // Top of the veil (y - STRIP_PADY) sits STRIP_MARGIN below the
+        // viewport's top edge.
+        y = STRIP_MARGIN + STRIP_PADY;
+    }
+    else
+    {
+        y = ResolveStripY(nav);
 
-    // Centred; clamp the start so an over-wide strip left-aligns
-    // rather than starting off-screen.
-    startX = (width - totalW) * 0.5;
-    if (startX < STRIP_PADX)
-        startX = STRIP_PADX;
+        // Centred; clamp the start so an over-wide strip left-aligns
+        // rather than starting off-screen.
+        startX = (width - totalW) * 0.5;
+        if (startX < STRIP_PADX)
+            startX = STRIP_PADX;
+    }
 
     // Two-pass dark veil so the legend stays readable over any
     // background — see OnScreenKeyboardWindow's panel and the CLAUDE.md
