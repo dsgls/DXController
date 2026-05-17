@@ -18,6 +18,15 @@ var name   subDialogActive; // None | 'WheelAssign' | 'ModApply' | …
 var bool   bAllowRepeat;    // true = HandleDPad accepts engine bRepeat=true presses (list/scroll screens)
                             // false = single-press only (grid screens — Inv, Augs)
 
+// Set true once InitFocus has completed its one-time setup. Gates the
+// ControllerRootWindow.Tick deferred-focus-init retry: the retry re-runs
+// InitFocus while this is false, and stops once it is true. Grid/menu
+// controllers get this set automatically when `focused` becomes non-None
+// (see Attach below and ControllerRootWindow.Tick). List/scroll
+// controllers, which keep `focused == None` by design, must set it
+// themselves once their content is ready.
+var bool bFocusInitDone;
+
 // ---- Button-legend hints ----
 // The active screen's controller-button legend, as parallel arrays:
 // hintIds[i] is a ControllerButtonHint logical id ("a", "b", "x",
@@ -47,7 +56,13 @@ function Attach(Window s)
     focused = None;
     focusIndex = -1;
     subDialogActive = '';
+    bFocusInitDone = false;
     InitFocus();
+    // Grid/menu controllers set `focused` to a real window in InitFocus;
+    // when they do, init is done. List/scroll controllers keep
+    // `focused == None` and set bFocusInitDone themselves.
+    if (focused != None)
+        bFocusInitDone = true;
     class'DXControllerDebug'.static.DebugLog("DXC-NAV ATTACH screen=" $ string(screen.Class));
 }
 
@@ -59,6 +74,7 @@ function Detach()
     focused = None;
     focusIndex = -1;
     subDialogActive = '';
+    bFocusInitDone = false;
 }
 
 // Override in subclasses: set focused/focusIndex to the "first focusable"
