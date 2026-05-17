@@ -20,7 +20,11 @@
 class InvNavController extends MenuNavController;
 
 // --- Weapon-mod apply (ModApply sub-dialog) ---
-var Window modSourceButton;          // mod's tile, captured on enter for B-cancel focus restore
+// mod's tile, captured on ModApply enter for B-cancel focus restore.
+// NB: like `focused`, this may go stale across PersonaScreenInventory's
+// periodic RefreshInventoryItemButtons rebuild (~0.25s) — same
+// pre-existing inventory-screen limitation noted in the design spec.
+var Window modSourceButton;
 var localized String NoCompatibleWeaponLabel;
 
 function InitFocus()
@@ -249,9 +253,10 @@ function bool HandleActivate(byte button)
     if (button == 200)        // IK_Joy1 (A)
     {
         // Weapon mod selected: A starts the apply-to-weapon flow.
-        // EnableButtons disables Use for a WeaponMod, but Equip stays
-        // sensitive — equipping a mod does nothing useful, so this
-        // branch must short-circuit before the Equip/Use fall-through.
+        // EnableButtons disables ChangeAmmo and Use for a WeaponMod,
+        // but Equip stays sensitive — equipping a mod does nothing
+        // useful, so this branch must short-circuit before the
+        // Equip/Use fall-through.
         if (s.selectedItem != None && WeaponMod(s.selectedItem.GetClientObject()) != None)
         {
             EnterModApply(s);
