@@ -133,6 +133,22 @@ function NavTick(float deltaSeconds)
             "DXC-TERM SCREEN-SWAP from=" $ string(oldClass)
             $ " to=" $ string(newClass));
 
+        // A Computer-pane screen swap is a deliberate navigation event
+        // — the new screen is what the player expects to drive. Pull
+        // the active pane back to Computer so input reaches it. This
+        // catches the case where the player hacked the terminal from
+        // the Hack pane: a successful hack swaps the Computer pane
+        // (login → post-login screen) but leaves winHack alive as a
+        // "Return" button, so the IsPanePresent auto-fallback above
+        // never fires and the dispatcher would stay stranded on
+        // PANE_HACK with the new screen unreachable.
+        if (activePane != PANE_COMPUTER)
+        {
+            class'DXControllerDebug'.static.DebugLog(
+                "DXC-TERM PANE-RESET-ON-SWAP pane=" $ string(activePane));
+            activePane = PANE_COMPUTER;
+        }
+
         if (activeSub != None)
             activeSub.OnLeave();
 
