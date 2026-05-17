@@ -1,86 +1,76 @@
 # DXController
 
-XInput controller support for Deus Ex (UE1-era / GOTY).
+Full Xbox-controller support for the original *Deus Ex* (2000, GOTY
+edition). DXController adds gamepad-driven movement and aiming, a weapon
+and augmentation wheel, an on-screen keyboard, and complete controller
+navigation for every menu, conversation, and in-world device (keypads,
+ATMs, computers, security terminals) — so the game is playable end to
+end without a mouse or keyboard.
+
+## Download
+
+Get the latest release from the
+[releases page](https://github.com/dsgls/DXController/releases).
+
+The release `.zip` contains everything you need:
+
+| File                | What it is                                             |
+|---------------------|--------------------------------------------------------|
+| `DeusEx.exe`       | Launcher with the built-in XInput controller driver    |
+| `DeusEx.u`          | Stock package with small controller hooks added        |
+| `DeusExe.u`         | Launcher support package                               |
+| `DXController.u`    | The mod                                                |
+| `DXControllerTex.u` | Button-glyph and weapon-wheel textures                 |
 
 ## Requirements
 
-- A Deus Ex install with `UCC.exe` in `System/`
-- WSL, or bash with `rsync` and access to `cmd.exe`
+*Deus Ex: Game of the Year Edition* — the standard GOG or Steam release.
 
-## Setup
+## Install
 
-Create a symlink pointing at your local game install:
+1. Copy all five files from the release `.zip` into the game's `System`
+   folder (e.g. `C:\GOG Games\Deus Ex GOTY\System\`), overwriting
+   `DeusEx.u`.
 
-```bash
-ln -s "/path/to/Deus Ex" gamedir   # e.g. "/mnt/c/leikir/Deus Ex GOTY - hax"
-```
+2. Apply the `.ini` edits below.
 
-`gamedir/` is gitignored. The build script reads it as `BUILD_DIR`; override
-with `BUILD_DIR=/path ./sync-and-build.sh` if you'd rather not symlink.
+4. Launch the game with **`DeusEx.exe`** (not the stock `DeusEx.exe`).
+   Controller input is only delivered through this launcher.
 
-The mod modifies `DeusEx.u`, so `gamedir/DeusEx/Classes/` must contain
-the stock package source. One-time setup from `gamedir/System/`:
+### `System\DeusEx.ini`
 
-```cmd
-ucc.exe batchexport DeusEx.u Class uc ..\DeusEx\Classes
-```
-
-## Build
-
-```bash
-./sync-and-build.sh        # rsync DXController/ and DeusEx/ → gamedir/, two-pass UCC build
-./sync-and-build.sh -n     # dry-run rsync, skip build
-```
-
-Output: `gamedir/System/DeusEx.u` and `gamedir/System/DXController.u`.
-
-`DXControllerTex.u` — a pre-built texture package (controller-button
-glyphs and the weapon-wheel backplate) committed at the repo root — is
-also required at runtime. `sync-and-build.sh` copies it into
-`gamedir/System/` automatically; it must sit alongside the built `.u`
-files there for the mod to load.
-
-## Configuration (one-time)
-
-### `gamedir/System/DeusEx.ini`
-
-Append to the `EditPackages` block:
-
-```ini
-EditPackages=DXController
-```
-
-Replace the two stock lines in `[Engine.Engine]` with:
+Under `[Engine.Engine]`, replace the existing `Console=` and `Root=`
+lines with:
 
 ```ini
 Console=DXController.ControllerConsole
 Root=DXController.ControllerRootWindow
 ```
 
-In `[DeusEx.DeusExPlayer]`:
+Under `[DeusEx.DeusExPlayer]`:
 
 ```ini
 bToggleCrouch=True
 ```
 
-In `[WinDrv.WindowsClient]`:
+Under `[WinDrv.WindowsClient]`:
 
 ```ini
 UseDirectInput=False
 UseJoystick=False
 ```
 
-### `gamedir/System/User.ini`
+Add one line to the `EditPackages` list under `[Editor.EditorEngine]`,
+after the existing `EditPackages=DeusEx` line:
 
-**Back up `User.ini` before editing** — the snippet overwrites existing
-`Joy*` / `JoyPov*` bindings.
-
-```bash
-cp "/path/to/Deus Ex/System/User.ini" "/path/to/Deus Ex/System/User.ini.bak"
+```ini
+EditPackages=DXController
 ```
 
-Paste the block below into **both** `[Engine.Input]` and
-`[Extension.InputExt]`:
+### `System\User.ini`
+
+Paste the block below into **both** the `[Engine.Input]` and the
+`[Extension.InputExt]` sections, replacing any existing `Joy*` lines:
 
 ```ini
 Joy1=Jump
@@ -107,16 +97,20 @@ JoyZ=
 JoyR=
 ```
 
-## Button mappings
+## Controls
 
 | Button         | Action                          |
 |----------------|---------------------------------|
+| Left stick     | Move                            |
+| Right stick    | Look                            |
+| RT             | Fire                            |
+| LT             | Toggle scope / laser            |
 | A              | Jump                            |
 | B              | Reload                          |
 | X              | Use / interact                  |
 | Y              | unbound                         |
-| LB             | Inventory equip wheel           |
-| RB             | Augmentation equip wheelt        |
+| LB             | Inventory / weapon wheel        |
+| RB             | Augmentation wheel              |
 | Back           | Toggle inventory / persona menu |
 | Start          | Main menu                       |
 | L-stick click  | Crouch                          |
@@ -125,34 +119,33 @@ JoyR=
 | D-pad left     | Belt slot 2                     |
 | D-pad right    | Belt slot 3                     |
 | D-pad down     | Belt slot 4                     |
-| LT             | Toggle scope / laser            |
-| RT             | Fire                            |
-| Left stick     | Move                            |
-| Right stick    | Look                            |
 
-Inside the inventory / persona menu, LB and RB cycle between tabs.
+In menus, conversations, and devices the D-pad moves the selection, A
+confirms, and B cancels. **LB / RB** cycle between tabs in the
+inventory and persona screens.
 
-## Debugging
+## Troubleshooting
 
-DXController emits diagnostic log lines (prefixed `DXC-`) describing
-gamepad navigation, cursor-mode transitions, and wheel events. They
-are off by default. To enable, add the following to `DeusEx.ini`:
+- Verify that you replaced the original .ini file settings, and didn't
+  duplicate the existing key.
+- Make sure `UseDirectInput` and `UseJoystick` are both `False`.
+- If you have any other mods installed, start with a fresh game install
+  and install only DXController. Compatibility with other mods has not
+  been tested.
 
-```ini
-[DXController.DXControllerDebug]
-bGamepadDebugLog=True
-```
+## Development
 
-Logs go to `…/System/DeusEx.log`.
+See [`development.md`](development.md) for the repo layout, build
+instructions, and architecture notes.
 
-## Known incompatibilities
+## License
 
-- DXController overrides `[Engine.Engine]` `Console=` and `Root=`. Any other
-  mod that overrides one of those will conflict — last one wins.
-- DXController modifies `DeusEx.u`. Any other mod that ships its own
-  `DeusEx.u` will conflict — last-installed wins.
-- Multiplayer rejects non-stock root windows server-side. Single-player
-  only; do not load the mod for an MP session.
-- The XInput shim that delivers `IK_Joy*` and `IK_JoyPov*` events is
-  external to this repo (typically a separate `Extension.dll` build). If
-  the shim isn't installed, bindings will silently misfire.
+GPLv3+
+
+Files modified from the original game are copyright Ion Storm and no
+license claim is made for them.
+
+This project uses a modified version of Deus Exe by kentie. I did not
+find any license information for it, but copyright of the original
+Deus Exe is held by the original author. My modifications are licensed
+GPLv3 or any license the original author chooses.
