@@ -129,7 +129,7 @@ function BuildHints()
 {
     AddHint("lb", "Prev tab");
     AddHint("rb", "Next tab");
-    AddHint("back", "Close");
+    AddHint("b", "Close");
 }
 
 defaultproperties
