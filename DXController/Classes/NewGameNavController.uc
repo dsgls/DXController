@@ -354,6 +354,17 @@ function Detach()
     Super.Detach();
 }
 
+// A is region-dependent (cycle portrait / upgrade skill / press action
+// button); the combined "Upgrade / Select" label covers all three
+// without per-region legend switching. X downgrades a skill (Skills
+// region only); the static label is accepted per the spec.
+function BuildHints()
+{
+    AddHint("a", "Upgrade / Select");
+    AddHint("x", "Downgrade");
+    AddHint("b", "Back");
+}
+
 defaultproperties
 {
     bAllowRepeat=True

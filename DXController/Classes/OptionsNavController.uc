@@ -301,6 +301,12 @@ function Detach()
     Super.Detach();
 }
 
+function BuildHints()
+{
+    AddHint("a", "Select");
+    AddHint("b", "Back");
+}
+
 defaultproperties
 {
     bAllowRepeat=True
