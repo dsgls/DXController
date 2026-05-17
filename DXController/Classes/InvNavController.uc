@@ -69,6 +69,24 @@ function bool HandleDPad(int dx, int dy)
     if (subDialogActive == 'WheelAssign')
         return true;
 
+    if (subDialogActive == 'ModApply')
+    {
+        s = PersonaScreenInventory(screen);
+        if (s == None || focused == None)
+            return true;
+
+        next = FindNearestInDirection(s, focused, dx, dy);
+        if (next == None)
+            next = FindWrapTarget(s, focused, dx, dy);
+
+        // Move the focus frame only — do NOT SelectInventory. Selecting a
+        // weapon would run ClearSpecialHighlights and wipe the green
+        // upgradeable-weapon highlights, and swap the info panel off the mod.
+        if (next != None && next != focused)
+            focused = next;
+        return true;
+    }
+
     s = PersonaScreenInventory(screen);
     if (s == None || focused == None)
         return true;
@@ -213,12 +231,28 @@ function bool HandleActivate(byte button)
         return true;
     }
 
+    if (subDialogActive == 'ModApply')
+    {
+        ResolveModApply(button);
+        return true;
+    }
+
     s = PersonaScreenInventory(screen);
     if (s == None)
         return true;
 
-    if (button == 200)        // IK_Joy1 (A): Equip if enabled, else Use.
+    if (button == 200)        // IK_Joy1 (A)
     {
+        // Weapon mod selected: A starts the apply-to-weapon flow. Both
+        // Equip and Use are disabled by EnableButtons for a WeaponMod,
+        // so the fall-through below would be a no-op anyway.
+        if (s.selectedItem != None && WeaponMod(s.selectedItem.GetClientObject()) != None)
+        {
+            EnterModApply(s);
+            return true;
+        }
+
+        // Otherwise: Equip if enabled, else Use.
         if (s.btnEquip != None && s.btnEquip.bIsSensitive)
             s.btnEquip.PressButton();
         else if (s.btnUse != None && s.btnUse.bIsSensitive)
