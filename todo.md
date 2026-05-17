@@ -140,9 +140,18 @@ RT with lockpick doesn't do anything, even though the mouse LB works. Are we sen
 
 The focus spots are on the body parts themselves, they only show a description of the bodypart when activated. Need to focus the actual heal buttons.
 
-### ATM screens (and probably other devices) don't suppress gameplay actions
+### ATM screens (and probably other devices) don't suppress gameplay actions - fix applied, needs testing
 
 Pulling RT fires while interacting with terminal.
+
+Root cause: `ControllerConsole.KeyEvent`'s `IK_JoyZ`/`IK_JoyR` branches
+called `OnGamepadLeftTrigger`/`OnGamepadRightTrigger` unconditionally
+(`OnGamepadRightTrigger` runs `ParseLeftClick` + `bFire=1` + `Fire`).
+Terminals/keypads/conversations are pushed `bNoPause=True`, so the
+console never enters `state Menuing` and the class-scoped handler runs;
+the trigger branches had no UI-foreground gate (unlike LB/RB). Fix:
+gate both triggers on `IsAnyUIForeground()` — force-release (pass 0.0)
+while a UI screen is foreground so a held trigger can't stay latched.
 
 ### Main menu controller/mouse focus fighting - fix applied, needs testing
 

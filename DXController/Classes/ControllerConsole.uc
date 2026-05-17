@@ -75,14 +75,31 @@ event bool KeyEvent(EInputKey Key, EInputAction Action, FLOAT Delta)
             }
         }
 
+        // Triggers fire the weapon / use tools (RT) and toggle
+        // scope-laser (LT). Suppress both while a UI screen owns the
+        // foreground — terminals, conversations, keypads and datacubes
+        // are pushed bNoPause, so the console never enters state
+        // Menuing and this class-scoped handler still runs (the persona
+        // menu, which IS in Menuing, already drops triggers via the
+        // state override). Force-release (pass 0.0) rather than skip
+        // the call, so a trigger physically held when the UI opened
+        // doesn't stay latched as bFire / scope state.
         if (Key == IK_JoyZ)
         {
-            p.OnGamepadLeftTrigger(Delta);
+            root = ControllerRootWindow(p.rootWindow);
+            if (root != None && root.IsAnyUIForeground())
+                p.OnGamepadLeftTrigger(0.0);
+            else
+                p.OnGamepadLeftTrigger(Delta);
             return false;
         }
         if (Key == IK_JoyR)
         {
-            p.OnGamepadRightTrigger(Delta);
+            root = ControllerRootWindow(p.rootWindow);
+            if (root != None && root.IsAnyUIForeground())
+                p.OnGamepadRightTrigger(0.0);
+            else
+                p.OnGamepadRightTrigger(Delta);
             return false;
         }
         if (Key == IK_JoyX || Key == IK_JoyY)
