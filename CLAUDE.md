@@ -743,6 +743,28 @@ stack" need — nav attach/detach, the radial wheel's UI-takeover cancel
 Don't use `RefreshDisplay`, `RefreshHUDDisplay`, or any polling loop for
 window-stack observation.
 
+### `InitFocus` and the deferred-init retry
+
+`ControllerRootWindow.Tick` re-calls `activeNav.InitFocus()` every frame
+until `activeNav.bFocusInitDone` is true. This exists because some
+screens (e.g. `PersonaScreenInventory`) populate child windows *after*
+the controller attaches, so the first `InitFocus()` finds an empty
+screen.
+
+Contract for `InitFocus()`:
+
+- It may be called many times before the screen is fully built. Make it
+  idempotent — re-running it on a ready screen must not disturb player
+  state.
+- Grid/menu controllers that set `focused` to a real `Window` get
+  `bFocusInitDone` set for free (by `Attach` and the Tick retry).
+- List/scroll controllers keep `focused == None` by design (rows are not
+  `Window` objects). They MUST set `bFocusInitDone = True` themselves
+  once their content is ready (e.g. `GetNumRows() > 0` and the first row
+  selected). If they don't, the retry re-runs `InitFocus()` every frame
+  and undoes navigation — this was the Logs/Conversations/Images
+  scroll-dead bug (commit history: persona-screen-nav-fixes).
+
 ### EInputKey is not in scope from controllers
 
 `MenuNavController extends Object`. `EInputKey` is on `Engine.Actor` and

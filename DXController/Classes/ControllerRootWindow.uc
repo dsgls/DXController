@@ -534,10 +534,19 @@ function Tick(float deltaSeconds)
     }
 
     // 3. Deferred focus init for screens whose children populate lazily.
-    if (activeNav != None && activeNav.focused == None && activeNav.screen != None)
+    //    Gated on bFocusInitDone, not `focused == None`: list/scroll
+    //    controllers keep `focused == None` permanently, so the old
+    //    sentinel re-ran InitFocus every frame and undid the player's
+    //    navigation. See the persona-screen-nav-fixes design doc.
+    if (activeNav != None && !activeNav.bFocusInitDone && activeNav.screen != None)
     {
         activeNav.InitFocus();
         if (activeNav.focused != None)
+            activeNav.bFocusInitDone = true;
+        // Fires once when init completes — whether the flag was set just
+        // above (grid/menu controllers) or inside InitFocus itself
+        // (list/scroll controllers).
+        if (activeNav.bFocusInitDone)
             class'DXControllerDebug'.static.DebugLog(
                 "DXC-NAV TICK-INIT screen=" $ string(activeNav.screen.Class));
     }
