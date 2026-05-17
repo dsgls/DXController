@@ -368,6 +368,9 @@ function EnterModApply(PersonaScreenInventory s)
     local Window first;
     local int count;
 
+    if (s == None || s.selectedItem == None)
+        return;
+
     mod = WeaponMod(s.selectedItem.GetClientObject());
     if (mod == None)
         return;
@@ -398,6 +401,9 @@ function ApplyModToFocusedWeapon(PersonaScreenInventory s)
 {
     local WeaponMod mod;
     local DeusExWeapon wpn;
+
+    if (s == None || s.selectedItem == None || focused == None)
+        return;
 
     mod = WeaponMod(s.selectedItem.GetClientObject());
     wpn = DeusExWeapon(focused.GetClientObject());
