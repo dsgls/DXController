@@ -14,6 +14,10 @@
 //=============================================================================
 class InvNavController extends MenuNavController;
 
+// --- Weapon-mod apply (ModApply sub-dialog) ---
+var Window modSourceButton;          // mod's tile, captured on enter for B-cancel focus restore
+var localized String NoCompatibleWeaponLabel;
+
 function InitFocus()
 {
     local PersonaScreenInventory s;
@@ -300,7 +304,164 @@ function ResolveAssignWheel(byte button)
     subDialogActive = '';
 }
 
+// ----------------------------------------------------------------------
+// IsEligibleWeapon — true if `tile` holds a weapon `mod` can upgrade.
+// ----------------------------------------------------------------------
+
+function bool IsEligibleWeapon(Window tile, WeaponMod mod)
+{
+    local DeusExWeapon wpn;
+
+    if (tile == None || mod == None)
+        return false;
+
+    wpn = DeusExWeapon(tile.GetClientObject());
+    if (wpn == None)
+        return false;
+
+    return mod.CanUpgradeWeapon(wpn);
+}
+
+// ----------------------------------------------------------------------
+// FirstEligibleWeapon — topmost-leftmost tile holding a weapon `mod` can
+// upgrade. Also returns the total eligible count via the out-param.
+// ----------------------------------------------------------------------
+
+function Window FirstEligibleWeapon(PersonaScreenInventory s, WeaponMod mod, out int count)
+{
+    local Window c, best;
+    local PersonaInventoryItemButton btn, bestBtn;
+
+    count = 0;
+    if (s == None || s.winItems == None || mod == None)
+        return None;
+
+    c = s.winItems.GetTopChild();
+    while (c != None)
+    {
+        btn = PersonaInventoryItemButton(c);
+        if (btn != None && IsEligibleWeapon(btn, mod))
+        {
+            count++;
+            if (best == None
+                || btn.dragPosY < bestBtn.dragPosY
+                || (btn.dragPosY == bestBtn.dragPosY && btn.dragPosX < bestBtn.dragPosX))
+            {
+                best = c;
+                bestBtn = btn;
+            }
+        }
+        c = c.GetLowerSibling();
+    }
+    return best;
+}
+
+// ----------------------------------------------------------------------
+// EnterModApply — A pressed on a selected weapon mod. Enters ModApply if
+// at least one weapon is upgradeable; otherwise posts a status message.
+// Caller has already confirmed s.selectedItem holds a WeaponMod.
+// ----------------------------------------------------------------------
+
+function EnterModApply(PersonaScreenInventory s)
+{
+    local WeaponMod mod;
+    local Window first;
+    local int count;
+
+    mod = WeaponMod(s.selectedItem.GetClientObject());
+    if (mod == None)
+        return;
+
+    first = FirstEligibleWeapon(s, mod, count);
+    if (count == 0 || first == None)
+    {
+        if (s.winStatus != None)
+            s.winStatus.AddText(NoCompatibleWeaponLabel);
+        class'DXControllerDebug'.static.DebugLog("DXC-NAV MODAPPLY no-target mod=" $ mod.ItemName);
+        return;
+    }
+
+    modSourceButton = focused;
+    focused = first;
+    subDialogActive = 'ModApply';
+    class'DXControllerDebug'.static.DebugLog(
+        "DXC-NAV MODAPPLY ENTER mod=" $ mod.ItemName $ " targets=" $ string(count));
+}
+
+// ----------------------------------------------------------------------
+// ApplyModToFocusedWeapon — applies the selected mod to the focused
+// weapon, mirroring the vanilla PersonaScreenInventory.FinishButtonDrag
+// block, then reselects the upgraded weapon.
+// ----------------------------------------------------------------------
+
+function ApplyModToFocusedWeapon(PersonaScreenInventory s)
+{
+    local WeaponMod mod;
+    local DeusExWeapon wpn;
+
+    mod = WeaponMod(s.selectedItem.GetClientObject());
+    wpn = DeusExWeapon(focused.GetClientObject());
+    if (mod == None || wpn == None || !mod.CanUpgradeWeapon(wpn))
+        return;
+
+    mod.ApplyMod(wpn);
+    s.player.RemoveObjectFromBelt(mod);
+    if (s.winStatus != None)
+        s.winStatus.AddText(Sprintf(s.WeaponUpgradedLabel, wpn.itemName));
+    mod.DestroyMod();   // destroys the mod actor; its tile is removed via InventoryDeleted
+
+    class'DXControllerDebug'.static.DebugLog("DXC-NAV MODAPPLY APPLY weapon=" $ wpn.ItemName);
+
+    // Reselect the upgraded weapon (parity with FinishButtonDrag) so its
+    // updated stats show in the info panel. focused still points at the
+    // weapon tile — only the mod tile was destroyed above.
+    s.SelectInventory(PersonaItemButton(focused));
+}
+
+// ----------------------------------------------------------------------
+// ResolveModApply — button dispatch while ModApply is active.
+//   A (200) — apply if focused on an eligible weapon, then exit mode.
+//   B (201) — cancel, restore focus to the mod tile, exit mode.
+//   other   — no-op (consumed).
+// ----------------------------------------------------------------------
+
+function ResolveModApply(byte button)
+{
+    local PersonaScreenInventory s;
+
+    s = PersonaScreenInventory(screen);
+    if (s == None)
+    {
+        subDialogActive = '';
+        modSourceButton = None;
+        return;
+    }
+
+    if (button == 200)        // A
+    {
+        if (s.selectedItem != None && focused != None
+            && IsEligibleWeapon(focused, WeaponMod(s.selectedItem.GetClientObject())))
+        {
+            ApplyModToFocusedWeapon(s);
+            subDialogActive = '';
+            modSourceButton = None;
+        }
+        // else: ignored — the green highlight already signals validity,
+        // and B exits, so there is no soft-lock.
+    }
+    else if (button == 201)   // B
+    {
+        if (modSourceButton != None)
+            focused = modSourceButton;
+        modSourceButton = None;
+        subDialogActive = '';
+        class'DXControllerDebug'.static.DebugLog("DXC-NAV MODAPPLY CANCEL");
+    }
+    // other buttons: no-op while ModApply is active.
+}
+
 defaultproperties
 {
     bAllowRepeat=False    // grid nav: single-press only
+    NoCompatibleWeaponLabel="No compatible weapon to upgrade"
 }
