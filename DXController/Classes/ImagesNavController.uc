@@ -120,6 +120,18 @@ function bool HandleActivate(byte button)
     return true;   // consume A / X / Y / R-stick-click — all no-ops
 }
 
+// PersonaScreenImages has no per-row activation — A is a no-op, and
+// selecting a row with the D-pad already displays the image. So the
+// legend advertises only the persona-common controls (tab cycling and
+// menu close) that ControllerRootWindow handles for every persona
+// screen.
+function BuildHints()
+{
+    AddHint("lb", "Prev tab");
+    AddHint("rb", "Next tab");
+    AddHint("back", "Close");
+}
+
 defaultproperties
 {
     bAllowRepeat=True
