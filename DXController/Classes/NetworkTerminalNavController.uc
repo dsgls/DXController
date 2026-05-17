@@ -36,7 +36,6 @@ var ComputerScreenNavSub        subInstances[16];
 
 // ---- Active-sub state ------------------------------------------------------
 var ComputerScreenNavSub activeSub;       // sub for the current Computer-pane screen
-var ComputerUIWindow     lastWinComputer; // identity check for Tick-based screen-swap detection
 
 // ---- Pane model ------------------------------------------------------------
 //
@@ -62,6 +61,8 @@ var int    paneAccountsRowKind;      // 0 = list, 1 = btnChangeAccount
 
 function Attach(Window s)
 {
+    local NetworkTerminal nt;
+
     Super.Attach(s);
     activePane = PANE_COMPUTER;
     paneHackFocused = None;
@@ -69,6 +70,14 @@ function Attach(Window s)
     paneAccountsRowKind = 0;
     class'DXControllerDebug'.static.DebugLog(
         "DXC-TERM ATTACH terminal=" $ string(s.Class));
+
+    // If a Computer-pane screen already exists at attach time, pick it
+    // up now. Normally the inner screen's DescendantAdded fires
+    // OnComputerScreenChanged just after this; this covers a re-attach
+    // or any ordering where the screen pre-exists.
+    nt = NetworkTerminal(s);
+    if (nt != None && nt.winComputer != None)
+        OnComputerScreenChanged(nt.winComputer);
 }
 
 function Detach()
@@ -79,10 +88,10 @@ function Detach()
 
     if (activeSub != None)
     {
+        activeSub.ClearAxisCache();
         activeSub.OnLeave();
         activeSub = None;
     }
-    lastWinComputer = None;
 
     Super.Detach();
 }
@@ -97,13 +106,19 @@ function bool AllowsMenuToggle()
     return false;
 }
 
-// ---- NavTick: screen-swap detection + sub lifecycle ------------------------
+// ---- NavTick: per-frame sub lifecycle --------------------------------------
+//
+// Computer-pane screen swaps are NOT detected here. NetworkTerminal.ShowScreen
+// destroys the old winComputer and immediately allocates the new one; UE1
+// hands the new screen the just-freed object slot, so the new winComputer
+// can be pointer-equal to the old. A pointer compare here would miss the
+// swap entirely. Swaps are driven by the engine event instead —
+// ControllerRootWindow.DescendantAdded → OnComputerScreenChanged — which
+// receives the genuine new-screen pointer at creation time.
 
 function NavTick(float deltaSeconds)
 {
     local NetworkTerminal nt;
-    local ComputerUIWindow newWinComp;
-    local Class<ComputerUIWindow> oldClass, newClass;
 
     nt = NetworkTerminal(screen);
     if (nt == None)
@@ -120,60 +135,66 @@ function NavTick(float deltaSeconds)
         activePane = PANE_COMPUTER;
     }
 
-    newWinComp = nt.winComputer;
-
-    if (newWinComp != lastWinComputer)
+    // winComputer cleared without a replacement (rare — e.g. a close
+    // path that nulls winComputer before the terminal itself goes
+    // away). Comparing against None is reliable; drop the orphaned sub.
+    if (nt.winComputer == None && activeSub != None)
     {
-        if (lastWinComputer != None)
-            oldClass = lastWinComputer.Class;
-        if (newWinComp != None)
-            newClass = newWinComp.Class;
-
-        class'DXControllerDebug'.static.DebugLog(
-            "DXC-TERM SCREEN-SWAP from=" $ string(oldClass)
-            $ " to=" $ string(newClass));
-
-        // A Computer-pane screen swap is a deliberate navigation event
-        // — the new screen is what the player expects to drive. Pull
-        // the active pane back to Computer so input reaches it. This
-        // catches the case where the player hacked the terminal from
-        // the Hack pane: a successful hack swaps the Computer pane
-        // (login → post-login screen) but leaves winHack alive as a
-        // "Return" button, so the IsPanePresent auto-fallback above
-        // never fires and the dispatcher would stay stranded on
-        // PANE_HACK with the new screen unreachable.
-        if (activePane != PANE_COMPUTER)
-        {
-            class'DXControllerDebug'.static.DebugLog(
-                "DXC-TERM PANE-RESET-ON-SWAP pane=" $ string(activePane));
-            activePane = PANE_COMPUTER;
-        }
-
-        if (activeSub != None)
-            activeSub.OnLeave();
-
-        lastWinComputer = newWinComp;
-        if (newWinComp != None)
-        {
-            activeSub = LookupOrCreateSub(newWinComp.Class);
-            if (activeSub != None)
-                activeSub.OnEnter(newWinComp);
-        }
-        else
-        {
-            activeSub = None;
-        }
+        activeSub.ClearAxisCache();
+        activeSub.OnLeave();
+        activeSub = None;
     }
 
-    // Deferred-init retry. Some screens populate action-bar children
-    // inside SetNetworkTerminal AFTER NewChild fires, so OnEnter may
-    // run before the children exist. Retry while activeSub has no
-    // focused element.
-    if (activeSub != None && activeSub.focused == None && newWinComp != None)
-        activeSub.OnEnter(newWinComp);
+    // Deferred-init retry. A screen populates its action-bar / choice
+    // children inside CreateControls / SetNetworkTerminal AFTER NewChild
+    // fires, so the OnEnter driven from OnComputerScreenChanged can run
+    // before those children exist. Retry while activeSub has no focused
+    // element.
+    if (activeSub != None && activeSub.focused == None && activeSub.screen != None)
+        activeSub.OnEnter(activeSub.screen);
 
     if (activeSub != None)
-        activeSub.OnTick();
+        activeSub.OnTick(deltaSeconds);
+}
+
+// ---- Computer-pane screen swap (engine-event driven) -----------------------
+//
+// Called from ControllerRootWindow.DescendantAdded when a ComputerUIWindow
+// is added as a child of this dispatcher's terminal — i.e. whenever
+// NetworkTerminal.ShowScreen swaps the Computer-pane screen, and for the
+// initial screen. `newScreen` is the genuine freshly-created window, so
+// this is immune to the UE1 slot-reuse aliasing that defeats a pointer
+// compare. May also be called from Attach when winComputer pre-exists.
+
+function OnComputerScreenChanged(ComputerUIWindow newScreen)
+{
+    if (newScreen == None)
+        return;
+
+    class'DXControllerDebug'.static.DebugLog(
+        "DXC-TERM SCREEN-CHANGED to=" $ string(newScreen.Class));
+
+    // A Computer-pane swap is a deliberate navigation event — pull the
+    // active pane back to Computer so input reaches the new screen.
+    // Catches the post-hack case: a successful hack swaps the Computer
+    // pane (login → post-login) but leaves winHack alive as a "Return"
+    // button, so the IsPanePresent auto-fallback never fires.
+    if (activePane != PANE_COMPUTER)
+    {
+        class'DXControllerDebug'.static.DebugLog(
+            "DXC-TERM PANE-RESET-ON-SWAP pane=" $ string(activePane));
+        activePane = PANE_COMPUTER;
+    }
+
+    if (activeSub != None)
+    {
+        activeSub.ClearAxisCache();
+        activeSub.OnLeave();
+    }
+
+    activeSub = LookupOrCreateSub(newScreen.Class);
+    if (activeSub != None)
+        activeSub.OnEnter(newScreen);
 }
 
 // ---- Sub-controller registry helpers ---------------------------------------
@@ -243,6 +264,11 @@ function SwitchPane(int newPane)
         return;
     oldPane = activePane;
     activePane = newPane;
+    // Leaving the Computer pane: drop any cached analog deflection so a
+    // held R-stick can't keep panning the camera from under the Hack /
+    // HackAccounts pane.
+    if (newPane != PANE_COMPUTER && activeSub != None)
+        activeSub.ClearAxisCache();
 
     nt = NetworkTerminal(screen);
     if (newPane == PANE_HACK && nt != None && nt.winHack != None)
@@ -433,6 +459,32 @@ function bool HandleActivate(byte button)
     return true;
 }
 
+// ---- Analog input delegation -----------------------------------------------
+//
+// R-stick / triggers reach the active sub only while the Computer pane
+// is active. On the Hack / HackAccounts panes they are consumed no-ops.
+
+function bool HandleScroll(float v)
+{
+    if (activePane == PANE_COMPUTER && activeSub != None)
+        return activeSub.HandleScroll(v);
+    return false;
+}
+
+function bool HandleScrollX(float v)
+{
+    if (activePane == PANE_COMPUTER && activeSub != None)
+        return activeSub.HandleScrollX(v);
+    return false;
+}
+
+function bool HandleTrigger(int side, float value)
+{
+    if (activePane == PANE_COMPUTER && activeSub != None)
+        return activeSub.HandleTrigger(side, value);
+    return false;
+}
+
 // ---- Focus-rect routing ----------------------------------------------------
 //
 // Routes to the correct widget for MenuFocusOverlay.
@@ -486,6 +538,14 @@ function bool GetFocusedRect(out float x, out float y, out float w, out float h)
 // every frame, so the shoulder hints track live pane availability.
 function BuildHints()
 {
+    // Let the active Computer-pane sub supply a screen-specific legend
+    // (the Security sub overrides BuildHints and owns the whole strip).
+    // Other subs use the no-op base and fall through to the generic
+    // legend below.
+    if (activePane == PANE_COMPUTER && activeSub != None
+        && activeSub.BuildHints(Self))
+        return;
+
     AddHint("a", "Select");
     if (IsPanePresent(PANE_HACK) || IsPanePresent(PANE_HACKACCOUNTS))
     {
@@ -519,4 +579,7 @@ defaultproperties
 
     subKeys(6)=Class'DeusEx.ComputerScreenSpecialOptions'
     subClasses(6)=Class'DXController.ComputerScreenSpecialOptionsNav'
+
+    subKeys(7)=Class'DeusEx.ComputerScreenSecurity'
+    subClasses(7)=Class'DXController.ComputerScreenSecurityNav'
 }

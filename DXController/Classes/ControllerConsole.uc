@@ -87,6 +87,14 @@ event bool KeyEvent(EInputKey Key, EInputAction Action, FLOAT Delta)
         if (Key == IK_JoyZ)
         {
             root = ControllerRootWindow(p.rootWindow);
+            // A UI nav controller may claim the trigger (Security-screen
+            // camera zoom). It must only claim while its screen owns the
+            // foreground — claiming during gameplay would silently drop the
+            // trigger. If it consumes, skip the force-zero and suppress
+            // binding dispatch.
+            if (root != None && root.activeNav != None
+                && root.activeNav.HandleTrigger(0, Delta))
+                return true;
             if (root != None && root.IsAnyUIForeground())
                 p.OnGamepadLeftTrigger(0.0);
             else
@@ -96,6 +104,10 @@ event bool KeyEvent(EInputKey Key, EInputAction Action, FLOAT Delta)
         if (Key == IK_JoyR)
         {
             root = ControllerRootWindow(p.rootWindow);
+            // Same nav-controller intercept as IK_JoyZ above.
+            if (root != None && root.activeNav != None
+                && root.activeNav.HandleTrigger(1, Delta))
+                return true;
             if (root != None && root.IsAnyUIForeground())
                 p.OnGamepadRightTrigger(0.0);
             else
@@ -151,6 +163,12 @@ event bool KeyEvent(EInputKey Key, EInputAction Action, FLOAT Delta)
             if (root != None && root.activeNav != None && Key == IK_JoyV)
             {
                 if (root.activeNav.HandleScroll(Delta))
+                    return true;  // consumed — suppress binding-system camera-pan
+            }
+            // Same for R-stick X (Security-screen camera yaw).
+            if (root != None && root.activeNav != None && Key == IK_JoyU)
+            {
+                if (root.activeNav.HandleScrollX(Delta))
                     return true;  // consumed — suppress binding-system camera-pan
             }
         }

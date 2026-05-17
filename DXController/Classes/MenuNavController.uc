@@ -89,6 +89,22 @@ function bool HandleScroll(float ry)
     return false;
 }
 
+// R-stick X-axis. rx is the raw axis value, -1000..1000. Return true to
+// consume. Pairs with HandleScroll (R-stick Y). ControllerConsole
+// forwards IK_JoyU here when a nav controller is active.
+function bool HandleScrollX(float rx)
+{
+    return false;
+}
+
+// Analog trigger. side: 0 = LT (IK_JoyZ), 1 = RT (IK_JoyR). value is the
+// raw axis value. Return true to consume — ControllerConsole then skips
+// its UI-foreground force-zero and suppresses binding dispatch.
+function bool HandleTrigger(int side, float value)
+{
+    return false;
+}
+
 // Out-params: focused element's screen rectangle, for MenuFocusOverlay
 // to draw a tinted frame around. Return false if no focused element
 // (overlay should not draw).
