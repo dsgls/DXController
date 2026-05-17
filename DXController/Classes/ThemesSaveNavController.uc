@@ -16,3 +16,8 @@ function InitListAndButtons()
     lst        = s.lstThemes;
     primaryBtn = class'ActionBarNav'.static.FindByKey(s, "SAVE");
 }
+
+defaultproperties
+{
+    primaryHintLabel="Save theme"
+}

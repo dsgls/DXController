@@ -23,3 +23,9 @@ function InitListAndButtons()
     primaryBtn   = class'ActionBarNav'.static.FindByKey(s, "LOAD");
     secondaryBtn = class'ActionBarNav'.static.FindByKey(s, "DELETE");
 }
+
+defaultproperties
+{
+    primaryHintLabel="Load"
+    secondaryHintLabel="Delete"
+}
