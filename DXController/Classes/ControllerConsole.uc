@@ -166,7 +166,22 @@ event bool KeyEvent(EInputKey Key, EInputAction Action, FLOAT Delta)
                 p.OnGamepadWeaponWheel(true);
                 if (root.radial != None)
                     root.radial.Open(root.radial.WM_Weapon);
+                return true;
             }
+            // A UI screen owns the foreground: LB is not the weapon
+            // wheel here — it belongs to the active nav controller
+            // (e.g. network-terminal LB/RB pane cycling, read in
+            // ControllerRootWindow.VirtualKeyPressed). Terminals are
+            // pushed bNoPause=True, so the console stays out of
+            // state Menuing and this class-scoped handler — not the
+            // Menuing override — is what runs; an unconditional
+            // return true would consume LB before the window system
+            // ever sees it. Fall through to Super.KeyEvent so it
+            // reaches VirtualKeyPressed, exactly as A (IK_Joy1) does.
+            // (Restricted input / a wheel already held still consume —
+            // no nav use there.)
+            if (root != None && root.IsAnyUIForeground())
+                return Super.KeyEvent(Key, Action, Delta);
             return true;
         }
         if (Action == IST_Release)
@@ -177,7 +192,14 @@ event bool KeyEvent(EInputKey Key, EInputAction Action, FLOAT Delta)
                 p.OnGamepadWeaponWheel(false);
                 if (root != None && root.radial != None)
                     root.radial.Close(true);
+                return true;
             }
+            // No weapon wheel was open (UI foreground gated it off).
+            // Mirror the press: pass the release through so press and
+            // release stay symmetric for the window system.
+            root = ControllerRootWindow(p.rootWindow);
+            if (root != None && root.IsAnyUIForeground())
+                return Super.KeyEvent(Key, Action, Delta);
             return true;
         }
     }
@@ -193,7 +215,13 @@ event bool KeyEvent(EInputKey Key, EInputAction Action, FLOAT Delta)
                 p.OnGamepadAugWheel(true);
                 if (root.radial != None)
                     root.radial.Open(root.radial.WM_Aug);
+                return true;
             }
+            // UI foreground: RB belongs to the active nav controller,
+            // not the aug wheel — fall through. See the Joy5 press
+            // comment for the full rationale.
+            if (root != None && root.IsAnyUIForeground())
+                return Super.KeyEvent(Key, Action, Delta);
             return true;
         }
         if (Action == IST_Release)
@@ -204,7 +232,12 @@ event bool KeyEvent(EInputKey Key, EInputAction Action, FLOAT Delta)
                 p.OnGamepadAugWheel(false);
                 if (root != None && root.radial != None)
                     root.radial.Close(true);
+                return true;
             }
+            // No aug wheel was open — mirror the press, pass through.
+            root = ControllerRootWindow(p.rootWindow);
+            if (root != None && root.IsAnyUIForeground())
+                return Super.KeyEvent(Key, Action, Delta);
             return true;
         }
     }

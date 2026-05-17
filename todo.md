@@ -22,12 +22,21 @@ Designed at
 `docs/superpowers/specs/2026-05-15-network-terminal-nav-phase1-design.md`,
 implemented per
 `docs/superpowers/plans/2026-05-15-network-terminal-nav-phase1.md`.
-All 12 nav classes build clean. Two attach bugs found and fixed: the
-nav-registry array overflowed at [32] (dropping terminal registrations),
-and the ATM pushes `ATMWindow` (a subclass of `NetworkTerminalATM`)
-which exact-match registration missed. ATM controls verified working.
-Personal/Public/Security terminals pending playtest (wiring audited OK;
-Security's post-login screen is the Phase 2 unknown-screen fallback).
+All 12 nav classes build clean. Three bugs found and fixed: the
+nav-registry array overflowed at [32] (dropping terminal registrations);
+the ATM pushes `ATMWindow` (a subclass of `NetworkTerminalATM`) which
+exact-match registration missed; and LB/RB pane switching never worked
+because `ControllerConsole.KeyEvent`'s class-scoped `IK_Joy5`/`IK_Joy6`
+branches `return true` unconditionally — terminals are pushed
+`bNoPause=True` so the console stays out of `state Menuing`, leaving
+that class-scoped wheel handler active, and it consumed LB/RB before
+the window system / `NetworkTerminalNavController.HandleActivate` ever
+saw them. Fixed: under `IsAnyUIForeground()` the LB/RB branches now
+fall through to `Super.KeyEvent` (same path A/D-pad already take).
+ATM login-screen controls verified working; LB/RB pane switching
+pending playtest. Personal/Public/Security terminals pending playtest
+(wiring audited OK; Security's post-login screen is the Phase 2
+unknown-screen fallback).
 
 - `NetworkTerminal` + `NetworkTerminalPersonal` / `Public` / `ATM` /
   `Security` shell (Security's per-screen sub-controller comes in
