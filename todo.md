@@ -81,9 +81,13 @@ deliberately dropped in favour of a single uniform bottom legend
 buttons are too small). Designed at
 `docs/superpowers/specs/2026-05-17-controller-button-legend-design.md`,
 plan at `docs/superpowers/plans/2026-05-17-controller-button-legend.md`.
-Four controllers wired (MessageBox, Inv, Images, NetworkTerminal); the
-remaining ~21 nav controllers inherit the no-op `BuildHints` default
-and need a later content-only pass.
+All nav controllers wired: the content pass added `BuildHints` to the
+remaining 18 registered controllers, plus a `ScreenTopRight`
+`hintPlacement` option used by ConversationNavController. Designed at
+`docs/superpowers/specs/2026-05-17-controller-button-legend-completion-design.md`,
+plan at
+`docs/superpowers/plans/2026-05-17-controller-button-legend-completion.md`.
+Needs playtest.
 
 ### Implement a way to apply weapon mods through inventory screen - implemented, needs testing
 
