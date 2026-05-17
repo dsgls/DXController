@@ -176,7 +176,7 @@ jobs:
           # Upstream zip extracts to DeusExe-XInput-<ver>/{deusex.exe,
           # DeusExe.u, ...}; we flatten the .exe into $REL so end users
           # get a single directory. The launcher currently ships as
-          # lowercase deusex.exe — rename to DeusExe.exe on the way in
+          # lowercase deusex.exe — rename to DeusEx.exe on the way in
           # (case-insensitive find tolerates an upstream fix without a
           # workflow change).
           DXX_ASSET="DeusExe-XInput-${DEUSEXE_XINPUT_VERSION}.zip"
@@ -194,7 +194,7 @@ jobs:
             echo "::error::$DXX_ASSET is missing deusex.exe"
             exit 1
           fi
-          cp "$EXE"  "$REL/DeusExe.exe"
+          cp "$EXE"  "$REL/DeusEx.exe"
 
       - name: Create release zip
         if: startsWith(github.ref, 'refs/tags/v')
