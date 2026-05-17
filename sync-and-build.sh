@@ -27,7 +27,7 @@
 #   1. rsync DXController/ -> $BUILD_DIR/DXController/
 #   2. rsync DeusEx/       -> $BUILD_DIR/DeusEx/
 #   3. rsync DeusExe/      -> $BUILD_DIR/DeusExe/
-#   4. copy DXControllerBtn.u (pre-built texture package) into
+#   4. copy DXControllerTex.u (pre-built texture package) into
 #      $BUILD_DIR/System/
 #   5. insert EditPackages=DeusExe into DeusEx.ini (idempotent)
 #   6. delete DeusEx.u + DeusExe.u; `echo n | UCC.exe make`. UCC prompts
@@ -66,15 +66,15 @@ rsync "${RSYNC_FLAGS[@]}" "$REPO_DIR/DXController/" "$BUILD_DIR/DXController/"
 rsync "${RSYNC_FLAGS[@]}" "$REPO_DIR/DeusEx/"       "$BUILD_DIR/DeusEx/"
 rsync "${RSYNC_FLAGS[@]}" "$REPO_DIR/DeusExe/"      "$BUILD_DIR/DeusExe/"
 
-# Stage the pre-built controller-button texture package. It is a
-# binary package committed at the repo root (not compiled from
-# source); DXController references Texture'DXControllerBtn.*' so it
-# must be in System/ before the pass-2 compile and at runtime.
+# Stage the pre-built texture package. It is a binary package committed
+# at the repo root (not compiled from source); DXController references
+# Texture'DXControllerTex.*' so it must be in System/ before the
+# pass-2 compile and at runtime.
 if (( DRY_RUN )); then
-    echo "sync-and-build: (dry-run) would copy DXControllerBtn.u -> $BUILD_DIR/System/"
+    echo "sync-and-build: (dry-run) would copy DXControllerTex.u -> $BUILD_DIR/System/"
 else
-    cp "$REPO_DIR/DXControllerBtn.u" "$BUILD_DIR/System/DXControllerBtn.u"
-    echo "sync-and-build: copied DXControllerBtn.u -> $BUILD_DIR/System/"
+    cp "$REPO_DIR/DXControllerTex.u" "$BUILD_DIR/System/DXControllerTex.u"
+    echo "sync-and-build: copied DXControllerTex.u -> $BUILD_DIR/System/"
 fi
 
 # Insert EditPackages=DeusExe between DeusEx and DXController in
@@ -91,13 +91,13 @@ if ! grep -qE '^EditPackages=DeusExe[[:space:]]*$' "$INI"; then
     echo "sync-and-build: inserted EditPackages=DeusExe into $INI"
 fi
 
-# Insert EditPackages=DXControllerBtn before DXController so UCC can
-# resolve Texture'DXControllerBtn.*' literals during the pass-2 compile.
-# DXControllerBtn is a pre-built texture-only package; it has no UScript
+# Insert EditPackages=DXControllerTex before DXController so UCC can
+# resolve Texture'DXControllerTex.*' literals during the pass-2 compile.
+# DXControllerTex is a pre-built texture-only package; it has no UScript
 # source and is never rebuilt by UCC (it's already on disk in System/).
-if ! grep -qE '^EditPackages=DXControllerBtn[[:space:]]*$' "$INI"; then
-    sed -i -E '/^EditPackages=DXController[[:space:]]*$/i EditPackages=DXControllerBtn' "$INI"
-    echo "sync-and-build: inserted EditPackages=DXControllerBtn into $INI"
+if ! grep -qE '^EditPackages=DXControllerTex[[:space:]]*$' "$INI"; then
+    sed -i -E '/^EditPackages=DXController[[:space:]]*$/i EditPackages=DXControllerTex' "$INI"
+    echo "sync-and-build: inserted EditPackages=DXControllerTex into $INI"
 fi
 
 if (( DRY_RUN )); then

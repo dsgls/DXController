@@ -61,8 +61,8 @@ jobs:
           rsync -rt DeusEx/       "$RUNNER_TEMP/build/DeusEx/"
           rsync -rt DeusExe/      "$RUNNER_TEMP/build/DeusExe/"
           # Pre-built texture package — staged into System/ for the
-          # pass-2 compile to resolve Texture'DXControllerBtn.*'.
-          cp DXControllerBtn.u "$RUNNER_TEMP/build/System/"
+          # pass-2 compile to resolve Texture'DXControllerTex.*'.
+          cp DXControllerTex.u "$RUNNER_TEMP/build/System/"
 
       - name: Register mod packages with the compiler
         run: |
@@ -84,12 +84,12 @@ jobs:
           if ! grep -qxF 'EditPackages=DXController' "$INI"; then
             sed -i -E '/^EditPackages=DeusExe[[:space:]]*$/a EditPackages=DXController' "$INI"
           fi
-          # DXControllerBtn is a pre-built texture-only package (no UScript
+          # DXControllerTex is a pre-built texture-only package (no UScript
           # source, never rebuilt by UCC). It must be in EditPackages
-          # *before* DXController so UCC can resolve Texture'DXControllerBtn.*'
+          # *before* DXController so UCC can resolve Texture'DXControllerTex.*'
           # literals during the pass-2 compile.
-          if ! grep -qxF 'EditPackages=DXControllerBtn' "$INI"; then
-            sed -i -E '/^EditPackages=DXController[[:space:]]*$/i EditPackages=DXControllerBtn' "$INI"
+          if ! grep -qxF 'EditPackages=DXControllerTex' "$INI"; then
+            sed -i -E '/^EditPackages=DXController[[:space:]]*$/i EditPackages=DXControllerTex' "$INI"
           fi
           echo "--- EditPackages block after edit ---"
           grep -n EditPackages "$INI"
@@ -155,7 +155,7 @@ jobs:
             DeusEx.u
             DeusExe.u
             DXController.u
-            DXControllerBtn.u
+            DXControllerTex.u
 
       - name: Stage release contents
         if: startsWith(github.ref, 'refs/tags/v')
@@ -165,7 +165,7 @@ jobs:
           REL="$RUNNER_TEMP/release/DXController-${GITHUB_REF_NAME}"
           mkdir -p "$REL"
           cp README.md "$REL/"
-          cp DXControllerBtn.u "$REL/"
+          cp DXControllerTex.u "$REL/"
           cp "$RUNNER_TEMP/build/System/DeusEx.u" "$REL/"
           cp "$RUNNER_TEMP/build/System/DeusExe.u" "$REL/"
           cp "$RUNNER_TEMP/build/System/DXController.u" "$REL/"

@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-"""Convert a directory of PNGs to 64x64 8-bit PCX with palette index 0 =
+"""Convert a directory of PNGs to square 8-bit PCX with palette index 0 =
 magenta key for UE1 masked-texture import.
 
-Usage: png-to-pcx.py [SRC_DIR] [DST_DIR]
+Usage: png-to-pcx.py [SRC_DIR] [DST_DIR] [--size SIZE]
 
-SRC_DIR and DST_DIR are optional and default to the xbox-buttons-png/ and
-xbox-buttons-pcx/ directories next to this script."""
+SRC_DIR and DST_DIR are optional and default to the XboxSeries/ and
+XboxSeries-pcx/ directories next to this script. SIZE is the output edge
+length in pixels (default: 64)."""
 
 import argparse
 from pathlib import Path
@@ -13,20 +14,20 @@ from PIL import Image
 
 KEY = (255, 0, 255)  # UE1 magenta transparency key at palette index 0
 ALPHA_THRESHOLD = 128
-DEFAULT_SRC_DIR = Path(__file__).parent / "xbox-buttons-png"
-DEFAULT_DST_DIR = Path(__file__).parent / "xbox-buttons-pcx"
-SIZE = (64, 64)
+DEFAULT_SRC_DIR = Path(__file__).parent / "XboxSeries"
+DEFAULT_DST_DIR = Path(__file__).parent / "XboxSeries-pcx"
+DEFAULT_SIZE = 64
 
 
-def convert(src: Path, dst: Path) -> None:
-    img = Image.open(src).convert("RGBA").resize(SIZE, Image.LANCZOS)
+def convert(src: Path, dst: Path, size: tuple) -> None:
+    img = Image.open(src).convert("RGBA").resize(size, Image.LANCZOS)
 
     # Binarize alpha: anything below threshold becomes the key; everything
     # else keeps its RGB (alpha discarded). Replace masked pixels with black
     # for the quantizer — black is already plentiful in the source so it
     # adds no extra cluster — then we remap them to the key index afterwards.
-    rgb = Image.new("RGB", SIZE)
-    mask = bytearray(SIZE[0] * SIZE[1])
+    rgb = Image.new("RGB", size)
+    mask = bytearray(size[0] * size[1])
     rgb_pixels = []
     for i, (r, g, b, a) in enumerate(img.getdata()):
         if a < ALPHA_THRESHOLD:
@@ -49,11 +50,11 @@ def convert(src: Path, dst: Path) -> None:
     new_palette[3 : 3 + 255 * 3] = bytes(src_palette)
 
     # Build final index buffer: masked pixels -> 0, opaque -> old_index + 1.
-    new_indices = bytearray(SIZE[0] * SIZE[1])
+    new_indices = bytearray(size[0] * size[1])
     for i in range(len(new_indices)):
         new_indices[i] = 0 if mask[i] else src_indices[i] + 1
 
-    out = Image.frombytes("P", SIZE, bytes(new_indices))
+    out = Image.frombytes("P", size, bytes(new_indices))
     out.putpalette(bytes(new_palette))
     out.save(dst, format="PCX")
 
@@ -64,11 +65,15 @@ def main() -> None:
     )
     parser.add_argument(
         "src_dir", nargs="?", type=Path, default=DEFAULT_SRC_DIR,
-        help="directory of source .png files (default: xbox-buttons-png/)",
+        help="directory of source .png files (default: XboxSeries/)",
     )
     parser.add_argument(
         "dst_dir", nargs="?", type=Path, default=DEFAULT_DST_DIR,
-        help="directory for output .pcx files (default: xbox-buttons-pcx/)",
+        help="directory for output .pcx files (default: XboxSeries-pcx/)",
+    )
+    parser.add_argument(
+        "--size", type=int, default=DEFAULT_SIZE,
+        help=f"output edge length in pixels, square (default: {DEFAULT_SIZE})",
     )
     args = parser.parse_args()
 
@@ -79,7 +84,7 @@ def main() -> None:
     pngs = sorted(args.src_dir.glob("*.png"))
     for src in pngs:
         dst = args.dst_dir / (src.stem + ".pcx")
-        convert(src, dst)
+        convert(src, dst, (args.size, args.size))
         print(f"{src.name} -> {dst.name}")
     print(f"\n{len(pngs)} files converted to {args.dst_dir}")
 

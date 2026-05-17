@@ -212,7 +212,7 @@ event DrawWindow(GC gc)
 {
     local float panelW, panelH, panelX, panelY;
     local float gridW, gridX, y;
-    local Color modDark, floorLift, accent, lightText;
+    local Color panelDark, accent, lightText;
 
     Super.DrawWindow(gc);
 
@@ -228,28 +228,17 @@ event DrawWindow(GC gc)
     panelX = (width  - panelW) * 0.5;
     panelY = (height - panelH) * 0.5;
 
-    // Panel fill: a uniform dark veil over whatever is behind the
-    // keyboard. Neither GC blend style gives a uniform translucent fill
-    // on its own — DSTY_Translucent over Texture'Solid' is purely
-    // additive (a dark tint adds ~nothing; the panel stays see-through)
-    // and DSTY_Modulated is purely multiplicative (it darkens lit areas
-    // but leaves black areas pure black, so the panel looks blotchy).
-    // Two passes combine into an even veil: modulate the scene down
-    // toward black, then add a flat dark floor back. modDark sets how
-    // much underlying context still bleeds through; floorLift sets the
-    // minimum darkness (raise it if the panel looks uneven).
-    modDark   = MakeColor(24, 24, 24, 255);   // multiply: ~0.19x
-    floorLift = MakeColor(26, 26, 26, 255);   // additive dark floor
+    panelDark = MakeColor(19, 21, 27, 255);
     accent    = colBorder;
     accent.A  = 255;
     lightText = MakeColor(200, 198, 170, 255);
 
-    // Panel: modulate-down then lift to a flat floor, + accent border.
-    gc.SetStyle(DSTY_Modulated);
-    gc.SetTileColor(modDark);
-    gc.DrawPattern(panelX, panelY, panelW, panelH, 0, 0, Texture'Solid');
-    gc.SetStyle(DSTY_Translucent);
-    gc.SetTileColor(floorLift);
+    // Panel: one opaque masked fill. The keyboard is modal — nothing
+    // usable is behind it — so there is no reason to keep the old
+    // two-pass translucent veil. A masked tile draw on Texture'Solid'
+    // is fully opaque (masked tile draws ignore tile-colour alpha).
+    gc.SetStyle(DSTY_Masked);
+    gc.SetTileColor(panelDark);
     gc.DrawPattern(panelX, panelY, panelW, panelH, 0, 0, Texture'Solid');
     gc.SetStyle(DSTY_Masked);
     gc.SetTileColor(accent);
@@ -291,11 +280,14 @@ function DrawEcho(GC gc, float x, float y, float w, float h, Color textCol)
     if (target != None)
         shown = target.GetText();
 
-    // Echo field: modulated black knocks the panel out to a solid black
-    // inset. Translucent black would be additive and draw nothing.
-    gc.SetStyle(DSTY_Modulated);
-    gc.SetTileColor(MakeColor(0, 0, 0, 255));
+    // Echo field: an opaque near-black inset with a thin border. The
+    // panel is now opaque, so this no longer needs the modulate trick.
+    gc.SetStyle(DSTY_Masked);
+    gc.SetTileColor(MakeColor(5, 6, 10, 255));
     gc.DrawPattern(x, y, w, h, 0, 0, Texture'Solid');
+    gc.SetStyle(DSTY_Masked);
+    gc.SetTileColor(MakeColor(44, 55, 68, 255));
+    gc.DrawBox(x, y, w, h, 0, 0, 1, Texture'Solid');
 
     gc.SetStyle(DSTY_Masked);
     gc.SetFont(Font'DeusExUI.FontMenuSmall');
@@ -357,9 +349,11 @@ function DrawKey(GC gc, float x, float y, float w, float h, string label,
     }
     else
     {
+        // Filled keycap a few shades lighter than the panel — the old
+        // 1 px outline was near-invisible against the dark panel.
         gc.SetStyle(DSTY_Masked);
-        gc.SetTileColor(MakeColor(60, 60, 60, 255));
-        gc.DrawBox(x, y, w, h, 0, 0, 1, Texture'Solid');
+        gc.SetTileColor(MakeColor(46, 51, 61, 255));
+        gc.DrawPattern(x, y, w, h, 0, 0, Texture'Solid');
         gc.SetTextColor(textCol);
     }
 
