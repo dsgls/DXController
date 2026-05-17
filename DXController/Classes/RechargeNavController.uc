@@ -92,6 +92,12 @@ function bool AllowsMenuToggle()
     return false;
 }
 
+function BuildHints()
+{
+    AddHint("a", "Recharge");
+    AddHint("b", "Close");
+}
+
 defaultproperties
 {
     bAllowRepeat=False

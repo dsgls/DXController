@@ -86,6 +86,12 @@ function bool AllowsMenuToggle()
     return false;
 }
 
+function BuildHints()
+{
+    AddHint("a", "Press");
+    AddHint("b", "Cancel");
+}
+
 defaultproperties
 {
     bAllowRepeat=False
