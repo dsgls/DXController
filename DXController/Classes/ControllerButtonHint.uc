@@ -95,3 +95,23 @@ static function float DrawHint(GC gc, float x, float y, string id, string label)
     gc.GetTextExtent(0.0, xExt, yExt, label);
     return textX + xExt;
 }
+
+// Pixel width one hint will occupy when drawn by DrawHint. Used by
+// ControllerHintOverlay to size and centre the legend strip before
+// drawing. Mirrors DrawHint's layout exactly: an icon box + gap when
+// the id resolves to a texture, plus the label's measured extent.
+// The caller's GC font is overwritten (set to FontMenuSmall) — same
+// as DrawHint does.
+static function float MeasureHint(GC gc, string id, string label)
+{
+    local float xExt, yExt;
+    local float w;
+
+    w = 0.0;
+    if (GetButtonTexture(id) != None)
+        w = ICON_SIZE + ICON_GAP;
+
+    gc.SetFont(Font'DeusExUI.FontMenuSmall');
+    gc.GetTextExtent(0.0, xExt, yExt, label);
+    return w + xExt;
+}
