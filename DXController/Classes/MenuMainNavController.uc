@@ -90,6 +90,12 @@ function bool HandleActivate(byte button)
     return true;
 }
 
+function BuildHints()
+{
+    AddHint("a", "Select");
+    AddHint("b", "Back");
+}
+
 defaultproperties
 {
     bAllowRepeat=True
