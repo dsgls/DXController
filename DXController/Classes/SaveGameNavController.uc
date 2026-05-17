@@ -25,3 +25,9 @@ function InitListAndButtons()
     primaryBtn   = class'ActionBarNav'.static.FindByKey(s, "SAVE");
     secondaryBtn = class'ActionBarNav'.static.FindByKey(s, "DELETE");
 }
+
+defaultproperties
+{
+    primaryHintLabel="Save"
+    secondaryHintLabel="Delete"
+}

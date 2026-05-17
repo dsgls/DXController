@@ -17,3 +17,8 @@ function InitListAndButtons()
     primaryBtn = class'ActionBarNav'.static.FindByKey(s, "LOAD");
     // secondaryBtn intentionally None — no delete action.
 }
+
+defaultproperties
+{
+    primaryHintLabel="Apply theme"
+}

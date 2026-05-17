@@ -24,6 +24,12 @@ var MenuUIListWindow         lst;
 var MenuUIActionButtonWindow primaryBtn;
 var MenuUIActionButtonWindow secondaryBtn;
 
+// Legend labels, set per subclass in defaultproperties. primaryHintLabel
+// is the A-button effect; secondaryHintLabel is the X-button effect, or
+// "" when the subclass has no secondaryBtn (Themes Load/Save).
+var string primaryHintLabel;
+var string secondaryHintLabel;
+
 // Subclasses override to populate lst, primaryBtn, secondaryBtn from
 // `screen`. The base class never names a concrete screen type.
 function InitListAndButtons();
@@ -104,6 +110,17 @@ function bool HandleActivate(byte button)
 function bool GetFocusedRect(out float x, out float y, out float w, out float h)
 {
     return false;
+}
+
+// A presses primaryBtn, X presses secondaryBtn (when bound). B backs out
+// of the menu screen via the root window's Escape synthesis. Labels come
+// from the per-subclass defaultproperties.
+function BuildHints()
+{
+    AddHint("a", primaryHintLabel);
+    if (secondaryHintLabel != "")
+        AddHint("x", secondaryHintLabel);
+    AddHint("b", "Back");
 }
 
 defaultproperties
