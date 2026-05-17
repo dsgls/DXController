@@ -19,19 +19,19 @@ var bool   bAllowRepeat;    // true = HandleDPad accepts engine bRepeat=true pre
                             // false = single-press only (grid screens — Inv, Augs)
 
 // ---- Button-legend hints ----
-// One legend entry: a controller-button glyph id plus its effect text.
-// Drawn by ControllerHintOverlay as a centered bottom strip. id is a
-// ControllerButtonHint logical id ("a", "b", "x", "lb", ...).
-struct ButtonHint
-{
-    var string id;
-    var string label;
-};
-
-// Hint accumulator. ControllerHintOverlay calls ResetHints() then
-// BuildHints() each frame, then reads hints[0..hintCount-1].
-var ButtonHint hints[16];   // 16 is more than any screen needs; AddHint drops past this
-var int        hintCount;   // number of populated hints; valid indices 0..hintCount-1
+// The active screen's controller-button legend, as parallel arrays:
+// hintIds[i] is a ControllerButtonHint logical id ("a", "b", "x",
+// "lb", ...), hintLabels[i] its effect text. ControllerHintOverlay
+// calls ResetHints() then BuildHints() each frame, then reads
+// entries 0..hintCount-1.
+//
+// Parallel arrays rather than an array-of-struct: a struct of two
+// UE1 strings is 384 bytes, and indexing a field of a >255-byte
+// struct array element ("nav.hints[i].id") trips UCC's 255-byte
+// context-expression limit. See the CLAUDE.md quirk.
+var string hintIds[16];     // 16 is more than any screen needs; AddHint drops past this
+var string hintLabels[16];  // parallel to hintIds
+var int    hintCount;       // number of populated hints; valid indices 0..hintCount-1
 
 function Attach(Window s)
 {
@@ -145,10 +145,10 @@ function ResetHints()
 // ControllerRootWindow.RegisterNav.
 function AddHint(string id, string label)
 {
-    if (hintCount >= ArrayCount(hints))
+    if (hintCount >= ArrayCount(hintIds))
         return;
-    hints[hintCount].id = id;
-    hints[hintCount].label = label;
+    hintIds[hintCount] = id;
+    hintLabels[hintCount] = label;
     hintCount++;
 }
 
