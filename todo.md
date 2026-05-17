@@ -70,11 +70,33 @@ Need to play the game enough to go beyond the text area size to test.
 
 Show xbox controller button pictures with their mapping in UI contexts. For menus where a controller button activates an UI button, show the controller button picture on the UI button. In other cases (e.g., inventory screen A=use,X=equip wheel) show buttons and their effect below the dialog.
 
-Button pictures have been added to assets/DXControllerBtn.utx (group XboxSeries, texture names match the base names of the source pictures in assets/xbox-buttons-png/).
+Button pictures have been added to DXControllerBtn.utx (group XboxSeries, texture names match the base names of the source pictures in assets/xbox-buttons-png/). Helper functions have been written to implement this in ControllerButtonHint.uc. The on screen keyboard currently implements this, other contexts remain.
 
-### Implement a way to apply weapon mods through inventory screen
+### Implement a way to apply weapon mods through inventory screen - implemented, needs testing
 
-Done through click-dragging the mod onto the weapon. Use/equip is useless, so probably best to special-case it for weapon mods to start modding.
+Vanilla applies a mod by mouse-dragging the mod tile onto a weapon;
+gamepad had no path (A = equip/use, both disabled for mods).
+
+Implemented a `'ModApply'` sub-dialog in `InvNavController` (commits
+`4f6c071`..`ea53256`). A on a selected weapon mod enters the mode: D-pad
+roams the focus frame over all inventory tiles (mod stays selected so
+its green compatible-weapon highlights persist), A applies the mod to a
+focused eligible weapon, B cancels. Zero compatible weapons -> status
+message, no mode entry; exactly one -> auto-focused. Apply mirrors the
+vanilla `FinishButtonDrag` block (`ApplyMod` / `RemoveObjectFromBelt` /
+status / `DestroyMod` / reselect weapon).
+
+Designed at
+`docs/superpowers/specs/2026-05-16-weapon-mod-apply-inventory-design.md`,
+plan at
+`docs/superpowers/plans/2026-05-17-weapon-mod-apply-inventory.md`
+(Task 3 = the 11-step playtest checklist). Builds clean; not yet
+playtested (needs a save with a weapon mod + mixed compatible/
+incompatible weapons in inventory).
+
+Known limitation, carried from the spec: `focused` / `modSourceButton`
+can go stale across `PersonaScreenInventory`'s ~0.25s tile rebuild —
+the same pre-existing limitation `InvNavController.focused` already has.
 
 ## Bug to fix
 
