@@ -511,6 +511,29 @@ function ResolveModApply(byte button)
     // other buttons: no-op while ModApply is active.
 }
 
+// Context-dependent legend: the inventory screen rebinds A/B while a
+// sub-dialog is active, and BuildHints runs every frame, so it just
+// branches on subDialogActive.
+function BuildHints()
+{
+    if (subDialogActive == 'ModApply')
+    {
+        AddHint("a", "Apply mod");
+        AddHint("b", "Cancel");
+        return;
+    }
+    if (subDialogActive == 'WheelAssign')
+    {
+        AddHint("a", "Assign");
+        AddHint("b", "Cancel");
+        return;
+    }
+    AddHint("a", "Use/Equip");
+    AddHint("x", "Assign slot");
+    AddHint("y", "Change ammo");
+    AddHint("rs", "Drop");
+}
+
 defaultproperties
 {
     bAllowRepeat=False    // grid nav: single-press only
