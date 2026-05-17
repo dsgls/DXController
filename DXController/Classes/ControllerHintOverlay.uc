@@ -9,7 +9,7 @@
 // reconfigure / select / press (forbidden during draw in UE1).
 //
 // Each frame: ResetHints() + BuildHints() on the active controller,
-// then draw hints[0..hintCount-1]. Draws nothing in mouse mode, while
+// then draw entries 0..hintCount-1. Draws nothing in mouse mode, while
 // the on-screen keyboard is open (it draws its own footer), when there
 // is no active controller, or when the controller declared no hints
 // (the inherited no-op BuildHints default).
@@ -56,7 +56,7 @@ event DrawWindow(GC gc)
     for (i = 0; i < n; i++)
     {
         totalW += class'ControllerButtonHint'.static.MeasureHint(
-            gc, nav.hints[i].id, nav.hints[i].label);
+            gc, nav.hintIds[i], nav.hintLabels[i]);
         if (i < n - 1)
             totalW += HINT_GAP;
     }
@@ -89,7 +89,7 @@ event DrawWindow(GC gc)
     for (i = 0; i < n; i++)
     {
         fx = class'ControllerButtonHint'.static.DrawHint(
-            gc, fx, y, nav.hints[i].id, nav.hints[i].label);
+            gc, fx, y, nav.hintIds[i], nav.hintLabels[i]);
         if (i < n - 1)
             fx += HINT_GAP;
     }

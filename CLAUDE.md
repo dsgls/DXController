@@ -363,6 +363,23 @@ Prefix all such logs with `DXC-<area>`: `DXC-WHEEL`, `DXC-NAV`,
   `RadialMenuWindow` draws inventory/aug icons with `DrawTexture` at
   `IconSize` (~48) — fine only as long as those icons are ≤ that size;
   larger stock icons would be silently cropped.
+- **A `struct` of two `string`s is 384 bytes and cannot be indexed as
+  an array element through a context expression.** UE1 stores each
+  `string` as a fixed 192-byte buffer, so
+  `struct { var string a; var string b; }` is 384 bytes. Accessing a
+  field of such a struct held in an array on another object —
+  `nav.hints[i].id` — makes UCC materialise the 384-byte element as a
+  context-expression intermediate and fails with
+  `Error, Context expression: Variable is too large (384 bytes, 255
+  max)`. Mitigation: use parallel arrays of the scalar fields instead
+  of an array-of-struct (`var string hintIds[16]; var string
+  hintLabels[16];`) — each indexed element is then a 192-byte string,
+  under the limit. This bit the button-legend hint model
+  (`MenuNavController.hintIds` / `hintLabels`, read by
+  `ControllerHintOverlay`). The 255-byte ceiling is on the
+  context-expression *intermediate*, not the `var` itself — a large
+  array as a plain `var` is fine; it is `obj.arr[i].field` chains that
+  trip it.
 
 ## Source overlay model
 
