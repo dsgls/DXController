@@ -7,10 +7,15 @@
 // wrap to the opposite edge of the grid.
 //
 // Activations:
-//   A (Joy1/200)          — Equip if enabled, else Use if enabled
+//   A (Joy1/200)          — on a weapon mod: enter apply-to-weapon mode;
+//                           otherwise Equip if enabled, else Use
 //   X (Joy3/202)          — open belt-assign wheel sub-dialog
 //   Y (Joy4/203)          — change ammo on selected weapon
 //   R-stick click (Joy10/209) — drop selected item
+//
+// ModApply sub-dialog: while applying a weapon mod, the D-pad moves the
+// focus frame over any inventory tile (mod stays selected), A applies
+// the mod to a focused eligible weapon, B cancels.
 //=============================================================================
 class InvNavController extends MenuNavController;
 
@@ -243,9 +248,10 @@ function bool HandleActivate(byte button)
 
     if (button == 200)        // IK_Joy1 (A)
     {
-        // Weapon mod selected: A starts the apply-to-weapon flow. Both
-        // Equip and Use are disabled by EnableButtons for a WeaponMod,
-        // so the fall-through below would be a no-op anyway.
+        // Weapon mod selected: A starts the apply-to-weapon flow.
+        // EnableButtons disables Use for a WeaponMod, but Equip stays
+        // sensitive — equipping a mod does nothing useful, so this
+        // branch must short-circuit before the Equip/Use fall-through.
         if (s.selectedItem != None && WeaponMod(s.selectedItem.GetClientObject()) != None)
         {
             EnterModApply(s);
