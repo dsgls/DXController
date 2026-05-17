@@ -18,6 +18,21 @@ var name   subDialogActive; // None | 'WheelAssign' | 'AugInstall' | …
 var bool   bAllowRepeat;    // true = HandleDPad accepts engine bRepeat=true presses (list/scroll screens)
                             // false = single-press only (grid screens — Inv, Augs)
 
+// ---- Button-legend hints ----
+// One legend entry: a controller-button glyph id plus its effect text.
+// Drawn by ControllerHintOverlay as a centered bottom strip. id is a
+// ControllerButtonHint logical id ("a", "b", "x", "lb", ...).
+struct ButtonHint
+{
+    var string id;
+    var string label;
+};
+
+// Hint accumulator. ControllerHintOverlay calls ResetHints() then
+// BuildHints() each frame, then reads hints[0..hintCount-1].
+var ButtonHint hints[16];
+var int        hintCount;
+
 function Attach(Window s)
 {
     screen = s;
@@ -111,6 +126,38 @@ function bool AllowsMenuToggle()
 // NetworkTerminalNavController's winComputer screen-swap detection)
 // override it.
 function NavTick(float deltaSeconds)
+{
+}
+
+// ---- Button-legend hints ----
+
+// Clear the hint accumulator. Called by ControllerHintOverlay each
+// frame before BuildHints.
+function ResetHints()
+{
+    hintCount = 0;
+}
+
+// Append one legend hint. id is a ControllerButtonHint logical id
+// ("a", "b", "x", "lb", ...); label is the effect text. Append order
+// is left-to-right draw order in the strip. Silently drops appends
+// past the array bound — same defensive idiom as
+// ControllerRootWindow.RegisterNav.
+function AddHint(string id, string label)
+{
+    if (hintCount >= ArrayCount(hints))
+        return;
+    hints[hintCount].id = id;
+    hints[hintCount].label = label;
+    hintCount++;
+}
+
+// Override in subclasses: call AddHint once per button this screen
+// uses. Invoked fresh every frame against live state, so a controller
+// branches here on subDialogActive / focused / etc. to produce a
+// context-dependent legend. Default: no legend (the overlay then
+// draws nothing).
+function BuildHints()
 {
 }
 
