@@ -182,7 +182,8 @@ function bool HandleActivate(byte button)
 
 function BuildHints()
 {
-    AddHint("rs", "Scroll");
+    AddHint("dpad", "Browse");
+    AddHint("rs", "Scroll text");
     AddHint("lb", "Prev tab");
     AddHint("rb", "Next tab");
     AddHint("b", "Close");
