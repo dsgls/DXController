@@ -37,13 +37,18 @@ function InitFocus()
 
     s = PersonaScreenLogs(screen);
     if (s == None || s.lstLogs == None)
-        return;
+        return;                       // screen not built yet — retry next frame
     if (s.lstLogs.GetNumRows() <= 0)
-        return;
+        return;                       // list not populated yet — retry next frame
 
     firstRowId = s.lstLogs.IndexToRowId(0);
     // bSelect=True, bClearRows=True → selects and scrolls into view.
     s.lstLogs.SetRow(firstRowId, True, True);
+
+    // List is populated and the first row selected; one-time init done.
+    // Without this the Tick retry would re-run InitFocus every frame
+    // (focused stays None on list screens) and snap selection to row 0.
+    bFocusInitDone = True;
 }
 
 // ----------------------------------------------------------------------
