@@ -14,7 +14,7 @@ class MenuNavController extends Object;
 var Window screen;          // the persona/menu screen window we operate on
 var Window focused;         // currently-focused child element (may be None)
 var int    focusIndex;      // index into the screen's primary array, if relevant
-var name   subDialogActive; // None | 'WheelAssign' | 'AugInstall' | …
+var name   subDialogActive; // None | 'WheelAssign' | 'ModApply' | …
 var bool   bAllowRepeat;    // true = HandleDPad accepts engine bRepeat=true presses (list/scroll screens)
                             // false = single-press only (grid screens — Inv, Augs)
 
