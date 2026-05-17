@@ -30,8 +30,8 @@ struct ButtonHint
 
 // Hint accumulator. ControllerHintOverlay calls ResetHints() then
 // BuildHints() each frame, then reads hints[0..hintCount-1].
-var ButtonHint hints[16];
-var int        hintCount;
+var ButtonHint hints[16];   // 16 is more than any screen needs; AddHint drops past this
+var int        hintCount;   // number of populated hints; valid indices 0..hintCount-1
 
 function Attach(Window s)
 {
