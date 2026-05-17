@@ -91,3 +91,11 @@ function bool HandleActivate(byte button)
         ButtonWindow(focused).PressButton();
     return true;
 }
+
+function BuildHints()
+{
+    AddHint("a", "Heal");
+    AddHint("lb", "Prev tab");
+    AddHint("rb", "Next tab");
+    AddHint("b", "Close");
+}

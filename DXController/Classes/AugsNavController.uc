@@ -124,6 +124,15 @@ function bool HandleActivate(byte button)
     return true;
 }
 
+function BuildHints()
+{
+    AddHint("a", "Toggle");
+    AddHint("x", "Upgrade");
+    AddHint("lb", "Prev tab");
+    AddHint("rb", "Next tab");
+    AddHint("b", "Close");
+}
+
 defaultproperties
 {
     bAllowRepeat=False

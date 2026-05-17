@@ -73,3 +73,11 @@ function bool HandleActivate(byte button)
         s.btnUpgrade.PressButton();
     return true;
 }
+
+function BuildHints()
+{
+    AddHint("a", "Upgrade");
+    AddHint("lb", "Prev tab");
+    AddHint("rb", "Next tab");
+    AddHint("b", "Close");
+}

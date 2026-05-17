@@ -96,6 +96,14 @@ function bool HandleScroll(float ry)
     return true;
 }
 
+function BuildHints()
+{
+    AddHint("rs", "Scroll");
+    AddHint("lb", "Prev tab");
+    AddHint("rb", "Next tab");
+    AddHint("b", "Close");
+}
+
 defaultproperties
 {
     bAllowRepeat=True
