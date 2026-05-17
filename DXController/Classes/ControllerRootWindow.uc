@@ -39,6 +39,9 @@ var float lastCursorX, lastCursorY;
 // Focus overlay (drawn above all menu content when in CM_Gamepad).
 var MenuFocusOverlay focusOverlay;
 
+// Button-legend overlay (drawn above all menu content when in CM_Gamepad).
+var ControllerHintOverlay hintOverlay;
+
 // Nav controller registry. Keyed by screen class via parallel arrays.
 // Entries populated in InitWindow. Concrete classes are instantiated
 // lazily on first attach.
@@ -67,6 +70,9 @@ event InitWindow()
 
     focusOverlay = MenuFocusOverlay(NewChild(Class'MenuFocusOverlay'));
     focusOverlay.SetWindowAlignments(HALIGN_Full, VALIGN_Full, 0, 0);
+
+    hintOverlay = ControllerHintOverlay(NewChild(Class'ControllerHintOverlay'));
+    hintOverlay.SetWindowAlignments(HALIGN_Full, VALIGN_Full, 0, 0);
 
     keyboard = OnScreenKeyboardWindow(NewChild(Class'OnScreenKeyboardWindow'));
     keyboard.SetWindowAlignments(HALIGN_Full, VALIGN_Full, 0, 0);
@@ -289,6 +295,10 @@ function SwitchActiveNav(MenuNavController desired, Window desiredScreen)
         // an opaque modulated tile that hides the frame entirely.
         if (focusOverlay != None)
             focusOverlay.Raise();
+
+        // Keep the legend overlay above the newly-attached modal too.
+        if (hintOverlay != None)
+            hintOverlay.Raise();
 
         // Initial menu open arrives here (mode is already CM_Gamepad from
         // InitWindow, so NoticeGamepadActivity won't fire). Hide the cursor
