@@ -532,6 +532,9 @@ function BuildHints()
     AddHint("x", "Assign slot");
     AddHint("y", "Change ammo");
     AddHint("rs", "Drop");
+    AddHint("lb", "Prev tab");
+    AddHint("rb", "Next tab");
+    AddHint("b", "Close");
 }
 
 defaultproperties
