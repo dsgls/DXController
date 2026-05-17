@@ -299,7 +299,31 @@ function bool GetFocusedRect(out float x, out float y, out float w, out float h)
     return false;
 }
 
+// ---- Button-legend hints ---------------------------------------------------
+
+// Three modes (see HandleActivate):
+//   cinematic    — A/B abort the cutscene; show B Skip.
+//   choice mode  — A commits the focused choice; B is inert, so no B hint
+//                  (a conversation choice cannot be cancelled).
+//   speech mode  — A/B advance to the next line; show A Skip.
+function BuildHints()
+{
+    if (IsCinematic())
+    {
+        AddHint("b", "Skip");
+        return;
+    }
+    if (IsChoiceMode())
+    {
+        AddHint("a", "Select");
+        return;
+    }
+    // Speech mode: ordinary non-interactive dialogue.
+    AddHint("a", "Skip");
+}
+
 defaultproperties
 {
     bAllowRepeat=False    // single-press D-pad on short choice lists
+    hintPlacement=ScreenTopRight    // legend in the viewport corner, clear of choice options
 }
