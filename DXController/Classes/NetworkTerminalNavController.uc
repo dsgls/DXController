@@ -465,6 +465,20 @@ function bool GetFocusedRect(out float x, out float y, out float w, out float h)
     return false;
 }
 
+// LB/RB pane cycling is only meaningful when a Hack or HackAccounts
+// pane coexists with the always-present Computer pane. BuildHints runs
+// every frame, so the shoulder hints track live pane availability.
+function BuildHints()
+{
+    AddHint("a", "Select");
+    if (IsPanePresent(PANE_HACK) || IsPanePresent(PANE_HACKACCOUNTS))
+    {
+        AddHint("lb", "Prev pane");
+        AddHint("rb", "Next pane");
+    }
+    AddHint("b", "Back");
+}
+
 defaultproperties
 {
     bAllowRepeat=True
