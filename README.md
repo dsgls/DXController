@@ -7,6 +7,11 @@ navigation for every menu, conversation, and in-world device (keypads,
 ATMs, computers, security terminals) — so the game is playable end to
 end without a mouse or keyboard.
 
+The mod is intended to feel like the game was made to be played on
+a controller. This means context-dependent controls and new UI elements
+like weapon/aug wheels for equipping, and an onscreen keyboard for
+entering usernames and passwords.
+
 ## Download
 
 Get the latest release from the
@@ -25,6 +30,12 @@ The release `.zip` contains everything you need:
 ## Requirements
 
 *Deus Ex: Game of the Year Edition* — the standard GOG or Steam release.
+
+## Screenshots
+
+![weapon wheel](/screenshots/weaponwheel.webp)
+![inventory screen](/screenshots/inventory.webp)
+![security terminal](/screenshots/securityterminal.webp)
 
 ## Install
 
