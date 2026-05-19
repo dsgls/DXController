@@ -24,9 +24,10 @@
 # just replaces specific files; the rest of the stock tree stays as-is.
 #
 # Build flow:
-#   1. rsync DXController/ -> $BUILD_DIR/DXController/
-#   2. rsync DeusEx/       -> $BUILD_DIR/DeusEx/
-#   3. rsync DeusExe/      -> $BUILD_DIR/DeusExe/
+#   1-3. convert the overlay .uc sources (DXController/, DeusEx/,
+#        DeusExe/) into the build dir, LF -> CRLF. The repo stores .uc
+#        as LF; the ancient UCC.exe wants CRLF-terminated source, so
+#        each file is passed through `unix2dos -n` on the way in.
 #   4. copy DXControllerTex.u (pre-built texture package) into
 #      $BUILD_DIR/System/
 #   5. insert EditPackages=DeusExe into DeusEx.ini (idempotent)
@@ -40,9 +41,12 @@
 #      (no rebuild, no GPF), DeusExe.u is built from the synced source,
 #      then DXController.u is built against both.
 #
+# Requires `unix2dos` (from the dos2unix package) on PATH — run under
+# `nix develop`, which provides it, or install dos2unix.
+#
 # Usage:
 #   ./sync-and-build.sh          # sync + build
-#   ./sync-and-build.sh -n       # dry run (rsync --dry-run, skip build)
+#   ./sync-and-build.sh -n       # dry run (list files, skip build)
 #   BUILD_DIR=/path ./sync-and-build.sh
 
 set -euo pipefail
@@ -51,10 +55,8 @@ REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BUILD_DIR="${BUILD_DIR:-$REPO_DIR/gamedir}"
 
 DRY_RUN=0
-RSYNC_FLAGS=(-rtv)
 if [[ "${1:-}" == "-n" || "${1:-}" == "--dry-run" ]]; then
     DRY_RUN=1
-    RSYNC_FLAGS+=(--dry-run)
 fi
 
 if [[ ! -d "$BUILD_DIR" ]]; then
@@ -62,9 +64,24 @@ if [[ ! -d "$BUILD_DIR" ]]; then
     exit 1
 fi
 
-rsync "${RSYNC_FLAGS[@]}" "$REPO_DIR/DXController/" "$BUILD_DIR/DXController/"
-rsync "${RSYNC_FLAGS[@]}" "$REPO_DIR/DeusEx/"       "$BUILD_DIR/DeusEx/"
-rsync "${RSYNC_FLAGS[@]}" "$REPO_DIR/DeusExe/"      "$BUILD_DIR/DeusExe/"
+# Sync the overlay .uc sources into the build dir, converting LF -> CRLF
+# on the way. The repo stores .uc as LF, but the ancient UCC.exe expects
+# CRLF-terminated source. `unix2dos -n` reads the LF source and writes a
+# CRLF copy straight to the destination — no rsync, no post-pass over the
+# build dir, so the full stock DeusEx/Classes/ tree is never touched.
+for pkg in DXController DeusEx DeusExe; do
+    src="$REPO_DIR/$pkg/Classes"
+    dst="$BUILD_DIR/$pkg/Classes"
+    (( DRY_RUN )) || mkdir -p "$dst"
+    for f in "$src"/*.uc; do
+        [[ -e "$f" ]] || continue
+        if (( DRY_RUN )); then
+            echo "sync-and-build: (dry-run) would convert $f -> $dst/$(basename "$f")"
+        else
+            unix2dos -n "$f" "$dst/$(basename "$f")"
+        fi
+    done
+done
 
 # Stage the pre-built texture package. It is a binary package committed
 # at the repo root (not compiled from source); DXController references

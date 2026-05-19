@@ -75,14 +75,24 @@ When you need to read a stock class, look it up under
 From WSL:
 
 ```bash
-./sync-and-build.sh   # rsyncs DXController/ and DeusEx/, two-pass UCC build
+./sync-and-build.sh   # sync overlay .uc into build dir, two-pass UCC build
 ```
 
-The script rsyncs `DXController/` and `DeusEx/` onto `$BUILD_DIR/`, then
-runs `UCC.exe make` twice: pass 1 deletes and rebuilds `DeusEx.u`
-(tolerating a known UCC GPF — see below); pass 2 deletes and rebuilds
-`DXController.u` in a fresh UCC process. Pass `-n` for a dry run (rsync
-preview only, no build). Override the build dir with `BUILD_DIR=/path`.
+The script copies the overlay `.uc` sources (`DXController/`, `DeusEx/`,
+`DeusExe/`) into `$BUILD_DIR/`, then runs `UCC.exe make` twice: pass 1
+deletes and rebuilds `DeusEx.u` (tolerating a known UCC GPF — see below);
+pass 2 deletes and rebuilds `DXController.u` in a fresh UCC process. Pass
+`-n` for a dry run (lists files, no build). Override the build dir with
+`BUILD_DIR=/path`.
+
+The repo stores `.uc` source as LF, but the ancient `UCC.exe` wants
+CRLF-terminated source. The sync step passes each overlay file through
+`unix2dos -n` on the way into the build dir, so only our overlay files
+are converted — the full stock `DeusEx/Classes/` tree is left untouched.
+`unix2dos` (from the `dos2unix` package) is therefore a build
+prerequisite: run `sync-and-build.sh` under `nix develop` (the flake dev
+shell provides it) or install `dos2unix`. The CI workflow installs it
+via `apt`.
 
 `UCC.exe` lives in `…/System/`. The compiler walks every package in
 `EditPackages` and emits `<Pkg>.u` next to it. If a `.u` already exists it is
@@ -168,6 +178,18 @@ Prefix all such logs with `DXC-<area>`: `DXC-WHEEL`, `DXC-NAV`,
 `DXC-CURSOR`, etc.
 
 ## UnrealScript quirks (this is UE1-era UScript — newer references will mislead)
+
+- **The repo is LF-standardized; `UCC.exe` wants CRLF.** All text files
+  (including every `.uc`) are stored with LF line endings — enforced by
+  `.editorconfig` (`end_of_line = lf`) and `.gitattributes`
+  (`* text=auto eol=lf`); history was rewritten once (via `jj fix`) to
+  normalise it. The ancient `UCC.exe` expects CRLF-terminated source, so
+  `sync-and-build.sh` and the CI workflow convert each overlay `.uc`
+  with `unix2dos -n` when writing it into the build dir (see "Building").
+  Consequence: never let raw `git` check out the working tree under a
+  config that would re-CRLF it — jj never does, and `.gitattributes`
+  pins `eol=lf` for git too. When vendoring stock scripts, convert
+  CRLF→LF before the verbatim commit (see "Source overlay model").
 
 - **Enums are bytes, but `int(enumValue)` doesn't compile.** The conventional
   idiom for getting the textual name of an enum value is in
@@ -398,10 +420,16 @@ Prefix all such logs with `DXC-<area>`: `DXC-WHEEL`, `DXC-NAV`,
 edited copy under `DeusEx/Classes/<File>.uc` in this repo; the build
 script rsyncs it on top of the stock tree and rebuilds the package.
 Stock files we don't touch stay stock. Discipline: when adding a stock
-file to `DeusEx/Classes/` for the first time, commit it verbatim first
-(message: "Vendor stock DeusEx/Classes/<File>.uc (unmodified)"), then
-make edits in a follow-up commit. `git diff <vendor>..<edit>` then shows
-exactly our delta against upstream.
+file to `DeusEx/Classes/` for the first time, copy it from
+`../deusex-scripts/`, **convert CRLF→LF** (`dos2unix`), and commit that
+as the verbatim vendor commit (message: "Vendor stock
+DeusEx/Classes/<File>.uc (unmodified)"); then make edits in a follow-up
+commit. The repo is LF-standardized but `ucc batchexport` emits CRLF, so
+the line-ending conversion is the one allowed deviation from "verbatim"
+— it changes no code, and it keeps `git diff <vendor>..<edit>` showing
+exactly our delta against upstream rather than whole-file line-ending
+noise. The same applies when vendoring into `DeusExe/Classes/` from
+`../DeusExe-XInput/`.
 
 Within each modified file, additions live in a banner-delimited block:
 

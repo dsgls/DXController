@@ -31,7 +31,10 @@ jobs:
         run: |
           sudo dpkg --add-architecture i386
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends wine wine32 wine64
+          # dos2unix provides unix2dos, used by the overlay step to
+          # convert the LF-stored .uc sources to the CRLF UCC.exe wants.
+          sudo apt-get install -y --no-install-recommends \
+            wine wine32 wine64 dos2unix
 
       - name: Initialize wine prefix
         run: |
@@ -57,9 +60,18 @@ jobs:
 
       - name: Overlay DXController, DeusEx, and DeusExe sources
         run: |
-          rsync -rt DXController/ "$RUNNER_TEMP/build/DXController/"
-          rsync -rt DeusEx/       "$RUNNER_TEMP/build/DeusEx/"
-          rsync -rt DeusExe/      "$RUNNER_TEMP/build/DeusExe/"
+          # The repo stores .uc as LF; the ancient UCC.exe wants CRLF.
+          # unix2dos -n reads each LF source and writes a CRLF copy
+          # straight into the build dir — only the overlay sources are
+          # touched, the full stock DeusEx/Classes/ tree is left alone.
+          for pkg in DXController DeusEx DeusExe; do
+            dst="$RUNNER_TEMP/build/$pkg/Classes"
+            mkdir -p "$dst"
+            for f in "$pkg"/Classes/*.uc; do
+              [ -e "$f" ] || continue
+              unix2dos -n "$f" "$dst/$(basename "$f")"
+            done
+          done
           # Pre-built texture package — staged into System/ for the
           # pass-2 compile to resolve Texture'DXControllerTex.*'.
           cp DXControllerTex.u "$RUNNER_TEMP/build/System/"

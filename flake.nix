@@ -38,11 +38,15 @@
           default = self.apps.${system}.png-to-pcx;
         });
 
-      # `nix develop` — a shell with python3 + Pillow on PATH.
-      devShells = forAllSystems (system: {
-        default = nixpkgs.legacyPackages.${system}.mkShell {
-          packages = [ (pythonFor system) ];
-        };
-      });
+      # `nix develop` — a shell with python3 + Pillow and dos2unix on
+      # PATH. dos2unix provides unix2dos, which sync-and-build.sh uses to
+      # convert the LF-stored .uc sources to the CRLF that UCC.exe wants.
+      devShells = forAllSystems (system:
+        let pkgs = nixpkgs.legacyPackages.${system};
+        in {
+          default = pkgs.mkShell {
+            packages = [ (pythonFor system) pkgs.dos2unix ];
+          };
+        });
     };
 }
