@@ -854,21 +854,55 @@ objects, so the focus overlay can't draw a frame around them). `bAllowRepeat=Tru
 
 Canonical template: `DXController/Classes/ImagesNavController.uc`.
 
-### Spatial nearest-neighbour (grid screens)
+### Spatial nearest-neighbour (uniform single-cell grids)
 
-For non-list screens with absolutely-positioned buttons (Inventory, Augs,
-AugInstall):
+For non-list screens whose buttons are all the **same size and occupy one
+cell** (Augs, AugInstall):
 
 - Get each button's centre via `ConvertCoordinates(btn, 0.5*btn.width, 0.5*btn.height, root, cx, cy)`.
 - Filter candidates by direction with a `bSkip` boolean (UE1 has no `goto`
   or `continue`).
 - Compare squared Euclidean distance; pick the nearest.
-- For wrap behaviour: see `InvNavController.FindWrapTarget` (same-row
-  preference for horizontal wrap, then nearest column for vertical).
 - `bAllowRepeat=False` — grid nav should be single-press.
 
-Canonical templates: `DXController/Classes/InvNavController.uc` (with wrap),
-`DXController/Classes/AugsNavController.uc` (no wrap).
+Canonical template: `DXController/Classes/AugsNavController.uc` (no wrap).
+
+**Do not use centre-distance when buttons can span multiple cells.** A
+multi-slot item collapsed to its geometric centre mis-picks its
+neighbours: the centre of a wide/tall item can sit closer to the cursor
+than the adjacent single-cell button, so the D-pad selects the wrong
+item, crosses rows on horizontal moves, and (lacking any memory of the
+entry column) exits a multi-slot item under the wrong cell. See the
+git history of `InvNavController.uc` for the four concrete failures.
+
+### Tile-cursor grid navigation (multi-slot grids)
+
+For grids where a button can span several cells (Inventory), navigate on
+the underlying tile grid instead of by centre distance:
+
+- Track a logical cursor cell `(cursorX, cursorY)` kept inside the focused
+  item's tile rectangle. The perpendicular coordinate is the **lane**,
+  preserved across straight-line travel so leaving a multi-slot item exits
+  under the cell it was entered on.
+- An item's inclusive tile rect is `dragPosX/dragPosY` (top-left) plus
+  `Inventory.invSlotsX/invSlotsY` span; one cell is
+  `invButtonWidth`×`invButtonHeight` px (53 each).
+- A candidate is **in-direction** when its near edge is strictly past the
+  focused item's far edge along the pressed axis (rectangle edges, not
+  centres). Rank in-direction candidates by lane distance (`SpanDist` of
+  the cursor's perpendicular coord to the candidate's span) then
+  directional distance.
+- When nothing is in-direction, wrap within the lane to the item furthest
+  in the opposite direction (`FindWrapTarget`).
+- After landing, `UpdateCursorAfterMove` puts the cursor on the entered
+  edge cell and clamps the preserved lane into the new item's span.
+- `bAllowRepeat=False`.
+
+Reachability: any two non-overlapping grid rectangles are separated on at
+least one axis, so every other item is in-direction of some press — no
+item is strandable (the D-pad can always reach and leave every item).
+
+Canonical template: `DXController/Classes/InvNavController.uc` (with wrap).
 
 ### Text scrolling (`PersonaScrollAreaWindow`)
 

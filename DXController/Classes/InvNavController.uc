@@ -2,9 +2,17 @@
 // InvNavController — Inventory grid navigation + per-button activations.
 //
 // Focus model: variable-size PersonaInventoryItemButtons in winItems treated
-// as single navigable units. D-pad picks the nearest item in the requested
-// direction by button-center geometry. If no item exists in that direction,
-// wrap to the opposite edge of the grid.
+// as single navigable units, navigated on the underlying tile grid. A
+// logical cursor cell (cursorX, cursorY) rides inside the focused item;
+// `focused` is the whole item the cursor sits on. D-pad picks the nearest
+// item whose tile-rectangle lies in the pressed direction, ranked by lane
+// distance (how far it is from the cursor's row/column) then directional
+// distance. The perpendicular lane coordinate is preserved across
+// straight-line travel, so leaving a multi-slot item exits under the tile
+// you entered on. If no item lies in that direction, wrap within the lane
+// to the far edge of the grid. An item's tile span is invSlotsX/invSlotsY
+// (each tile invButtonWidth/Height px); collapsing items to a single
+// center point — the old model — mis-picked neighbours of multi-slot items.
 //
 // Activations:
 //   A (Joy1/200)          — on a weapon mod: enter apply-to-weapon mode;
@@ -27,6 +35,15 @@ class InvNavController extends MenuNavController;
 var Window modSourceButton;
 var localized String NoCompatibleWeaponLabel;
 
+// --- Tile cursor ---
+// The logical cursor cell, in grid tile coordinates (0-based col/row).
+// Always kept inside `focused`'s tile rectangle. The perpendicular
+// coordinate acts as the "lane" preserved across straight-line D-pad
+// travel — this is what makes leaving a multi-slot item exit under the
+// tile it was entered on. Seeded by SeedCursor; advanced by
+// UpdateCursorAfterMove.
+var int cursorX, cursorY;
+
 function InitFocus()
 {
     local PersonaScreenInventory s;
@@ -38,7 +55,88 @@ function InitFocus()
     if (first != None)
     {
         focused = first;
+        SeedCursor(first);
         s.SelectInventory(PersonaItemButton(first));
+    }
+}
+
+// Place the cursor on an item's top-left tile. Used when focus is set
+// without a directional move (InitFocus, ModApply enter, B-cancel).
+function SeedCursor(Window w)
+{
+    local PersonaInventoryItemButton btn;
+    btn = PersonaInventoryItemButton(w);
+    if (btn != None)
+    {
+        cursorX = btn.dragPosX;
+        cursorY = btn.dragPosY;
+    }
+}
+
+// An item's inclusive tile rectangle: top-left (dragPosX,dragPosY), span
+// invSlotsX/invSlotsY from the client Inventory. Returns false for a
+// non-item window (e.g. a stray winItems child) so callers can skip it.
+function bool GetItemRect(Window w, out int x0, out int y0, out int x1, out int y1)
+{
+    local PersonaInventoryItemButton btn;
+    local Inventory inv;
+
+    btn = PersonaInventoryItemButton(w);
+    if (btn == None)
+        return false;
+    inv = Inventory(btn.GetClientObject());
+    if (inv == None)
+        return false;
+
+    x0 = btn.dragPosX;
+    y0 = btn.dragPosY;
+    x1 = x0 + inv.invSlotsX - 1;
+    y1 = y0 + inv.invSlotsY - 1;
+    return true;
+}
+
+// Distance from scalar `v` to the inclusive span [lo..hi]: 0 if inside.
+function int SpanDist(int v, int lo, int hi)
+{
+    if (v < lo)
+        return lo - v;
+    if (v > hi)
+        return v - hi;
+    return 0;
+}
+
+// After landing on `next` via a (dx,dy) press, move the cursor onto the
+// edge tile it was entered on while preserving the lane (the
+// perpendicular coordinate), clamped into `next`'s span if a wrap or
+// off-lane landing put it outside.
+function UpdateCursorAfterMove(Window next, int dx, int dy)
+{
+    local int x0, y0, x1, y1;
+
+    if (!GetItemRect(next, x0, y0, x1, y1))
+        return;
+
+    if (dx != 0)
+    {
+        if (dx > 0)
+            cursorX = x0;
+        else
+            cursorX = x1;
+        if (cursorY < y0)
+            cursorY = y0;
+        else if (cursorY > y1)
+            cursorY = y1;
+    }
+    else if (dy != 0)
+    {
+        if (dy > 0)
+            cursorY = y0;
+        else
+            cursorY = y1;
+        if (cursorX < x0)
+            cursorX = x0;
+        else if (cursorX > x1)
+            cursorX = x1;
     }
 }
 
@@ -92,7 +190,10 @@ function bool HandleDPad(int dx, int dy)
         // weapon would run ClearSpecialHighlights and wipe the green
         // upgradeable-weapon highlights, and swap the info panel off the mod.
         if (next != None && next != focused)
+        {
             focused = next;
+            UpdateCursorAfterMove(next, dx, dy);
+        }
         return true;
     }
 
@@ -107,6 +208,7 @@ function bool HandleDPad(int dx, int dy)
     if (next != None && next != focused)
     {
         focused = next;
+        UpdateCursorAfterMove(next, dx, dy);
         s.SelectInventory(PersonaItemButton(next));
         class'DXControllerDebug'.static.DebugLog("DXC-NAV FOCUS item=" $ string(next));
     }
@@ -115,44 +217,60 @@ function bool HandleDPad(int dx, int dy)
 
 function Window FindNearestInDirection(PersonaScreenInventory s, Window from, int dx, int dy)
 {
+    // Phase 1: nearest item whose tile-rectangle lies strictly in the
+    // pressed direction, ranked by lane distance (distance from the
+    // cursor's row/column) then directional distance.
     local Window c, best;
-    local PersonaInventoryItemButton fromBtn, btn, bestBtn;
-    local float fx, fy, cx, cy, distance, bestDist;
-    local bool bSkip;
+    local int fx0, fy0, fx1, fy1;       // focused item's tile rect
+    local int jx0, jy0, jx1, jy1;       // candidate's tile rect
+    local int laneDist, dirDist, bestLane, bestDir;
+    local bool bInDir;
 
-    fromBtn = PersonaInventoryItemButton(from);
-    if (fromBtn == None || s.winItems == None)
+    if (s == None || s.winItems == None || !GetItemRect(from, fx0, fy0, fx1, fy1))
         return None;
 
-    fx = fromBtn.dragPosX + 0.5 * fromBtn.width  / s.invButtonWidth;
-    fy = fromBtn.dragPosY + 0.5 * fromBtn.height / s.invButtonHeight;
-
-    bestDist = 100000000.0;
     c = s.winItems.GetTopChild();
     while (c != None)
     {
-        btn = PersonaInventoryItemButton(c);
-        bSkip = false;
-        if (btn != None && c != from)
+        if (c != from && GetItemRect(c, jx0, jy0, jx1, jy1))
         {
-            cx = btn.dragPosX + 0.5 * btn.width  / s.invButtonWidth;
-            cy = btn.dragPosY + 0.5 * btn.height / s.invButtonHeight;
-
-            // Filter to the requested direction.
-            if (dx > 0 && cx <= fx) bSkip = true;
-            if (!bSkip && dx < 0 && cx >= fx) bSkip = true;
-            if (!bSkip && dy > 0 && cy <= fy) bSkip = true;
-            if (!bSkip && dy < 0 && cy >= fy) bSkip = true;
-
-            if (!bSkip)
+            // "In direction": candidate's near edge is strictly past the
+            // focused item's far edge along the pressed axis. Lane is the
+            // cursor's perpendicular coordinate.
+            bInDir = false;
+            if (dx > 0 && jx0 > fx1)
             {
-                distance = (cx - fx) * (cx - fx) + (cy - fy) * (cy - fy);
-                if (distance < bestDist)
-                {
-                    bestDist = distance;
-                    best = c;
-                    bestBtn = btn;
-                }
+                bInDir = true;
+                dirDist = jx0 - fx1;
+                laneDist = SpanDist(cursorY, jy0, jy1);
+            }
+            else if (dx < 0 && jx1 < fx0)
+            {
+                bInDir = true;
+                dirDist = fx0 - jx1;
+                laneDist = SpanDist(cursorY, jy0, jy1);
+            }
+            else if (dy > 0 && jy0 > fy1)
+            {
+                bInDir = true;
+                dirDist = jy0 - fy1;
+                laneDist = SpanDist(cursorX, jx0, jx1);
+            }
+            else if (dy < 0 && jy1 < fy0)
+            {
+                bInDir = true;
+                dirDist = fy0 - jy1;
+                laneDist = SpanDist(cursorX, jx0, jx1);
+            }
+
+            if (bInDir
+                && (best == None
+                    || laneDist < bestLane
+                    || (laneDist == bestLane && dirDist < bestDir)))
+            {
+                best = c;
+                bestLane = laneDist;
+                bestDir = dirDist;
             }
         }
         c = c.GetLowerSibling();
@@ -162,72 +280,55 @@ function Window FindNearestInDirection(PersonaScreenInventory s, Window from, in
 
 function Window FindWrapTarget(PersonaScreenInventory s, Window from, int dx, int dy)
 {
-    // Wrap: pick the item furthest in the OPPOSITE direction (same row/col when possible).
+    // Phase 2 (only when nothing is in-direction): wrap within the lane to
+    // the item furthest in the OPPOSITE direction. Prefer the cursor's
+    // lane (same row for a horizontal press, same column for vertical),
+    // then take the furthest-back item — so a left press lands on the
+    // row's rightmost item, a down press on the column's topmost, etc.
     local Window c, best;
-    local PersonaInventoryItemButton fromBtn, btn, bestBtn;
-    local float fy, cx, cy;
-    local float bestKey;
-    local bool sameAxis;
+    local int fx0, fy0, fx1, fy1;
+    local int jx0, jy0, jx1, jy1;
+    local int laneDist, dirKey, bestLane, bestDir;
 
-    fromBtn = PersonaInventoryItemButton(from);
-    if (fromBtn == None || s.winItems == None)
+    if (s == None || s.winItems == None || !GetItemRect(from, fx0, fy0, fx1, fy1))
         return None;
 
-    fy = fromBtn.dragPosY + 0.5;
+    c = s.winItems.GetTopChild();
+    while (c != None)
+    {
+        if (c != from && GetItemRect(c, jx0, jy0, jx1, jy1))
+        {
+            if (dx != 0)
+            {
+                laneDist = SpanDist(cursorY, jy0, jy1);
+                // Minimising dirKey maximises distance in the opposite
+                // direction: left press -> largest jx1, right -> smallest jx0.
+                if (dx < 0)
+                    dirKey = -jx1;
+                else
+                    dirKey = jx0;
+            }
+            else
+            {
+                laneDist = SpanDist(cursorX, jx0, jx1);
+                if (dy < 0)
+                    dirKey = -jy1;
+                else
+                    dirKey = jy0;
+            }
 
-    if (dx != 0)
-    {
-        // Horizontal wrap: pick item furthest in OPPOSITE direction on the same row.
-        if (dx > 0) bestKey = 100000000.0;
-        else bestKey = -100000000.0;
-        c = s.winItems.GetTopChild();
-        while (c != None)
-        {
-            btn = PersonaInventoryItemButton(c);
-            if (btn != None && c != from)
+            if (best == None
+                || laneDist < bestLane
+                || (laneDist == bestLane && dirKey < bestDir))
             {
-                cx = btn.dragPosX + 0.5;
-                cy = btn.dragPosY + 0.5;
-                sameAxis = Abs(cy - fy) < 0.5;
-                if (sameAxis)
-                {
-                    if ((dx > 0 && cx < bestKey) || (dx < 0 && cx > bestKey))
-                    {
-                        bestKey = cx;
-                        best = c;
-                        bestBtn = btn;
-                    }
-                }
+                best = c;
+                bestLane = laneDist;
+                bestDir = dirKey;
             }
-            c = c.GetLowerSibling();
         }
-        if (best != None)
-            return best;
+        c = c.GetLowerSibling();
     }
-    if (dy != 0)
-    {
-        // Vertical wrap: pick item furthest in OPPOSITE direction (any column).
-        if (dy > 0) bestKey = 100000000.0;
-        else bestKey = -100000000.0;
-        c = s.winItems.GetTopChild();
-        while (c != None)
-        {
-            btn = PersonaInventoryItemButton(c);
-            if (btn != None && c != from)
-            {
-                cy = btn.dragPosY + 0.5;
-                if ((dy > 0 && cy < bestKey) || (dy < 0 && cy > bestKey))
-                {
-                    bestKey = cy;
-                    best = c;
-                    bestBtn = btn;
-                }
-            }
-            c = c.GetLowerSibling();
-        }
-        return best;
-    }
-    return None;
+    return best;
 }
 
 function bool HandleActivate(byte button)
@@ -431,6 +532,7 @@ function EnterModApply(PersonaScreenInventory s)
 
     modSourceButton = focused;
     focused = first;
+    SeedCursor(first);
     subDialogActive = 'ModApply';
     class'DXControllerDebug'.static.DebugLog(
         "DXC-NAV MODAPPLY ENTER mod=" $ mod.ItemName $ " targets=" $ string(count));
@@ -503,7 +605,10 @@ function ResolveModApply(byte button)
     else if (button == 201)   // B
     {
         if (modSourceButton != None)
+        {
             focused = modSourceButton;
+            SeedCursor(modSourceButton);
+        }
         modSourceButton = None;
         subDialogActive = '';
         class'DXControllerDebug'.static.DebugLog("DXC-NAV MODAPPLY CANCEL");
