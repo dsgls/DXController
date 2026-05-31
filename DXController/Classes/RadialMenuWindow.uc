@@ -417,7 +417,7 @@ function DrawBackplate(GC gc, float cx, float cy)
     gc.DrawStretchedTexture(cx - PlateDiameter * 0.5, cy - PlateDiameter * 0.5,
                             PlateDiameter, PlateDiameter,
                             0, 0, PlateTexSize, PlateTexSize,
-                            Texture'DXControllerTex.WheelPlate');
+                            Texture'DXController.WheelPlate');
 }
 
 function DrawSlot(GC gc, int slotIdx, float cx, float cy,
