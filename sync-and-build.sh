@@ -28,8 +28,9 @@
 #        DeusExe/) into the build dir, LF -> CRLF. The repo stores .uc
 #        as LF; the ancient UCC.exe wants CRLF-terminated source, so
 #        each file is passed through `unix2dos -n` on the way in.
-#   4. copy DXControllerTex.u (pre-built texture package) into
-#      $BUILD_DIR/System/
+#   4. wipe+recreate $BUILD_DIR/DXController, sync overlay .uc, then
+#      generate textures (gen-wheel.py + png-to-pcx.py) into
+#      DXController/Textures/ for the #exec imports in DXControllerTextures.uc
 #   5. insert EditPackages=DeusExe into DeusEx.ini (idempotent)
 #   6. delete DeusEx.u + DeusExe.u; `echo n | UCC.exe make`. UCC prompts
 #      to overwrite DeusEx/Inc/DeusExClasses.h; we answer 'n'. UCC
@@ -64,6 +65,18 @@ if [[ ! -d "$BUILD_DIR" ]]; then
     exit 1
 fi
 
+# Wipe and recreate the DXController package dir so obsolete scripts or
+# textures from a prior build can't linger. Scoped to DXController/ only —
+# DeusEx/ (the full stock-source overlay, which we do not reconstruct here)
+# and DeusExe/ are left untouched. Done before the overlay sync and the
+# texture generation below, both of which write into this tree.
+if (( DRY_RUN )); then
+    echo "sync-and-build: (dry-run) would wipe and recreate $BUILD_DIR/DXController"
+else
+    rm -rf "$BUILD_DIR/DXController"
+    mkdir -p "$BUILD_DIR/DXController/Classes"
+fi
+
 # Sync the overlay .uc sources into the build dir, converting LF -> CRLF
 # on the way. The repo stores .uc as LF, but the ancient UCC.exe expects
 # CRLF-terminated source. `unix2dos -n` reads the LF source and writes a
@@ -83,15 +96,23 @@ for pkg in DXController DeusEx DeusExe; do
     done
 done
 
-# Stage the pre-built texture package. It is a binary package committed
-# at the repo root (not compiled from source); DXController references
-# Texture'DXControllerTex.*' so it must be in System/ before the
-# pass-2 compile and at runtime.
+# Generate the texture set and convert to the 8-bit PCX the package import
+# expects, writing into DXController/Textures/. The #exec lines in
+# DXControllerTextures.uc reference FILE=Textures\<name>.pcx (relative to
+# the package dir). The wheel art is generated fresh by gen-wheel.py; the
+# button glyphs are committed PNGs under assets/XboxSeries/.
+TEXDIR="$BUILD_DIR/DXController/Textures"
 if (( DRY_RUN )); then
-    echo "sync-and-build: (dry-run) would copy DXControllerTex.u -> $BUILD_DIR/System/"
+    echo "sync-and-build: (dry-run) would generate textures into $TEXDIR"
 else
-    cp "$REPO_DIR/DXControllerTex.u" "$BUILD_DIR/System/DXControllerTex.u"
-    echo "sync-and-build: copied DXControllerTex.u -> $BUILD_DIR/System/"
+    WHEELSRC="$(mktemp -d)"
+    trap 'rm -rf "$WHEELSRC"' EXIT
+    mkdir -p "$TEXDIR"
+    python3 "$REPO_DIR/assets/gen-wheel.py" "$WHEELSRC"
+    python3 "$REPO_DIR/assets/png-to-pcx.py" "$REPO_DIR/assets/XboxSeries" "$TEXDIR" --size 64   --mode masked
+    python3 "$REPO_DIR/assets/png-to-pcx.py" "$WHEELSRC"         "$TEXDIR" --size 1024 --mode masked
+    python3 "$REPO_DIR/assets/png-to-pcx.py" "$WHEELSRC/wedges"  "$TEXDIR" --size 1024 --mode grey
+    echo "sync-and-build: generated textures into $TEXDIR"
 fi
 
 # Insert EditPackages=DeusExe between DeusEx and DXController in
@@ -106,15 +127,6 @@ fi
 if ! grep -qE '^EditPackages=DeusExe[[:space:]]*$' "$INI"; then
     sed -i -E '/^EditPackages=DeusEx[[:space:]]*$/a EditPackages=DeusExe' "$INI"
     echo "sync-and-build: inserted EditPackages=DeusExe into $INI"
-fi
-
-# Insert EditPackages=DXControllerTex before DXController so UCC can
-# resolve Texture'DXControllerTex.*' literals during the pass-2 compile.
-# DXControllerTex is a pre-built texture-only package; it has no UScript
-# source and is never rebuilt by UCC (it's already on disk in System/).
-if ! grep -qE '^EditPackages=DXControllerTex[[:space:]]*$' "$INI"; then
-    sed -i -E '/^EditPackages=DXController[[:space:]]*$/i EditPackages=DXControllerTex' "$INI"
-    echo "sync-and-build: inserted EditPackages=DXControllerTex into $INI"
 fi
 
 if (( DRY_RUN )); then
