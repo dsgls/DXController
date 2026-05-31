@@ -630,9 +630,27 @@ event bool VirtualKeyPressed(EInputKey key, bool bRepeat)
     local byte bkey;        // byte alias for key — HandleActivate takes byte,
                             // and UE1 rejects EInputKey→byte implicit coercion.
     local Window top;
+    local string scrName;   // active screen class for the diagnostic log
+    local bool superResult; // captured Super result for the fall-through log
 
     p = DeusExPlayer(parentPawn);
     bkey = key;             // EInputKey IS a byte; assignment (not cast) compiles.
+
+    // Per-press diagnostic. Gated inside DebugLog (bGamepadDebugLog), so
+    // the call is unconditional here. Logs every key reaching the root
+    // handler and whether a nav controller is mounted; the matching
+    // "unmatched" line below fires only when nothing here consumes the
+    // press and it falls through to Super. Together they trace which
+    // presses the gamepad layer handled vs. let bubble — the pair that
+    // diagnosed the inventory drop/use crash.
+    if (activeNav != None && activeNav.screen != None)
+        scrName = string(activeNav.screen.Class);
+    else
+        scrName = "none";
+    class'DXControllerDebug'.static.DebugLog(
+        "DXC-VKP key=" $ Mid(string(GetEnum(enum'EInputKey', key)), 3)
+        $ "(" $ string(bkey) $ ") bRepeat=" $ string(bRepeat)
+        $ " nav=" $ string(activeNav != None) $ " screen=" $ scrName);
 
     // Re-hide cursor on gamepad button presses. Console.state Menuing
     // doesn't forward IST_Press button events to global.KeyEvent (only
@@ -797,7 +815,11 @@ event bool VirtualKeyPressed(EInputKey key, bool bRepeat)
             return true;
     }
 
-    return Super.VirtualKeyPressed(key, bRepeat);
+    superResult = Super.VirtualKeyPressed(key, bRepeat);
+    class'DXControllerDebug'.static.DebugLog(
+        "DXC-VKP key=" $ string(bkey) $ " unmatched, Super returned="
+        $ string(superResult));
+    return superResult;
 }
 
 function int FindPersonaScreenIndex(Class<PersonaScreenBaseWindow> c)
