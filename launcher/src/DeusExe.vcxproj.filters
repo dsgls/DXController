@@ -107,6 +107,9 @@
     <ClInclude Include="NativeHooks.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="OutputDeviceFileFlush.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="WinDrvPatch.h">
       <Filter>Header Files</Filter>
     </ClInclude>

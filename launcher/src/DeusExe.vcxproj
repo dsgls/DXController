@@ -142,6 +142,7 @@
     <ClInclude Include="LauncherDialog.h" />
     <ClInclude Include="Misc.h" />
     <ClInclude Include="NativeHooks.h" />
+    <ClInclude Include="OutputDeviceFileFlush.h" />
     <ClInclude Include="WinDrvPatch.h" />
     <ClInclude Include="RawInput.h" />
     <ClInclude Include="XInput.h" />

@@ -7,6 +7,7 @@
 #include "ExecHook.h"
 #include "NativeHooks.h"
 #include "WinDrvPatch.h"
+#include "OutputDeviceFileFlush.h"
 #include "Launcher.h"
 
 //Do not put before stdafx.h
@@ -28,7 +29,7 @@ INT WINAPI WinMain(HINSTANCE /*hInInstance*/, HINSTANCE /*hPrevInstance*/, LPSTR
 
     //Init core
     FMallocWindows Malloc;
-    FOutputDeviceFile Log;
+    FOutputDeviceFileFlush Log;
     FOutputDeviceWindowsError Error;
     FFeedbackContextWindows Warn;
 
