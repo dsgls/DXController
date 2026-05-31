@@ -427,6 +427,9 @@ function Window FindWrapTarget(PersonaScreenInventory s, Window from, int dx, in
 function bool HandleActivate(byte button)
 {
     local PersonaScreenInventory s;
+    local Inventory inv;
+    local DeusExPickup pk;
+    local bool bUseItem;
 
     if (subDialogActive == 'WheelAssign')
     {
@@ -457,8 +460,22 @@ function bool HandleActivate(byte button)
             return true;
         }
 
-        // Otherwise: Equip if enabled, else Use.
-        if (s.btnEquip != None && s.btnEquip.bIsSensitive)
+        // Otherwise classify by behaviour, not by class name: a
+        // stackable activatable consumable (drinks, biocells, food,
+        // cigarettes, medkits, vials, flares) is USED directly;
+        // everything else (weapons, grenades, binoculars, tools,
+        // wearable charged gear) is EQUIPPED. The use -> equip -> use
+        // fall-through keeps A always acting (no soft-lock) and is
+        // mirrored exactly by BuildHints' A label.
+        inv = None;
+        if (s.selectedItem != None)
+            inv = Inventory(s.selectedItem.GetClientObject());
+        pk = DeusExPickup(inv);
+        bUseItem = (pk != None && pk.bActivatable && pk.bCanHaveMultipleCopies);
+
+        if (bUseItem && s.btnUse != None && s.btnUse.bIsSensitive)
+            s.btnUse.PressButton();
+        else if (s.btnEquip != None && s.btnEquip.bIsSensitive)
             s.btnEquip.PressButton();
         else if (s.btnUse != None && s.btnUse.bIsSensitive)
             s.btnUse.PressButton();
@@ -714,6 +731,11 @@ function ResolveModApply(byte button)
 // branches on subDialogActive.
 function BuildHints()
 {
+    local PersonaScreenInventory s;
+    local Inventory inv;
+    local DeusExPickup pk;
+    local string aLabel;
+
     if (subDialogActive == 'ModApply')
     {
         AddHint("a", "Apply mod");
@@ -726,7 +748,37 @@ function BuildHints()
         AddHint("b", "Cancel");
         return;
     }
-    AddHint("a", "Use/Equip");
+
+    // Label A with the exact action it will perform on the focused
+    // item — derived from the same decision HandleActivate makes, so
+    // the hint can never disagree with the action. Drop the hint
+    // entirely when nothing is actionable rather than advertise a
+    // dead button.
+    s = PersonaScreenInventory(screen);
+    aLabel = "";
+    if (s != None && s.selectedItem != None)
+    {
+        inv = Inventory(s.selectedItem.GetClientObject());
+        pk = DeusExPickup(inv);
+
+        if (WeaponMod(inv) != None)                 // matches the ModApply short-circuit
+            aLabel = "Apply mod";
+        else if (pk != None && pk.bActivatable && pk.bCanHaveMultipleCopies
+                 && s.btnUse != None && s.btnUse.bIsSensitive)
+            aLabel = "Use";
+        else if (s.btnEquip != None && s.btnEquip.bIsSensitive)
+        {
+            if (inv == s.player.inHand || inv == s.player.inHandPending)
+                aLabel = "Unequip";
+            else
+                aLabel = "Equip";
+        }
+        else if (s.btnUse != None && s.btnUse.bIsSensitive)
+            aLabel = "Use";
+    }
+    if (aLabel != "")
+        AddHint("a", aLabel);
+
     AddHint("x", "Assign slot");
     AddHint("y", "Change ammo");
     AddHint("rs", "Drop");
