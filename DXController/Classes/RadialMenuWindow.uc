@@ -92,7 +92,7 @@ function Open(int newMode, optional Inventory item, optional bool bStickyMode, o
 function PopulateAugSlots()
 {
     local Augmentation aug;
-    local int i, j;
+    local int i, idx;
 
     // Clear the cache.
     for (i = 0; i < 10; i++)
@@ -101,28 +101,18 @@ function PopulateAugSlots()
     if (player == None || player.AugmentationSystem == None)
         return;
 
-    // Walk the aug list, insertion-sort by HotKeyNum into augSlots.
+    // Place augs by hotkey so slot i is always aug F(i+3). HotKeyNum 3..12
+    // are the activatable range (AugmentationManager.ActivateAugByKey
+    // rejects keyNum outside 0..9). Anything outside that range is
+    // silently dropped — a missing hotkey leaves a labelled-but-empty gap.
     aug = player.AugmentationSystem.FirstAug;
     while (aug != None)
     {
         if (aug.bHasIt && !aug.bAlwaysActive)
         {
-            // Find insertion index.
-            for (i = 0; i < 10; i++)
-            {
-                if (augSlots[i] == None)
-                    break;
-                if (aug.HotKeyNum < augSlots[i].HotKeyNum)
-                    break;
-            }
-
-            if (i < 10)
-            {
-                // Shift higher slots up.
-                for (j = 9; j > i; j--)
-                    augSlots[j] = augSlots[j-1];
-                augSlots[i] = aug;
-            }
+            idx = aug.HotKeyNum - 3;
+            if (idx >= 0 && idx < 10)
+                augSlots[idx] = aug;
         }
         aug = aug.next;
     }
