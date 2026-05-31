@@ -31,6 +31,7 @@ const WheelRadius      = 130.0;   // pixels from screen-centre to each icon's ce
 const IconSize         = 48.0;    // base icon edge length, pixels
 const IconSelScale     = 1.15;    // size multiplier for the selected slot
 const FramePadding     = 8.0;     // selection frame is icon size + 2 * this
+const NumberRadius     = 80.0;    // distance from centre to each slot-number label
 const PlateDiameter    = 360.0;   // backplate draw size, pixels (encloses the icon ring)
 const PlateTexSize     = 1024.0;  // WheelPlate source texture edge length
 
@@ -375,6 +376,7 @@ event DrawWindow(GC gc)
         {
             inv = belt.objects[i].GetItem();
             DrawSlot(gc, i, cx, cy, inv, (i == highlightedSlot), tintFrame);
+            DrawSlotNumber(gc, cx, cy, i, string(i));
         }
     }
     else if (mode == WM_Aug)
@@ -388,6 +390,7 @@ event DrawWindow(GC gc)
                 tintAug = colAugInactive;
             DrawAugSlot(gc, i, cx, cy, aug, (i == highlightedSlot),
                         tintFrame, tintAug);
+            DrawSlotNumber(gc, cx, cy, i, string(i + 3));
         }
     }
 
@@ -507,6 +510,36 @@ function DrawAugSlot(GC gc, int slotIdx, float cx, float cy,
     {
         DrawEmptyMark(gc, sx, sy);
     }
+}
+
+// Draws the small reference digit for a slot. Uniform dim cool-grey on
+// every slot — the highlighted slot does NOT brighten its number;
+// selection emphasis lives entirely in the slice glow (DrawHighlightSlice).
+// The colour is built with explicit A=255 and drawn via SetTextColor
+// (not SetTextColorRGB) — SetTextColorRGB leaves Color.A == 0 and the
+// text would draw fully transparent under DSTY_Masked. See CLAUDE.md
+// "GC.SetTextColorRGB / SetTileColorRGB leave Color.A == 0".
+function DrawSlotNumber(GC gc, float cx, float cy, int slotIdx, string label)
+{
+    local float angleDeg, angleRad;
+    local float sx, sy;
+    local Color dim;
+    local float boxW, boxH;
+
+    angleDeg = slotIdx * 36.0;
+    angleRad = angleDeg / DegreesPerRadian;
+    sx = cx + NumberRadius * Sin(angleRad);
+    sy = cy - NumberRadius * Cos(angleRad);
+
+    dim = ColorAlpha(140, 150, 165, 255);
+    boxW = 24;
+    boxH = 14;
+
+    gc.SetStyle(DSTY_Masked);
+    gc.SetTextColor(dim);
+    gc.SetFont(Font'DeusExUI.FontMenuSmall');
+    gc.SetAlignments(HALIGN_Center, VALIGN_Center);
+    gc.DrawText(sx - boxW * 0.5, sy - boxH * 0.5, boxW, boxH, label);
 }
 
 // Empty-slot marker: a thin dim outline box with a "+" inside, drawn at
