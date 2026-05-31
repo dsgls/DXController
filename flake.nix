@@ -14,34 +14,38 @@
         nixpkgs.legacyPackages.${system}.python3.withPackages (ps: [ ps.pillow ps.numpy ]);
     in
     {
-      # `nix run .#png-to-pcx` — convert a directory of PNGs to 8-bit PCX
-      # via assets/png-to-pcx.py. Run from the repo root. All arguments are
-      # forwarded to the script:
-      #   nix run .#png-to-pcx -- [SRC_DIR] [DST_DIR] [--size N]
-      # With no arguments the script's own defaults apply (assets/XboxSeries
-      # -> assets/XboxSeries-pcx).
+      # `nix run .#sync-and-build` — run the in-tree sync-and-build.sh with
+      # python3 + Pillow + numpy and dos2unix on PATH (the script generates
+      # textures and converts the LF .uc sources to the CRLF UCC.exe wants).
+      # Run from the repo root. Arguments pass through:
+      #   nix run .#sync-and-build           # sync + build
+      #   nix run .#sync-and-build -- -n      # dry run
+      #   BUILD_DIR=/path nix run .#sync-and-build
       apps = forAllSystems (system:
         let
           pkgs = nixpkgs.legacyPackages.${system};
-          png-to-pcx = pkgs.writeShellApplication {
-            name = "png-to-pcx";
-            runtimeInputs = [ (pythonFor system) ];
+          sync-and-build = pkgs.writeShellApplication {
+            name = "sync-and-build";
+            runtimeInputs = [ (pythonFor system) pkgs.dos2unix ];
+            # Exec the working-tree script (not a store copy) so REPO_DIR
+            # resolves to the live tree and picks up uncommitted edits.
             text = ''
-              exec python3 ${./assets/png-to-pcx.py} "$@"
+              exec "$PWD/sync-and-build.sh" "$@"
             '';
           };
         in
         {
-          png-to-pcx = {
+          sync-and-build = {
             type = "app";
-            program = "${png-to-pcx}/bin/png-to-pcx";
+            program = "${sync-and-build}/bin/sync-and-build";
           };
-          default = self.apps.${system}.png-to-pcx;
+          default = self.apps.${system}.sync-and-build;
         });
 
-      # `nix develop` — a shell with python3 + Pillow and dos2unix on
-      # PATH. dos2unix provides unix2dos, which sync-and-build.sh uses to
-      # convert the LF-stored .uc sources to the CRLF that UCC.exe wants.
+      # `nix develop` — a shell with python3 + Pillow + numpy and dos2unix
+      # on PATH. dos2unix provides unix2dos, which sync-and-build.sh uses to
+      # convert the LF-stored .uc sources to the CRLF that UCC.exe wants;
+      # Pillow + numpy drive the texture generation.
       devShells = forAllSystems (system:
         let pkgs = nixpkgs.legacyPackages.${system};
         in {
