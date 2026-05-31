@@ -33,8 +33,10 @@ jobs:
           sudo apt-get update
           # dos2unix provides unix2dos, used by the overlay step to
           # convert the LF-stored .uc sources to the CRLF UCC.exe wants.
+          # python3-pil (Pillow) + python3-numpy drive the texture
+          # generation step below (gen-wheel.py + png-to-pcx.py).
           sudo apt-get install -y --no-install-recommends \
-            wine wine32 wine64 dos2unix
+            wine wine32 wine64 dos2unix python3-pil python3-numpy
 
       - name: Initialize wine prefix
         run: |
@@ -72,9 +74,17 @@ jobs:
               unix2dos -n "$f" "$dst/$(basename "$f")"
             done
           done
-          # Pre-built texture package — staged into System/ for the
-          # pass-2 compile to resolve Texture'DXControllerTex.*'.
-          cp DXControllerTex.u "$RUNNER_TEMP/build/System/"
+          # Generate the texture set and convert to 8-bit PCX into the
+          # DXController package's Textures/ dir, mirroring sync-and-build.sh.
+          # The #exec lines in DXControllerTextures.uc reference
+          # FILE=Textures\<name>.pcx (relative to the package dir).
+          TEXDIR="$RUNNER_TEMP/build/DXController/Textures"
+          mkdir -p "$TEXDIR"
+          WHEELSRC="$(mktemp -d)"
+          python3 assets/gen-wheel.py "$WHEELSRC"
+          python3 assets/png-to-pcx.py assets/XboxSeries "$TEXDIR" --size 64   --mode masked
+          python3 assets/png-to-pcx.py "$WHEELSRC"        "$TEXDIR" --size 1024 --mode masked
+          python3 assets/png-to-pcx.py "$WHEELSRC/wedges" "$TEXDIR" --size 1024 --mode grey
 
       - name: Register mod packages with the compiler
         run: |
@@ -95,13 +105,6 @@ jobs:
           fi
           if ! grep -qxF 'EditPackages=DXController' "$INI"; then
             sed -i -E '/^EditPackages=DeusExe[[:space:]]*$/a EditPackages=DXController' "$INI"
-          fi
-          # DXControllerTex is a pre-built texture-only package (no UScript
-          # source, never rebuilt by UCC). It must be in EditPackages
-          # *before* DXController so UCC can resolve Texture'DXControllerTex.*'
-          # literals during the pass-2 compile.
-          if ! grep -qxF 'EditPackages=DXControllerTex' "$INI"; then
-            sed -i -E '/^EditPackages=DXController[[:space:]]*$/i EditPackages=DXControllerTex' "$INI"
           fi
           echo "--- EditPackages block after edit ---"
           grep -n EditPackages "$INI"
@@ -167,7 +170,6 @@ jobs:
             DeusEx.u
             DeusExe.u
             DXController.u
-            DXControllerTex.u
 
       - name: Stage release contents
         if: startsWith(github.ref, 'refs/tags/v')
@@ -177,7 +179,6 @@ jobs:
           REL="$RUNNER_TEMP/release/DXController-${GITHUB_REF_NAME}"
           mkdir -p "$REL"
           cp README.md "$REL/"
-          cp DXControllerTex.u "$REL/"
           cp "$RUNNER_TEMP/build/System/DeusEx.u" "$REL/"
           cp "$RUNNER_TEMP/build/System/DeusExe.u" "$REL/"
           cp "$RUNNER_TEMP/build/System/DXController.u" "$REL/"
