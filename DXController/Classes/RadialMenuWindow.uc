@@ -134,6 +134,7 @@ function Close(bool bApply)
     local HUDObjectBelt belt;
     local Inventory inv;
     local Augmentation aug;
+    local PersonaScreenInventory invScreen;
     local string actionLog;
 
     if (!bOpen)
@@ -212,15 +213,27 @@ function Close(bool bApply)
         {
             if (player != None && sourceItem != None)
             {
-                player.AddObjectToBelt(sourceItem, highlightedSlot, true);
+                // Assign through the inventory screen's belt helper, which
+                // updates BOTH the real HUD belt (root.hud.belt — what the
+                // wheel and the gameplay item bar read) and the screen's
+                // local objBelt display copy, atomically. This is the same
+                // path the drag-and-drop handler uses
+                // (PersonaScreenInventory drop -> invBelt.AddObject).
+                //
+                // Do NOT call PersonaScreenInventory.CleanBelt() here: it
+                // runs invBelt.hudBelt.ClearBelt() (emptying the real HUD
+                // belt) but only repopulates the local objBelt copy, so the
+                // gameplay belt and the weapon wheel are left permanently
+                // empty while the inventory screen's own bar still looks
+                // correct (it rebuilds from item flags on open). CleanBelt
+                // is only "safe" in stock because its sole SP caller,
+                // RefreshWindow, is dead under NM_Standalone.
+                invScreen = PersonaScreenInventory(stickySourceScreen);
+                if (invScreen != None && invScreen.invBelt != None)
+                    invScreen.invBelt.AddObject(sourceItem, highlightedSlot);
+                else
+                    player.AddObjectToBelt(sourceItem, highlightedSlot, true);
                 actionLog = "assign:" $ string(highlightedSlot);
-
-                // Refresh persona inventory belt display, if open.
-                if (stickySourceScreen != None
-                    && PersonaScreenInventory(stickySourceScreen) != None)
-                {
-                    PersonaScreenInventory(stickySourceScreen).CleanBelt();
-                }
             }
         }
     }

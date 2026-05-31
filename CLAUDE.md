@@ -450,6 +450,35 @@ Prefix all such logs with `DXC-<area>`: `DXC-WHEEL`, `DXC-NAV`,
   widget in response to input — other persona/menu screens have stable
   button sets, and list/conversation controllers keep `focused == None` —
   but the base-class guard immunizes every present and future controller.
+- **`PersonaScreenInventory.CleanBelt()` empties the *real* HUD belt and
+  only repopulates the screen's local copy — never call it to "refresh"
+  the belt.** The belt has three views over one source of truth (per-item
+  `bInObjectBelt`/`beltPos`): `root.hud.belt` (the gameplay item bar, and
+  what `RadialMenuWindow` reads), `invBelt.hudBelt` (an *alias pointer* to
+  `root.hud.belt`), and `invBelt.objBelt` (the inventory screen's private
+  `HUDObjectBelt`, rebuilt from item flags by its own `InitWindow ->
+  PopulateBelt` each time the screen opens). `CleanBelt`
+  (`../deusex-scripts/DeusEx/Classes/PersonaScreenInventory.uc:990`) does
+  `invBelt.hudBelt.ClearBelt(); invBelt.objBelt.ClearBelt();
+  invBelt.objBelt.PopulateBelt();` — so it nulls every slot of the real
+  HUD belt (`ClearBelt`/`ClearPosition` only `SetItem(None)`; the item
+  `bInObjectBelt`/`beltPos` flags are left intact) and then repopulates
+  *only* `objBelt`. Result: the gameplay item bar and the weapon wheel go
+  permanently empty (nothing recreates `root.hud.belt`), while the
+  inventory screen's own bar self-heals on every reopen (its fresh
+  `objBelt` repopulates from the still-intact item flags) — which masks
+  the breakage as "looks fine in the menu, broken in gameplay." `CleanBelt`
+  is only non-destructive in stock because its sole SP caller,
+  `RefreshWindow`, is dead under `NM_Standalone` (see the
+  `RefreshDisplay`-is-dead quirk above), so it effectively never runs. To
+  assign an item to a belt slot from a controller, use the canonical
+  inventory-screen path `PersonaScreenInventory.invBelt.AddObject(inv,
+  slot)` (the same call the drag-and-drop drop handler uses,
+  `PersonaScreenInventory.uc:1536`): it updates the player's real belt
+  (`player.RemoveObjectFromBelt` + `AddObjectToBelt`) *and* the local
+  `objBelt` together, non-destructively, and no-ops on slot 0 (the
+  NanoKeyRing slot). This bit the weapon-wheel belt assign in
+  `RadialMenuWindow.Close` (WM_BeltAssign).
 
 ## Source overlay model
 
