@@ -1,0 +1,56 @@
+//=============================================================================
+// DXControllerTextures — import-only holder. Compiles every DXController
+// texture into DXController.u via #exec; no runtime code. The logical-id ->
+// texture map lives in ControllerButtonHint (this file is the import layer).
+//
+//   Masked (palette index 0 = magenta key -> transparent):
+//     18 button glyphs (Group=XboxSeries) + WheelPlate (Group=Wheel)
+//   Non-masked greyscale (black adds nothing under additive DSTY_Translucent):
+//     Wedge0..Wedge9 (Group=Wheel) — the wheel's slice-highlight stamps
+//
+// FILE= is relative to the package dir (DXController/), so paths are
+// Textures\<name>.pcx. sync-and-build.sh / CI generate those PCX into
+// DXController/Textures/ before the compile (assets/gen-wheel.py +
+// assets/png-to-pcx.py). FLAGS=2 = PF_Masked (keys palette index 0, the
+// magenta key png-to-pcx.py writes) — this is the masked-import token the
+// stock scripts use (220 #exec lines in ../deusex-scripts use FLAGS=2;
+// none use MASKED=1). MIPS=Off everywhere: mandatory for masked textures
+// (mip blending corrupts the colour key) and fine for the wedges (drawn
+// near native size); the wedges omit FLAGS so they import non-masked.
+//=============================================================================
+class DXControllerTextures extends Object;
+
+// --- Button glyphs (masked, Group=XboxSeries) ---
+#exec TEXTURE IMPORT NAME=a          FILE=Textures\a.pcx          GROUP=XboxSeries MIPS=Off FLAGS=2
+#exec TEXTURE IMPORT NAME=b          FILE=Textures\b.pcx          GROUP=XboxSeries MIPS=Off FLAGS=2
+#exec TEXTURE IMPORT NAME=x          FILE=Textures\x.pcx          GROUP=XboxSeries MIPS=Off FLAGS=2
+#exec TEXTURE IMPORT NAME=y          FILE=Textures\y.pcx          GROUP=XboxSeries MIPS=Off FLAGS=2
+#exec TEXTURE IMPORT NAME=back       FILE=Textures\back.pcx       GROUP=XboxSeries MIPS=Off FLAGS=2
+#exec TEXTURE IMPORT NAME=share      FILE=Textures\share.pcx      GROUP=XboxSeries MIPS=Off FLAGS=2
+#exec TEXTURE IMPORT NAME=start      FILE=Textures\start.pcx      GROUP=XboxSeries MIPS=Off FLAGS=2
+#exec TEXTURE IMPORT NAME=dpad       FILE=Textures\dpad.pcx       GROUP=XboxSeries MIPS=Off FLAGS=2
+#exec TEXTURE IMPORT NAME=dpad_up    FILE=Textures\dpad_up.pcx    GROUP=XboxSeries MIPS=Off FLAGS=2
+#exec TEXTURE IMPORT NAME=dpad_down  FILE=Textures\dpad_down.pcx  GROUP=XboxSeries MIPS=Off FLAGS=2
+#exec TEXTURE IMPORT NAME=dpad_left  FILE=Textures\dpad_left.pcx  GROUP=XboxSeries MIPS=Off FLAGS=2
+#exec TEXTURE IMPORT NAME=dpad_right FILE=Textures\dpad_right.pcx GROUP=XboxSeries MIPS=Off FLAGS=2
+#exec TEXTURE IMPORT NAME=lb         FILE=Textures\lb.pcx         GROUP=XboxSeries MIPS=Off FLAGS=2
+#exec TEXTURE IMPORT NAME=ls         FILE=Textures\ls.pcx         GROUP=XboxSeries MIPS=Off FLAGS=2
+#exec TEXTURE IMPORT NAME=lt         FILE=Textures\lt.pcx         GROUP=XboxSeries MIPS=Off FLAGS=2
+#exec TEXTURE IMPORT NAME=rb         FILE=Textures\rb.pcx         GROUP=XboxSeries MIPS=Off FLAGS=2
+#exec TEXTURE IMPORT NAME=rs         FILE=Textures\rs.pcx         GROUP=XboxSeries MIPS=Off FLAGS=2
+#exec TEXTURE IMPORT NAME=rt         FILE=Textures\rt.pcx         GROUP=XboxSeries MIPS=Off FLAGS=2
+
+// --- Wheel plate (masked, Group=Wheel) ---
+#exec TEXTURE IMPORT NAME=WheelPlate FILE=Textures\WheelPlate.pcx GROUP=Wheel MIPS=Off FLAGS=2
+
+// --- Slice-highlight wedges (NON-masked greyscale, Group=Wheel) ---
+#exec TEXTURE IMPORT NAME=Wedge0 FILE=Textures\wedge0.pcx GROUP=Wheel MIPS=Off
+#exec TEXTURE IMPORT NAME=Wedge1 FILE=Textures\wedge1.pcx GROUP=Wheel MIPS=Off
+#exec TEXTURE IMPORT NAME=Wedge2 FILE=Textures\wedge2.pcx GROUP=Wheel MIPS=Off
+#exec TEXTURE IMPORT NAME=Wedge3 FILE=Textures\wedge3.pcx GROUP=Wheel MIPS=Off
+#exec TEXTURE IMPORT NAME=Wedge4 FILE=Textures\wedge4.pcx GROUP=Wheel MIPS=Off
+#exec TEXTURE IMPORT NAME=Wedge5 FILE=Textures\wedge5.pcx GROUP=Wheel MIPS=Off
+#exec TEXTURE IMPORT NAME=Wedge6 FILE=Textures\wedge6.pcx GROUP=Wheel MIPS=Off
+#exec TEXTURE IMPORT NAME=Wedge7 FILE=Textures\wedge7.pcx GROUP=Wheel MIPS=Off
+#exec TEXTURE IMPORT NAME=Wedge8 FILE=Textures\wedge8.pcx GROUP=Wheel MIPS=Off
+#exec TEXTURE IMPORT NAME=Wedge9 FILE=Textures\wedge9.pcx GROUP=Wheel MIPS=Off
