@@ -357,6 +357,20 @@ Prefix all such logs with `DXC-<area>`: `DXC-WHEEL`, `DXC-NAV`,
   `Solid` pattern is still present in `RadialMenuWindow.uc` (empty-slot
   placeholder ~472, panel dim ~613) — likely also drawing ~nothing;
   unverified, not yet changed.
+- **For a translucent-tinted glow over arbitrary geometry, use
+  `DSTY_Translucent` over a greyscale-on-black texture.** UE1's
+  additive blend (`framebuffer += texel × tileColor`) makes black
+  texels add nothing, so the visible shape is the texture's lit
+  pixels and the brightness/colour is the tile colour at draw time.
+  Useful when `GC` has no primitive for the shape — e.g.
+  non-axis-aligned arcs, pie slices, soft falloffs — and when the
+  shape needs to track a theme accent (set tile colour to
+  `colBorder`). **Background must be pure black, NOT magenta-keyed**;
+  magenta-keyed textures import as masked, and a `DSTY_Translucent`
+  draw of a masked-import texture renders the magenta as a hot pink
+  glow rather than transparent. The wheel's slice highlight uses
+  this — see `RadialMenuWindow.DrawHighlightSlice` and the
+  `Wedge0..Wedge9` non-masked imports in `DXControllerTextures.uc`.
 - **`GC.SetTextColorRGB` / `SetTileColorRGB` leave `Color.A == 0`.**
   Both helpers (`../deusex-scripts/Extension/Classes/GC.uc:157,172`)
   build a `Color` from R/G/B only and never touch the alpha byte, so it
@@ -496,6 +510,18 @@ Prefix all such logs with `DXC-<area>`: `DXC-WHEEL`, `DXC-NAV`,
   Reference textures as `Texture'DXController.<name>'` (the old
   `Texture'DXControllerTex.*'` package is gone). Same-package compile order
   <was / was not> an issue (UCC runs all `#exec` before linking).
+- **Index-by-int arrays of Texture refs can be initialised from
+  `defaultproperties` with `arr(i)=Texture'Pkg.Name'`.** UE1
+  resolves the texture literal at link time, so as long as the
+  package containing the texture is built in the same pass (or an
+  earlier pass) as the class referencing it, the array slots are
+  populated before any draw call. This avoids a per-frame switch
+  statement for textures keyed off an integer. The wheel's
+  `wedgeTex[10]` uses this — see `RadialMenuWindow.uc`
+  `defaultproperties` and the `Wedge0..Wedge9` imports in
+  `DXControllerTextures.uc`. The same pattern would work for any
+  small fixed-size texture lookup (per-slot, per-state, per-quadrant)
+  in the DXController package.
 
 ## Source overlay model
 
