@@ -412,6 +412,44 @@ Prefix all such logs with `DXC-<area>`: `DXC-WHEEL`, `DXC-NAV`,
   have no primitive at all and must be baked into a texture.
   `RadialMenuWindow.DrawEmptyMark` draws its `+` as two thin
   `DrawPattern` rects for exactly this reason.
+- **UE1 does NOT null `Object`/`Window` references when the target is
+  `Destroy()`ed — a stored child-window pointer dangles (and the freed
+  slot is reused).** Only `Actor` references get swept to `None` on
+  destruction; `Window` extends `Object`, not `Actor`, so a held pointer
+  stays non-`None` and points at freed (or recycled) memory. This bit the
+  menu focus overlay: a nav controller stores `MenuNavController.focused`
+  = a screen child button, and vanilla can free that button while the
+  controller stays attached — dropping (R-stick) or using up a single-use
+  consumable (A) in the inventory runs
+  `PersonaScreenInventory.RemoveSelectedItem → selectedItem.Destroy()`
+  (`../deusex-scripts/DeusEx/Classes/PersonaScreenInventory.uc:815`).
+  `focused` then dangles and `MenuFocusOverlay.DrawWindow →
+  MenuNavController.GetFocusedRect` dereferences freed memory on the next
+  frame, crashing *inside* `DrawWindow` (the press itself is handled fine;
+  the crash is one frame later in the draw path). You cannot null-check
+  your way out — the pointer is non-`None`, and the slot may be reused by
+  a different live window. Detect staleness with a **downward**
+  live-descendant walk from the (always-live) `screen` —
+  `MenuNavController.IsDescendantOf` / `IsFocusedLive`, pointer-compares
+  only. Never call `focused.GetParent()` (or cast/`IsA` it) on a possibly
+  dead pointer — that dereferences freed memory. The walk is safe because
+  `Window.Destroy()` (native 1409) unlinks the window from its parent's
+  child list immediately: vanilla `RefreshInventoryItemButtons`
+  (`PersonaScreenInventory.uc:641-652`) grabs `GetLowerSibling()` *before*
+  `Destroy()`, proving the list stays consistent across a destroy.
+  Recovery runs from `ControllerRootWindow.Tick` (between frames, where
+  `SelectInventory` is legal) via the `OnFocusedDestroyed` hook, never
+  from the draw path; `MenuFocusOverlay.GetFocusedRect` keeps the same
+  liveness guard as defense-in-depth. Corollary: the periodic
+  `PersonaScreenInventory.RefreshWindow` rebuild — which `Destroy()`s and
+  recreates *every* item button every 0.25 s — is **dead in single-player**
+  (it is driven by `DeusExRootWindow.RefreshDisplay`, which
+  `DeusExPlayer.RefreshSystems` skips on `NM_Standalone`; see the
+  `RefreshDisplay`-is-dead quirk above), so in SP only an explicit
+  drop/use churns buttons. Scope: today only the inventory frees a focused
+  widget in response to input — other persona/menu screens have stable
+  button sets, and list/conversation controllers keep `focused == None` —
+  but the base-class guard immunizes every present and future controller.
 
 ## Source overlay model
 

@@ -533,6 +533,16 @@ function Tick(float deltaSeconds)
         }
     }
 
+    // 2.5 Recover focus if the focused window was Destroyed underneath the
+    //     active controller (an inventory item dropped or used up). UE1
+    //     leaves activeNav.focused dangling; without this, the very next
+    //     MenuFocusOverlay.DrawWindow would dereference it and crash. Runs
+    //     before the deferred-init block below so a base-class reseed lands
+    //     this same frame; InvNavController re-homes focus to the nearest
+    //     neighbour instead of restarting.
+    if (activeNav != None && activeNav.focused != None && !activeNav.IsFocusedLive())
+        activeNav.OnFocusedDestroyed();
+
     // 3. Deferred focus init for screens whose children populate lazily.
     //    Gated on bFocusInitDone, not `focused == None`: list/scroll
     //    controllers keep `focused == None` permanently, so the old

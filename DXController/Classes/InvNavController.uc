@@ -140,6 +140,99 @@ function UpdateCursorAfterMove(Window next, int dx, int dy)
     }
 }
 
+// The focused item button was Destroyed out from under us — the item was
+// dropped (R-stick) or a single-use consumable was used up (A), and
+// vanilla RemoveSelectedItem ran selectedItem.Destroy(). Re-home focus to
+// the nearest remaining item to the preserved cursor cell — i.e. the next
+// neighbour — rather than restarting at the first item. The cursor cell
+// (cursorX, cursorY) is plain ints, so it survives the button's
+// destruction and anchors the choice. Called from ControllerRootWindow.
+// Tick (between frames), where SelectInventory is safe to call.
+function OnFocusedDestroyed()
+{
+    local PersonaScreenInventory s;
+    local Window nbr;
+
+    s = PersonaScreenInventory(screen);
+    if (s == None)
+    {
+        Super.OnFocusedDestroyed();
+        return;
+    }
+
+    nbr = FindNearestToCursor(s);
+    if (nbr == None)
+    {
+        // Nothing left to focus — shouldn't happen (the NanoKeyRing is
+        // non-droppable and non-usable, so an item always remains), but
+        // stay safe and fall back to the base reseed path.
+        Super.OnFocusedDestroyed();
+        return;
+    }
+
+    focused = nbr;
+    ClampCursorInto(nbr);
+    s.SelectInventory(PersonaItemButton(nbr));
+    class'DXControllerDebug'.static.DebugLog("DXC-NAV INV-RECOVER focus=" $ string(nbr));
+}
+
+// Nearest remaining inventory item to the logical cursor cell, by tile
+// Manhattan distance, tie-broken in reading order (top-most then
+// left-most). The cursor sits in the now-vacated tiles of the removed
+// item, so the nearest surviving item is its spatial neighbour.
+function Window FindNearestToCursor(PersonaScreenInventory s)
+{
+    local Window c, best;
+    local int x0, y0, x1, y1;
+    local int d, bestD;
+    local PersonaInventoryItemButton btn, bestBtn;
+
+    if (s == None || s.winItems == None)
+        return None;
+
+    c = s.winItems.GetTopChild();
+    while (c != None)
+    {
+        if (GetItemRect(c, x0, y0, x1, y1))
+        {
+            d = SpanDist(cursorX, x0, x1) + SpanDist(cursorY, y0, y1);
+            btn = PersonaInventoryItemButton(c);
+            if (best == None
+                || d < bestD
+                || (d == bestD
+                    && (btn.dragPosY < bestBtn.dragPosY
+                        || (btn.dragPosY == bestBtn.dragPosY
+                            && btn.dragPosX < bestBtn.dragPosX))))
+            {
+                best = c;
+                bestD = d;
+                bestBtn = btn;
+            }
+        }
+        c = c.GetLowerSibling();
+    }
+    return best;
+}
+
+// Clamp the preserved cursor cell into w's tile rect, so a subsequent
+// D-pad move continues from where the cursor was rather than jumping to a
+// corner.
+function ClampCursorInto(Window w)
+{
+    local int x0, y0, x1, y1;
+
+    if (!GetItemRect(w, x0, y0, x1, y1))
+        return;
+    if (cursorX < x0)
+        cursorX = x0;
+    else if (cursorX > x1)
+        cursorX = x1;
+    if (cursorY < y0)
+        cursorY = y0;
+    else if (cursorY > y1)
+        cursorY = y1;
+}
+
 function Window FirstItemButton(PersonaScreenInventory s)
 {
     // Topmost (smallest dragPosY then smallest dragPosX) item in winItems.

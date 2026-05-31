@@ -133,7 +133,10 @@ function bool GetFocusedRect(out float x, out float y, out float w, out float h)
     local Window root;
     local float lx, ly;
 
-    if (focused == None)
+    // A focused child window can be Destroyed out from under us (an
+    // inventory item dropped or used up); UE1 does not null the reference,
+    // so guard the dereference with a live-descendant check.
+    if (!IsFocusedLive())
         return false;
 
     root = focused.GetRootWindow();
@@ -143,6 +146,54 @@ function bool GetFocusedRect(out float x, out float y, out float w, out float h)
     w = focused.width;
     h = focused.height;
     return true;
+}
+
+// True if `target` is somewhere in `parent`'s live descendant tree.
+// Pointer-equality compares only — it never dereferences `target`, so it
+// is safe to pass a stale/dangling Window pointer. (UE1 does not null
+// Object references when the object is Destroyed, and reuses the freed
+// slot.) Always walk DOWN from a known-live `parent`; never call
+// GetParent() on a possibly-dead target — that would dereference freed
+// memory. Static so ComputerScreenNavSub (a separate Object-rooted
+// hierarchy) could reuse it too.
+static function bool IsDescendantOf(Window parent, Window target)
+{
+    local Window c;
+
+    if (parent == None || target == None)
+        return false;
+
+    c = parent.GetTopChild();
+    while (c != None)
+    {
+        if (c == target)
+            return true;
+        if (IsDescendantOf(c, target))
+            return true;
+        c = c.GetLowerSibling();
+    }
+    return false;
+}
+
+// True if `focused` still points at a live descendant of `screen`. The
+// screen is always live while a controller is active — DescendantRemoved
+// clears activeNav when the screen itself is torn down — so the walk
+// roots at a valid window. Detects a focused child window Destroyed out
+// from under us (e.g. an inventory item dropped or used up).
+function bool IsFocusedLive()
+{
+    return focused != None && IsDescendantOf(screen, focused);
+}
+
+// Called from ControllerRootWindow.Tick when `focused` has been Destroyed
+// underneath the active controller. Default: forget focus and clear
+// bFocusInitDone so the deferred-init retry reseeds from scratch. Override
+// to re-home focus to a neighbour instead of restarting (see
+// InvNavController).
+function OnFocusedDestroyed()
+{
+    focused = None;
+    bFocusInitDone = false;
 }
 
 // Returns true if Start/Back may toggle the persona menu while this
