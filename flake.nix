@@ -8,9 +8,10 @@
       systems = [ "x86_64-linux" "aarch64-linux" "x86_64-darwin" "aarch64-darwin" ];
       forAllSystems = f: nixpkgs.lib.genAttrs systems (system: f system);
 
-      # python3 with Pillow (PIL) — the only dependency of png-to-pcx.py.
+      # python3 with Pillow (PIL) for png-to-pcx.py and numpy for
+      # gen-wheel.py's per-pixel wheel/wedge rendering.
       pythonFor = system:
-        nixpkgs.legacyPackages.${system}.python3.withPackages (ps: [ ps.pillow ]);
+        nixpkgs.legacyPackages.${system}.python3.withPackages (ps: [ ps.pillow ps.numpy ]);
     in
     {
       # `nix run .#png-to-pcx` — convert a directory of PNGs to 8-bit PCX
