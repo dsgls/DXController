@@ -73,8 +73,8 @@ UseJoystick=False
 
 ### `System\User.ini`
 
-Paste the block below into **both** the `[Engine.Input]` and the
-`[Extension.InputExt]` sections, replacing any existing `Joy*` lines:
+Paste the block below into `[Extension.InputExt]` section, replacing any
+existing `Joy*` lines:
 
 ```ini
 Joy1=Jump
