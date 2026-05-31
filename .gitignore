@@ -4,7 +4,3 @@ gamedir
 
 /docs/superpowers
 /docs/tmp
-
-# Generated files, run assets/png-to-pcx.py to create from source PNGs
-assets/XboxSeries-pcx/
-assets/WheelPlate-pcx/
