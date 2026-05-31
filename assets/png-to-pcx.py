@@ -1,8 +1,15 @@
 #!/usr/bin/env python3
-"""Convert a directory of PNGs to square 8-bit PCX with palette index 0 =
-magenta key for UE1 masked-texture import.
+"""Convert a directory of PNGs to 8-bit PCX for UE1 #exec Texture Import.
 
-Usage: png-to-pcx.py [SRC_DIR] [DST_DIR] [--size SIZE]
+Two modes:
+  masked (default) — square PCX, palette index 0 = magenta key (255,0,255)
+    for masked/transparent import. Used for the button glyphs and the
+    wheel plate.
+  grey            — PCX with an explicit linear grey palette (index i ->
+    (i,i,i)), no key, for non-masked additive textures (the wheel's
+    slice-highlight wedges).
+
+Usage: png-to-pcx.py [SRC_DIR] [DST_DIR] [--size SIZE] [--mode masked|grey]
 
 SRC_DIR and DST_DIR are optional and default to the XboxSeries/ and
 XboxSeries-pcx/ directories next to this script. SIZE is the output edge
@@ -19,7 +26,7 @@ DEFAULT_DST_DIR = Path(__file__).parent / "XboxSeries-pcx"
 DEFAULT_SIZE = 64
 
 
-def convert(src: Path, dst: Path, size: tuple) -> None:
+def convert_masked(src: Path, dst: Path, size: tuple) -> None:
     img = Image.open(src).convert("RGBA").resize(size, Image.LANCZOS)
 
     # Binarize alpha: anything below threshold becomes the key; everything
@@ -59,6 +66,28 @@ def convert(src: Path, dst: Path, size: tuple) -> None:
     out.save(dst, format="PCX")
 
 
+def convert_grey(src: Path, dst: Path, size: tuple) -> None:
+    """Convert a greyscale PNG to 8-bit PCX with an explicit linear grey
+    palette (index i -> (i, i, i)). No magenta key: the result is imported
+    non-masked, so its black background stays drawn and adds nothing under
+    the additive DSTY_Translucent blend the wheel highlight uses. Index 0
+    is true black; the full 0..255 ramp is preserved."""
+    img = Image.open(src).convert("L").resize(size, Image.LANCZOS)
+
+    # Reinterpret the L pixel buffer as palette indices (one byte/pixel),
+    # then attach a linear grey palette so index == grey level. Building
+    # the palette explicitly (not relying on PIL's L->PCX default) keeps
+    # the output deterministic across Pillow versions.
+    out = Image.frombytes("P", size, img.tobytes())
+    palette = bytearray(768)
+    for i in range(256):
+        palette[i * 3 + 0] = i
+        palette[i * 3 + 1] = i
+        palette[i * 3 + 2] = i
+    out.putpalette(bytes(palette))
+    out.save(dst, format="PCX")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Convert a directory of PNGs to UE1 masked-texture PCX files."
@@ -75,6 +104,11 @@ def main() -> None:
         "--size", type=int, default=DEFAULT_SIZE,
         help=f"output edge length in pixels, square (default: {DEFAULT_SIZE})",
     )
+    parser.add_argument(
+        "--mode", choices=["masked", "grey"], default="masked",
+        help="masked = magenta-key transparency (default); grey = linear "
+             "greyscale, no key, for additive textures",
+    )
     args = parser.parse_args()
 
     if not args.src_dir.is_dir():
@@ -82,6 +116,7 @@ def main() -> None:
 
     args.dst_dir.mkdir(parents=True, exist_ok=True)
     pngs = sorted(args.src_dir.glob("*.png"))
+    convert = convert_masked if args.mode == "masked" else convert_grey
     for src in pngs:
         dst = args.dst_dir / (src.stem + ".pcx")
         convert(src, dst, (args.size, args.size))
