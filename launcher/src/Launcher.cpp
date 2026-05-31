@@ -217,6 +217,16 @@ CLauncher::CLauncher()
         }
         GIsRunning = 0;
 
+        if (GIsClient) //Restore the global cursor state the main loop mutated (ClipCursor/ShowCursor)
+        {
+            //Windows reclaims per-process cursor state on process exit, but a fullscreen
+            //DX app that exits while the cursor is clipped/hidden can leave the session's
+            //cursor wedged (clipped to the old rect, or hidden until reboot), so release it
+            //explicitly here.
+            ClipCursor(NULL); //Drop any clip rect set in the loop; never set elsewhere
+            while (ShowCursor(TRUE) < 0) {} //Undo any net ShowCursor(FALSE) so the cursor is visible
+        }
+
         GLogWindow->Log(NAME_Title, LocalizeGeneral("Exit"));
     }
 
