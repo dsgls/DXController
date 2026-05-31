@@ -25,7 +25,6 @@ The release `.zip` contains everything you need:
 | `DeusEx.u`          | Stock package with small controller hooks added        |
 | `DeusExe.u`         | Launcher support package                               |
 | `DXController.u`    | The mod                                                |
-| `DXControllerTex.u` | Button-glyph and weapon-wheel textures                 |
 
 ## Requirements
 
@@ -39,7 +38,7 @@ The release `.zip` contains everything you need:
 
 ## Install
 
-1. Copy all five files from the release `.zip` into the game's `System`
+1. Copy all four files from the release `.zip` into the game's `System`
    folder (e.g. `C:\GOG Games\Deus Ex GOTY\System\`), overwriting
    `DeusEx.u`.
 

@@ -10,8 +10,7 @@ This is the script-side mod for the DXController project. It builds the
 DXController/Classes/*.uc   the mod — one package, compiles to DXController.u
 DeusEx/Classes/*.uc         overlay edits to stock DeusEx classes (rebuilds DeusEx.u)
 DeusExe/Classes/*.uc        classes vendored from the DeusExe-XInput launcher repo
-DXControllerTex.u           pre-built texture package (button glyphs, wheel backplate)
-assets/                     source art for DXControllerTex.u + conversion tooling
+assets/                     source art + generators for the DXController textures
 sync-and-build.sh           rsync + two-pass UCC build
 .github/workflows/build.yml CI build and release packaging
 CLAUDE.md                   authoritative engine-quirk and convention notes
@@ -62,11 +61,10 @@ ucc.exe batchexport DeusEx.u Class uc ..\DeusEx\Classes
 
 `DeusEx.ini` must have:
 ```ini
-EditPackages=DXControllerTex
 EditPackages=DXController
 ```
 
-The script adds these automatically.
+The script adds this automatically.
 
 ### Build
 
@@ -74,10 +72,15 @@ The dev env is set up to run in WSL. Symlink your game directory to
 `gamedir/` at the repository root.
 
 ```bash
-./sync-and-build.sh        # rsync overlays → gamedir, two-pass UCC build
-./sync-and-build.sh -n     # dry-run rsync, skip the build
-BUILD_DIR=/path ./sync-and-build.sh   # override the build dir
+nix run .#sync-and-build         # generate textures, sync overlays, two-pass UCC build
+nix run .#sync-and-build -- -n   # dry run (list actions, skip the build)
+BUILD_DIR=/path nix run .#sync-and-build
 ```
+
+The `sync-and-build` flake app puts python3 + Pillow + numpy and dos2unix
+on PATH; the script generates the texture PCX into
+`gamedir/DXController/Textures/` before the compile, and the `#exec` lines
+in `DXControllerTextures.uc` fold them into `DXController.u`.
 
 The build runs `UCC.exe make` twice: pass 1 rebuilds `DeusEx.u`
 (tolerating a known UCC GPF), pass 2 builds `DeusExe.u` and
@@ -92,7 +95,7 @@ Output lands in `gamedir/System/`: `DeusEx.u`, `DeusExe.u`,
 
 `.github/workflows/build.yml` builds on every push to `master` and, on
 a `v*` tag, assembles the release `.zip`: the three built `.u` files,
-the pre-built `DXControllerTex.u`, `README.md`, and the matching
+`README.md`, and the matching
 `DeusExe.exe` downloaded from the
 [DeusExe-XInput releases](https://github.com/dsgls/DeusExe-XInput/releases).
 The bundled launcher version is pinned by `DEUSEXE_XINPUT_VERSION` in
@@ -150,15 +153,23 @@ fuller language rundown.
 
 ## Asset tooling
 
-`DXControllerTex.u` is a binary texture package committed at the repo
-root. Its source art lives in `assets/`; `assets/png-to-pcx.py`
-converts PNGs to the 8-bit PCX format the package import expects. The
-`flake.nix` provides a Python + Pillow environment for it:
+All DXController textures are generated at build time and compiled into
+`DXController.u` via `#exec Texture Import` in
+`DXController/Classes/DXControllerTextures.uc` — there is no separate
+texture package. `sync-and-build.sh` (and CI) produce the PCX the imports
+expect:
 
-```bash
-nix run .#png-to-pcx -- [SRC_DIR] [DST_DIR] [--size N]
-nix develop          # shell with python3 + Pillow
-```
+- `assets/gen-wheel.py` renders the weapon-wheel plate
+  (`WheelPlate.png`) and the ten slice-highlight wedges
+  (`wedges/wedge0..9.png`). It is parametric — tuning knobs at the top of
+  the file; same inputs give byte-identical output.
+- `assets/png-to-pcx.py` converts PNG → 8-bit PCX in two modes: `masked`
+  (magenta key at palette index 0, for the glyphs and the plate) and
+  `grey` (linear grey palette, no key, for the additive wedges).
+- The button glyphs are hand-authored PNGs under `assets/XboxSeries/`.
 
-Building the DXControllerTex.u needs to be done in UnrealEd.
+The build writes the PCX into `<gamedir>/DXController/Textures/`; the
+`#exec FILE=Textures\<name>.pcx` paths are relative to the package dir.
+CI mirrors the same generation steps. python3 + Pillow + numpy are
+provided by the `sync-and-build` flake app and `nix develop`.
 

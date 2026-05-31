@@ -75,24 +75,24 @@ When you need to read a stock class, look it up under
 From WSL:
 
 ```bash
-./sync-and-build.sh   # sync overlay .uc into build dir, two-pass UCC build
+nix run .#sync-and-build         # generate textures, sync overlays, two-pass UCC build
+nix run .#sync-and-build -- -n   # dry run (list actions, skip the build)
+BUILD_DIR=/path nix run .#sync-and-build
 ```
 
 The script copies the overlay `.uc` sources (`DXController/`, `DeusEx/`,
 `DeusExe/`) into `$BUILD_DIR/`, then runs `UCC.exe make` twice: pass 1
 deletes and rebuilds `DeusEx.u` (tolerating a known UCC GPF — see below);
-pass 2 deletes and rebuilds `DXController.u` in a fresh UCC process. Pass
-`-n` for a dry run (lists files, no build). Override the build dir with
-`BUILD_DIR=/path`.
+pass 2 deletes and rebuilds `DXController.u` in a fresh UCC process.
 
 The repo stores `.uc` source as LF, but the ancient `UCC.exe` wants
 CRLF-terminated source. The sync step passes each overlay file through
 `unix2dos -n` on the way into the build dir, so only our overlay files
 are converted — the full stock `DeusEx/Classes/` tree is left untouched.
-`unix2dos` (from the `dos2unix` package) is therefore a build
-prerequisite: run `sync-and-build.sh` under `nix develop` (the flake dev
-shell provides it) or install `dos2unix`. The CI workflow installs it
-via `apt`.
+`unix2dos` (from the `dos2unix` package), python3, Pillow, and numpy are
+build prerequisites: the `sync-and-build` flake app puts them all on
+PATH, or run under `nix develop` (the flake dev shell provides them
+too), or install them directly. The CI workflow installs them via `apt`.
 
 `UCC.exe` lives in `…/System/`. The compiler walks every package in
 `EditPackages` and emits `<Pkg>.u` next to it. If a `.u` already exists it is
@@ -380,7 +380,7 @@ Prefix all such logs with `DXC-<area>`: `DXC-WHEEL`, `DXC-NAV`,
   texture, use `DrawStretchedTexture(destX, destY, destW, destH, srcX,
   srcY, srcWidth, srcHeight, tx)` (`GC.uc:129`), which takes a source
   *rect* and maps it onto the destination rect. This bit
-  `ControllerButtonHint.DrawHint` (the 64×64 DXControllerTex glyphs
+  `ControllerButtonHint.DrawHint` (the 64×64 DXController button glyphs
   drew invisibly at 16px until switched to `DrawStretchedTexture`). Note
   `RadialMenuWindow` draws inventory/aug icons with `DrawTexture` at
   `IconSize` (~48) — fine only as long as those icons are ≤ that size;
@@ -479,6 +479,23 @@ Prefix all such logs with `DXC-<area>`: `DXC-WHEEL`, `DXC-NAV`,
   `objBelt` together, non-destructively, and no-ops on slot 0 (the
   NanoKeyRing slot). This bit the weapon-wheel belt assign in
   `RadialMenuWindow.Close` (WM_BeltAssign).
+- **Textures compile into `DXController.u` via an `#exec` holder, not a
+  separate package.** `DXController/Classes/DXControllerTextures.uc`
+  (`class … extends Object;`, no runtime code) carries all 29
+  `#exec TEXTURE IMPORT` lines: 18 button glyphs + `WheelPlate` (masked,
+  palette index 0 = magenta key) and `Wedge0..Wedge9` (non-masked
+  greyscale, black background — for additive `DSTY_Translucent` draws).
+  Masked imports use `FLAGS=2` (PF_Masked, keys palette index 0 = the
+  magenta key) — the token all stock `#exec TEXTURE IMPORT` lines use
+  (`MASKED=1` appears nowhere in `../deusex-scripts/`); the wedges omit
+  FLAGS to import non-masked. `MIPS=Off` on all (mip blending corrupts a
+  masked key). `FILE=` is **relative to the package dir** (`DXController/`),
+  so paths are `Textures\<name>.pcx`; `sync-and-build.sh` / CI generate
+  those PCX into `<gamedir>/DXController/Textures/` (via
+  `assets/gen-wheel.py` + `assets/png-to-pcx.py`) before the pass-2 compile.
+  Reference textures as `Texture'DXController.<name>'` (the old
+  `Texture'DXControllerTex.*'` package is gone). Same-package compile order
+  <was / was not> an issue (UCC runs all `#exec` before linking).
 
 ## Source overlay model
 
