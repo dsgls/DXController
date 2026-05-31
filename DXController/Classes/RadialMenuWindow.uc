@@ -417,28 +417,21 @@ function DrawSlot(GC gc, int slotIdx, float cx, float cy,
                   Inventory inv, bool bSelected, Color tintFrame)
 {
     local float angleDeg, angleRad;
-    local float sx, sy;             // slot centre
-    local float size, x, y;         // icon rect
-    local float frameSize, fx, fy;  // keycap rect
+    local float sx, sy;
+    local Texture tex;
+    local float srcW, srcH;
+    local float frameSize, fx, fy;
 
     angleDeg = slotIdx * 36.0;
     angleRad = angleDeg / DegreesPerRadian;
     sx = cx + WheelRadius * Sin(angleRad);
     sy = cy - WheelRadius * Cos(angleRad);
 
-    size = IconSize;
-    if (bSelected)
-        size = IconSize * IconSelScale;
-
-    x = sx - size * 0.5;
-    y = sy - size * 0.5;
-
-    // Selected slot: a dark keycap fill behind the icon plus a
-    // theme-coloured border — the same keycap aesthetic as the
-    // on-screen keyboard.
+    // Selection emphasis still lives in the per-icon keycap+border at
+    // this stage — moved to the slice glow in the next task.
     if (bSelected)
     {
-        frameSize = size + 2.0 * FramePadding;
+        frameSize = IconSize + 2.0 * FramePadding;
         fx = sx - frameSize * 0.5;
         fy = sy - frameSize * 0.5;
         gc.SetStyle(DSTY_Masked);
@@ -449,11 +442,30 @@ function DrawSlot(GC gc, int slotIdx, float cx, float cy,
         gc.DrawBox(fx, fy, frameSize, frameSize, 0, 0, 2, Texture'Solid');
     }
 
-    if (inv != None && inv.Icon != None)
+    if (inv != None)
     {
-        gc.SetStyle(DSTY_Masked);
-        gc.SetTileColorRGB(255, 255, 255);
-        gc.DrawTexture(x, y, size, size, 0, 0, inv.Icon);
+        // Prefer the large icon — the wheel slot is ~48 px, so the
+        // large art downscales crisply rather than upscaling soft.
+        // Mirror the stock persona inventory screen's choice.
+        if (inv.largeIcon != None && inv.largeIconWidth > 0 && inv.largeIconHeight > 0)
+        {
+            tex  = inv.largeIcon;
+            srcW = inv.largeIconWidth;
+            srcH = inv.largeIconHeight;
+        }
+        else if (inv.Icon != None)
+        {
+            tex  = inv.Icon;
+            // Stock weapon `Icon` art is 40x35 inside a padded texture.
+            srcW = 40;
+            srcH = 35;
+        }
+
+        if (tex != None)
+            DrawIconCentered(gc, sx, sy, tex, srcW, srcH,
+                             ColorAlpha(255, 255, 255, 255));
+        else
+            DrawEmptyMark(gc, sx, sy);
     }
     else
     {
@@ -466,24 +478,19 @@ function DrawAugSlot(GC gc, int slotIdx, float cx, float cy,
                      Color tintFrame, Color tintAug)
 {
     local float angleDeg, angleRad;
-    local float sx, sy, size, x, y;
+    local float sx, sy;
+    local Texture tex;
+    local float srcW, srcH;
     local float frameSize, fx, fy;
-    local Texture iconTex;
 
     angleDeg = slotIdx * 36.0;
     angleRad = angleDeg / DegreesPerRadian;
     sx = cx + WheelRadius * Sin(angleRad);
     sy = cy - WheelRadius * Cos(angleRad);
 
-    size = IconSize;
-    if (bSelected)
-        size = IconSize * IconSelScale;
-    x = sx - size * 0.5;
-    y = sy - size * 0.5;
-
     if (bSelected)
     {
-        frameSize = size + 2.0 * FramePadding;
+        frameSize = IconSize + 2.0 * FramePadding;
         fx = sx - frameSize * 0.5;
         fy = sy - frameSize * 0.5;
         gc.SetStyle(DSTY_Masked);
@@ -496,20 +503,53 @@ function DrawAugSlot(GC gc, int slotIdx, float cx, float cy,
 
     if (aug != None)
     {
-        iconTex = aug.smallIcon;
-        if (iconTex == None)
-            iconTex = aug.Icon;
-        if (iconTex != None)
+        // Prefer the large icon (52x52) — same choice as the persona
+        // aug screen. Fall back to smallIcon (32x32) if large is unset.
+        if (aug.Icon != None)
         {
-            gc.SetStyle(DSTY_Masked);
-            gc.SetTileColor(tintAug);
-            gc.DrawTexture(x, y, size, size, 0, 0, iconTex);
+            tex  = aug.Icon;
+            srcW = 52;
+            srcH = 52;
         }
+        else if (aug.smallIcon != None)
+        {
+            tex  = aug.smallIcon;
+            srcW = 32;
+            srcH = 32;
+        }
+
+        if (tex != None)
+            DrawIconCentered(gc, sx, sy, tex, srcW, srcH, tintAug);
     }
     else
     {
         DrawEmptyMark(gc, sx, sy);
     }
+}
+
+// Draws an icon texture centred at (sx, sy), scaled to fit inside an
+// IconSize box while preserving the source aspect ratio. Uses
+// DrawStretchedTexture (which takes a source rect and scales);
+// DrawTexture would 1:1-blit the art into the top-left of the box.
+// srcW/srcH are the art dimensions (NOT the texture's padded USize/VSize).
+function DrawIconCentered(GC gc, float sx, float sy, Texture tex,
+                          float srcW, float srcH, Color tileColor)
+{
+    local float scale, drawW, drawH;
+
+    if (tex == None || srcW <= 0.0 || srcH <= 0.0)
+        return;
+
+    scale = IconSize / FMax(srcW, srcH);
+    drawW = srcW * scale;
+    drawH = srcH * scale;
+
+    gc.SetStyle(DSTY_Masked);
+    gc.SetTileColor(tileColor);
+    gc.DrawStretchedTexture(sx - drawW * 0.5, sy - drawH * 0.5,
+                            drawW, drawH,
+                            0, 0, srcW, srcH,
+                            tex);
 }
 
 // Draws the small reference digit for a slot. Uniform dim cool-grey on
