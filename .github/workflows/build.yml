@@ -24,7 +24,7 @@ jobs:
       # https://github.com/dsgls/DeusExe-XInput/releases — the workflow
       # downloads DeusExe-XInput-${DEUSEXE_XINPUT_VERSION}.zip from
       # that release.
-      DEUSEXE_XINPUT_VERSION: v1.0.0
+      DEUSEXE_XINPUT_VERSION: v1.0.1
 
     steps:
       - name: Install wine
