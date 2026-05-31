@@ -29,11 +29,16 @@ const FocusGrace        = 0.3;      // seconds after stick recentres where Close
 
 const WheelRadius      = 130.0;   // pixels from screen-centre to each icon's centre
 const IconSize         = 48.0;    // base icon edge length, pixels
-const IconSelScale     = 1.15;    // size multiplier for the selected slot
-const FramePadding     = 8.0;     // selection frame is icon size + 2 * this
 const NumberRadius     = 80.0;    // distance from centre to each slot-number label
 const PlateDiameter    = 360.0;   // backplate draw size, pixels (encloses the icon ring)
 const PlateTexSize     = 1024.0;  // WheelPlate source texture edge length
+const WedgeTexSize     = 1024.0;  // Wedge0..9 source texture edge length (matches the plate)
+
+// Per-slot highlight wedge textures, indexed by slot 0..9. Populated
+// from defaultproperties (the `wedgeTex(i)=Texture'...'` literal makes
+// the texture name resolvable in the pass-2 DXController compile and
+// avoids a 10-way switch at draw time).
+var Texture wedgeTex[10];
 
 var bool  bOpen;
 var bool  bSticky;
@@ -342,7 +347,7 @@ event DrawWindow(GC gc)
 {
     local int i;
     local float cx, cy;
-    local Color tintFrame, tintWhite, tintAug;
+    local Color tintWhite, tintAug;
     local DeusExRootWindow root;
     local HUDObjectBelt belt;
     local Inventory inv;
@@ -362,10 +367,13 @@ event DrawWindow(GC gc)
 
     DrawBackplate(gc, cx, cy);
 
-    // Pull the HUD theme colour for our accent (colBorder is maintained by
-    // HUDBaseWindow.StyleChanged and stays in sync with theme changes).
-    tintFrame = colBorder;
     tintWhite = ColorAlpha(255, 255, 255, 255);
+
+    // Highlight the selected slice (drawn AFTER the plate, BEFORE the
+    // icons + numbers, so icons sit on top of the glow). Skipped in the
+    // deadzone (highlightedSlot == -1).
+    if (highlightedSlot >= 0)
+        DrawHighlightSlice(gc, cx, cy, highlightedSlot);
 
     if (mode == WM_Weapon || mode == WM_BeltAssign)
     {
@@ -375,7 +383,7 @@ event DrawWindow(GC gc)
         for (i = 0; i < 10; i++)
         {
             inv = belt.objects[i].GetItem();
-            DrawSlot(gc, i, cx, cy, inv, (i == highlightedSlot), tintFrame);
+            DrawSlot(gc, i, cx, cy, inv);
             DrawSlotNumber(gc, cx, cy, i, string(i));
         }
     }
@@ -388,8 +396,7 @@ event DrawWindow(GC gc)
                 tintAug = colAugActive;
             else
                 tintAug = colAugInactive;
-            DrawAugSlot(gc, i, cx, cy, aug, (i == highlightedSlot),
-                        tintFrame, tintAug);
+            DrawAugSlot(gc, i, cx, cy, aug, tintAug);
             DrawSlotNumber(gc, cx, cy, i, string(i + 3));
         }
     }
@@ -413,34 +420,17 @@ function DrawBackplate(GC gc, float cx, float cy)
                             Texture'DXController.WheelPlate');
 }
 
-function DrawSlot(GC gc, int slotIdx, float cx, float cy,
-                  Inventory inv, bool bSelected, Color tintFrame)
+function DrawSlot(GC gc, int slotIdx, float cx, float cy, Inventory inv)
 {
     local float angleDeg, angleRad;
     local float sx, sy;
     local Texture tex;
     local float srcW, srcH;
-    local float frameSize, fx, fy;
 
     angleDeg = slotIdx * 36.0;
     angleRad = angleDeg / DegreesPerRadian;
     sx = cx + WheelRadius * Sin(angleRad);
     sy = cy - WheelRadius * Cos(angleRad);
-
-    // Selection emphasis still lives in the per-icon keycap+border at
-    // this stage — moved to the slice glow in the next task.
-    if (bSelected)
-    {
-        frameSize = IconSize + 2.0 * FramePadding;
-        fx = sx - frameSize * 0.5;
-        fy = sy - frameSize * 0.5;
-        gc.SetStyle(DSTY_Masked);
-        gc.SetTileColor(ColorAlpha(60, 70, 88, 255));
-        gc.DrawPattern(fx, fy, frameSize, frameSize, 0, 0, Texture'Solid');
-        gc.SetStyle(DSTY_Masked);
-        gc.SetTileColor(tintFrame);
-        gc.DrawBox(fx, fy, frameSize, frameSize, 0, 0, 2, Texture'Solid');
-    }
 
     if (inv != None)
     {
@@ -474,32 +464,17 @@ function DrawSlot(GC gc, int slotIdx, float cx, float cy,
 }
 
 function DrawAugSlot(GC gc, int slotIdx, float cx, float cy,
-                     Augmentation aug, bool bSelected,
-                     Color tintFrame, Color tintAug)
+                     Augmentation aug, Color tintAug)
 {
     local float angleDeg, angleRad;
     local float sx, sy;
     local Texture tex;
     local float srcW, srcH;
-    local float frameSize, fx, fy;
 
     angleDeg = slotIdx * 36.0;
     angleRad = angleDeg / DegreesPerRadian;
     sx = cx + WheelRadius * Sin(angleRad);
     sy = cy - WheelRadius * Cos(angleRad);
-
-    if (bSelected)
-    {
-        frameSize = IconSize + 2.0 * FramePadding;
-        fx = sx - frameSize * 0.5;
-        fy = sy - frameSize * 0.5;
-        gc.SetStyle(DSTY_Masked);
-        gc.SetTileColor(ColorAlpha(60, 70, 88, 255));
-        gc.DrawPattern(fx, fy, frameSize, frameSize, 0, 0, Texture'Solid');
-        gc.SetStyle(DSTY_Masked);
-        gc.SetTileColor(tintFrame);
-        gc.DrawBox(fx, fy, frameSize, frameSize, 0, 0, 2, Texture'Solid');
-    }
 
     if (aug != None)
     {
@@ -525,6 +500,30 @@ function DrawAugSlot(GC gc, int slotIdx, float cx, float cy,
     {
         DrawEmptyMark(gc, sx, sy);
     }
+}
+
+// Draws the additive theme-tinted glow over the selected slice. Drawn
+// onto the same disc rect as the plate, so the wedge art (greyscale on
+// black, slice-shaped) aligns with the plate's spokes by construction.
+// Black texels in the wedge add zero under DSTY_Translucent — only the
+// slice itself glows. tileColor scales the brightness; default
+// colBorder (HUD theme accent).
+function DrawHighlightSlice(GC gc, float cx, float cy, int slotIdx)
+{
+    local Texture tex;
+
+    if (slotIdx < 0 || slotIdx > 9)
+        return;
+    tex = wedgeTex[slotIdx];
+    if (tex == None)
+        return;
+
+    gc.SetStyle(DSTY_Translucent);
+    gc.SetTileColor(colBorder);
+    gc.DrawStretchedTexture(cx - PlateDiameter * 0.5, cy - PlateDiameter * 0.5,
+                            PlateDiameter, PlateDiameter,
+                            0, 0, WedgeTexSize, WedgeTexSize,
+                            tex);
 }
 
 // Draws an icon texture centred at (sx, sy), scaled to fit inside an
@@ -720,4 +719,14 @@ defaultproperties
     highlightedSlot=-1
     colAugActive=(R=255,G=255,B=0,A=255)
     colAugInactive=(R=100,G=100,B=100,A=255)
+    wedgeTex(0)=Texture'DXController.Wedge0'
+    wedgeTex(1)=Texture'DXController.Wedge1'
+    wedgeTex(2)=Texture'DXController.Wedge2'
+    wedgeTex(3)=Texture'DXController.Wedge3'
+    wedgeTex(4)=Texture'DXController.Wedge4'
+    wedgeTex(5)=Texture'DXController.Wedge5'
+    wedgeTex(6)=Texture'DXController.Wedge6'
+    wedgeTex(7)=Texture'DXController.Wedge7'
+    wedgeTex(8)=Texture'DXController.Wedge8'
+    wedgeTex(9)=Texture'DXController.Wedge9'
 }
