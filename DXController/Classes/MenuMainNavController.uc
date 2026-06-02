@@ -67,7 +67,7 @@ function InitFocus()
 function bool HandleDPad(int dx, int dy)
 {
     local MenuUIMenuWindow m;
-    local int step, newIdx, i, count;
+    local int step, newIdx, i, count, curIdx;
 
     if (dy == 0)
         return true;        // L/R consumed, no-op
@@ -80,8 +80,27 @@ function bool HandleDPad(int dx, int dy)
     if (count == 0)
         return true;
 
+    // Re-derive the current position from engine focus, not from our
+    // cached focusIndex. Vanilla SetFocusWindow calls from the screen's
+    // own InitWindow can land AFTER our InitFocus runs (notably
+    // MenuSelectDifficulty.InitWindow → SetFocusWindow(winButtons[1])
+    // for the "Medium" default), so our focusIndex may have been seeded
+    // on Easy while the visible yellow text is on Medium. Reading
+    // IsFocusWindow here lets the first press step relative to whatever
+    // is actually focused. Falls through to focusIndex if no button is
+    // engine-focused.
+    curIdx = focusIndex;
+    for (i = 0; i < count; i++)
+    {
+        if (m.winButtons[i] != None && m.winButtons[i].IsFocusWindow())
+        {
+            curIdx = i;
+            break;
+        }
+    }
+
     if (dy > 0) step = 1; else step = -1;
-    newIdx = focusIndex;
+    newIdx = curIdx;
     for (i = 0; i < count; i++)
     {
         newIdx = (newIdx + step + count) % count;
