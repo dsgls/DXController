@@ -139,6 +139,14 @@ function bool GetFocusedRect(out float x, out float y, out float w, out float h)
     if (!IsFocusedLive())
         return false;
 
+    // Suppress the overlay frame for widgets that paint their own focus
+    // or selection cue — the frame would be a redundant second indicator.
+    // The widget-class registry lives on HasStockFocusCue. Subclasses
+    // that focus a sentinel (lists, scroll viewports) keep their explicit
+    // GetFocusedRect overrides on top of this.
+    if (HasStockFocusCue(focused))
+        return false;
+
     root = focused.GetRootWindow();
     lx = 0;
     ly = 0;
@@ -218,6 +226,59 @@ function bool AllowsMenuToggle()
 // override it.
 function NavTick(float deltaSeconds)
 {
+}
+
+// True for widget classes that paint their own focus or selection
+// highlight, where the MenuFocusOverlay frame would be a redundant
+// second indicator. The check is by widget class identity — a property
+// of the class, not of the controller pointing at it. Two kinds of cue
+// belong here:
+//   (a) Engine-focus driven — vanilla yellow text on a button when
+//       SetFocusWindow puts engine focus on it (e.g.
+//       MenuUIBorderButtonWindow.SetButtonMetrics uses IsFocusWindow()
+//       to pick colText[1] over colText[0]).
+//   (b) Selection-state driven — a vanilla SelectX method on the
+//       screen paints a per-button bSelected highlight that lives
+//       independently of engine focus (e.g.
+//       PersonaScreenSkills.SelectSkillButton → SelectButton(True)).
+// Controllers that focus widgets in this list either drive (a) via
+// SetFocus/SetFocusWindow or (b) via the corresponding SelectX call;
+// either way the overlay frame stays off. Static so
+// ComputerScreenNavSub (a separate Object-rooted hierarchy) can call
+// it cross-class.
+static function bool HasStockFocusCue(Window w)
+{
+    if (w == None)
+        return false;
+    return MenuUIBorderButtonWindow(w) != None
+        || PersonaBorderButtonWindow(w) != None;
+}
+
+// Atomically write `focused` and sync engine focus to it. Use this
+// helper for every focus update that targets a widget whose stock cue
+// is engine-focus-driven, so the controller's focus state and the
+// engine's can never drift apart (and so the stock yellow text never
+// gets stuck on a stale widget — that's the security-terminal class
+// of bug). Passing `w == None` is treated the same as `ClearFocus`.
+function SetFocus(Window w)
+{
+    focused = w;
+    if (w != None && screen != None)
+        screen.SetFocusWindow(w);
+    else if (screen != None)
+        screen.SetFocusWindow(screen);
+}
+
+// Drop `focused` and detach engine focus from any button. The screen
+// window itself has no focus-driven cue, so engine focus parked there
+// removes the yellow-text cue from whichever button last held it. Use
+// this on transitions to non-stock-cued targets (e.g. moving onto a
+// camera viewport from a choice row in the security terminal).
+function ClearFocus()
+{
+    focused = None;
+    if (screen != None)
+        screen.SetFocusWindow(screen);
 }
 
 // ---- Button-legend hints ----
