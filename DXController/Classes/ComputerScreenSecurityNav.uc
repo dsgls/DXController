@@ -102,20 +102,30 @@ function FocusRow(ComputerScreenSecurity sec)
 
     if (rowIndex == ROW_CAMERA)
     {
-        // Clear engine focus before setting `focused` to a camera
-        // viewport. Without this the vanilla yellow-text cue stays glued
-        // to the last visited choice row's btnAction. ClearFocus parks
-        // engine focus on the screen itself (no focus-driven cue there),
-        // detaching the yellow text. Camera windows are not stock-cued,
-        // so the MenuFocusOverlay frame draws around the focused camera
-        // via the GetFocusedRect override below.
-        ClearFocus();
+        // Move BOTH controller focus and engine focus directly onto the
+        // camera viewport. The A4 attempt of parking engine focus on
+        // `screen` via ClearFocus was visibly NOT detaching the yellow-
+        // text cue from the previously focused choice btnAction —
+        // SetFocusWindow(screen) didn't seem to move IsFocusWindow off
+        // the button. Focusing a real, distinct widget (the camera
+        // window) forces a genuine focus transition that the button's
+        // per-frame `IsFocusWindow()` check picks up: next draw, its
+        // SetButtonMetrics returns textColorIndex=0 (normal) instead of
+        // 1 (focus). The camera window has no stock cue, so the
+        // MenuFocusOverlay frame still draws around it via the
+        // GetFocusedRect override below.
         if (sec.winCameras[cameraIndex] != None)
         {
             sec.SelectCamera(sec.winCameras[cameraIndex]);
-            focused = sec.winCameras[cameraIndex];
+            SetFocus(sec.winCameras[cameraIndex]);
             class'DXControllerDebug'.static.DebugLog(
                 "DXC-TERM SEC-CAMERA idx=" $ string(cameraIndex));
+        }
+        else
+        {
+            // No camera at this slot — fall back to ClearFocus to
+            // release any prior engine focus.
+            ClearFocus();
         }
         return;
     }
