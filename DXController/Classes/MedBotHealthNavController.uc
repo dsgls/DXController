@@ -8,10 +8,11 @@
 // screen inherits PersonaScreenBaseWindow's Escape→CancelScreen path,
 // so B routes through the root's standard Escape-synthesis to close.
 //
-// SetFocusWindow lights up the vanilla focus text color
+// SetFocus drives the vanilla focus-text-color cue on btnHealAll
 // (PersonaBorderButtonWindow.SetButtonMetrics uses IsFocusWindow to
-// pick colText[1] over colText[0]). The MenuFocusOverlay frame still
-// draws on top via the inherited GetFocusedRect.
+// pick colText[1] over colText[0]). The MenuFocusOverlay frame is
+// suppressed by the base GetFocusedRect because PersonaBorderButtonWindow
+// is in MenuNavController.HasStockFocusCue — one indicator, not two.
 //=============================================================================
 class MedBotHealthNavController extends MenuNavController;
 
@@ -24,8 +25,7 @@ function InitFocus()
         return;
     if (s.btnHealAll == None)
         return;
-    focused = s.btnHealAll;
-    s.SetFocusWindow(s.btnHealAll);
+    SetFocus(s.btnHealAll);
 }
 
 function bool HandleDPad(int dx, int dy)
