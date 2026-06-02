@@ -102,22 +102,30 @@ function FocusRow(ComputerScreenSecurity sec)
 
     if (rowIndex == ROW_CAMERA)
     {
-        // Move BOTH controller focus and engine focus directly onto the
-        // camera viewport. The A4 attempt of parking engine focus on
-        // `screen` via ClearFocus was visibly NOT detaching the yellow-
-        // text cue from the previously focused choice btnAction —
-        // SetFocusWindow(screen) didn't seem to move IsFocusWindow off
-        // the button. Focusing a real, distinct widget (the camera
-        // window) forces a genuine focus transition that the button's
-        // per-frame `IsFocusWindow()` check picks up: next draw, its
-        // SetButtonMetrics returns textColorIndex=0 (normal) instead of
-        // 1 (focus). The camera window has no stock cue, so the
-        // MenuFocusOverlay frame still draws around it via the
-        // GetFocusedRect override below.
+        // Keep gamepad `focused` on the camera viewport (so the
+        // MenuFocusOverlay frame draws around the whole 202x213 camera
+        // tile, including its title and status labels). Move ENGINE
+        // focus onto winCameras[i].btnCamera, the camera-view button —
+        // this is what vanilla mouse-clicks already focus, so the
+        // engine accepts it without needing SetSelectability. Earlier
+        // attempts (ClearFocus parking focus on `screen`; SetFocus on
+        // the camera viewport itself) both failed to move engine focus
+        // off the previously visited choice btnAction, because neither
+        // the screen nor the bare camera viewport are selectable by
+        // default — SetFocusWindow on them silently no-ops (compare
+        // vanilla MenuScreenCustomizeKeys.WaitingForInput which calls
+        // SetSelectability(True) before SetFocusWindow(Self) for that
+        // exact reason). Focusing btnCamera shifts engine focus to a
+        // real selectable widget; the choice btnAction's IsFocusWindow
+        // returns false on the next frame and its SetButtonMetrics
+        // picks textColorIndex=0 (no yellow).
         if (sec.winCameras[cameraIndex] != None)
         {
             sec.SelectCamera(sec.winCameras[cameraIndex]);
-            SetFocus(sec.winCameras[cameraIndex]);
+            focused = sec.winCameras[cameraIndex];
+            if (screen != None
+                && sec.winCameras[cameraIndex].btnCamera != None)
+                screen.SetFocusWindow(sec.winCameras[cameraIndex].btnCamera);
             class'DXControllerDebug'.static.DebugLog(
                 "DXC-TERM SEC-CAMERA idx=" $ string(cameraIndex));
         }
