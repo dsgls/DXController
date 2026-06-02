@@ -102,6 +102,14 @@ function FocusRow(ComputerScreenSecurity sec)
 
     if (rowIndex == ROW_CAMERA)
     {
+        // Clear engine focus before setting `focused` to a camera
+        // viewport. Without this the vanilla yellow-text cue stays glued
+        // to the last visited choice row's btnAction. ClearFocus parks
+        // engine focus on the screen itself (no focus-driven cue there),
+        // detaching the yellow text. Camera windows are not stock-cued,
+        // so the MenuFocusOverlay frame draws around the focused camera
+        // via the GetFocusedRect override below.
+        ClearFocus();
         if (sec.winCameras[cameraIndex] != None)
         {
             sec.SelectCamera(sec.winCameras[cameraIndex]);
@@ -112,11 +120,10 @@ function FocusRow(ComputerScreenSecurity sec)
         return;
     }
 
-    if (sec.choiceWindows[rowIndex] != None)
+    if (sec.choiceWindows[rowIndex] != None
+        && sec.choiceWindows[rowIndex].btnAction != None)
     {
-        focused = sec.choiceWindows[rowIndex].btnAction;
-        if (focused != None)
-            sec.SetFocusWindow(focused);
+        SetFocus(sec.choiceWindows[rowIndex].btnAction);
     }
 }
 
