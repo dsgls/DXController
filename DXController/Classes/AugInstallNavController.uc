@@ -24,6 +24,13 @@
 // HandleDPad) is paired with a SelectAugmentation call, so the cue tracks
 // focus without drift. HUDMedBotAugItemButton is therefore registered in
 // MenuNavController.HasStockFocusCue and the overlay frame stays off here.
+//
+// Edge case: HUDMedBotAddAugsScreen.SelectAugmentation bails without
+// painting bSelected when the focused canister's aug is already
+// installed (bHasIt) or its slot is full (bSlotFull). The
+// GetFocusedRect override below catches that case and re-enables the
+// overlay frame so the gamepad cursor is still visible — same shape as
+// InvNavController's ModApply fix.
 //=============================================================================
 class AugInstallNavController extends MenuNavController;
 
@@ -115,6 +122,41 @@ function RefreshIfStale()
             return;
         }
     }
+}
+
+// Override the base policy when the vanilla cue isn't painted. The
+// stock `HUDMedBotAddAugsScreen.SelectAugmentation` bails out without
+// calling SelectButton(True) on canisters whose aug is already
+// installed (bHasIt) or whose slot is full (bSlotFull). When that
+// happens, `focused.bSelected` stays False — meaning the
+// PersonaItemButton border isn't drawn, and the controller would have
+// no visible cursor (only the dim unselected outline shared by every
+// other canister). Force the overlay frame back on as the cursor
+// indicator in that case. Outside this corner, fall through to the
+// base policy (which suppresses the frame because
+// HUDMedBotAugItemButton is in HasStockFocusCue from Task C4).
+function bool GetFocusedRect(out float x, out float y, out float w, out float h)
+{
+    local Window root;
+    local float lx, ly;
+    local PersonaItemButton btn;
+
+    if (!IsFocusedLive())
+        return false;
+
+    btn = PersonaItemButton(focused);
+    if (btn != None && !btn.bSelected)
+    {
+        root = focused.GetRootWindow();
+        lx = 0;
+        ly = 0;
+        focused.ConvertCoordinates(focused, lx, ly, root, x, y);
+        w = focused.width;
+        h = focused.height;
+        return true;
+    }
+
+    return Super.GetFocusedRect(x, y, w, h);
 }
 
 function InitFocus()
