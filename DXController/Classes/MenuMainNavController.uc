@@ -14,6 +14,11 @@
 //                wrapping at edges.
 // D-pad L/R:     consumed, no-op (MenuUIMenuButtonWindow has no cycle).
 // X / Y / R-stick: consumed, no-op.
+//
+// SetFocus on each focus update drives the vanilla yellow-text cue on
+// the focused MenuUIMenuButtonWindow (engine-focus-driven via
+// MenuUIBorderButtonWindow's SetButtonMetrics). The overlay frame is
+// suppressed by the base GetFocusedRect via HasStockFocusCue.
 //=============================================================================
 class MenuMainNavController extends MenuNavController;
 
@@ -32,8 +37,8 @@ function InitFocus()
     {
         if (m.winButtons[i] != None && m.winButtons[i].bIsSensitive)
         {
-            focused = m.winButtons[i];
             focusIndex = i;
+            SetFocus(m.winButtons[i]);
             return;
         }
     }
@@ -63,7 +68,7 @@ function bool HandleDPad(int dx, int dy)
         if (m.winButtons[newIdx] != None && m.winButtons[newIdx].bIsSensitive)
         {
             focusIndex = newIdx;
-            focused = m.winButtons[newIdx];
+            SetFocus(m.winButtons[newIdx]);
             class'DXControllerDebug'.static.DebugLog(
                 "DXC-NAV FOCUS menumain idx=" $ string(focusIndex));
             return true;
