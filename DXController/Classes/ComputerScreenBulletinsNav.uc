@@ -56,8 +56,7 @@ function OnEnter(ComputerUIWindow s)
             actionBarIndex = 0;
         if (actionBarIndex < barCount)
         {
-            focused = barBtns[actionBarIndex];
-            screen.SetFocusWindow(focused);
+            SetFocus(barBtns[actionBarIndex]);
         }
         focusIndex = ROW_ACTIONBAR;
     }
@@ -82,8 +81,7 @@ function MoveToActionBar()
     focusIndex = ROW_ACTIONBAR;
     if (actionBarIndex < barCount)
     {
-        focused = barBtns[actionBarIndex];
-        screen.SetFocusWindow(focused);
+        SetFocus(barBtns[actionBarIndex]);
     }
 }
 
@@ -121,8 +119,7 @@ function bool HandleDPad(int dx, int dy)
                 barBtns, barCount, actionBarIndex);
         if (actionBarIndex < barCount)
         {
-            focused = barBtns[actionBarIndex];
-            screen.SetFocusWindow(focused);
+            SetFocus(barBtns[actionBarIndex]);
         }
         return true;
     }
@@ -175,7 +172,7 @@ function bool HandleActivate(byte button)
 
 // Lists keep the frame (it tells the player which list is the focused
 // tab-stop, distinct from the intra-list per-row highlight). Buttons
-// suppress per the inherited IsButtonClass policy.
+// suppress per the inherited MenuNavController.HasStockFocusCue policy.
 function bool GetFocusedRect(out float x, out float y, out float w, out float h)
 {
     if (rowIndex == ROW_LIST && focused != None)

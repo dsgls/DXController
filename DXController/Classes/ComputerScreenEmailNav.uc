@@ -7,7 +7,8 @@
 //
 // btnHeaderFrom/btnHeaderSubject are MenuUIListHeaderButtonWindow which
 // inherits MenuUIBorderButtonWindow → ButtonWindow, so PressButton is
-// the standard route and IsButtonClass returns true (frame suppressed).
+// the standard route and MenuNavController.HasStockFocusCue returns
+// true for them (frame suppressed).
 //
 // winEmail (side panel) auto-updates via vanilla ListSelectionChanged.
 //=============================================================================
@@ -57,8 +58,7 @@ function OnEnter(ComputerUIWindow s)
         // stay interactable even with nothing to sort).
         rowIndex = ROW_HEADERS;
         headerIndex = HEADER_FROM;
-        focused = eScr.btnHeaderFrom;
-        screen.SetFocusWindow(focused);
+        SetFocus(eScr.btnHeaderFrom);
         focusIndex = ROW_HEADERS;
     }
 }
@@ -72,8 +72,7 @@ function MoveToHeaders()
     rowIndex = ROW_HEADERS;
     focusIndex = ROW_HEADERS;
     headerIndex = HEADER_FROM;
-    focused = eScr.btnHeaderFrom;
-    screen.SetFocusWindow(focused);
+    SetFocus(eScr.btnHeaderFrom);
 }
 
 function MoveToList()
@@ -110,8 +109,7 @@ function MoveToActionBar()
     focusIndex = ROW_ACTIONBAR;
     if (actionBarIndex < barCount)
     {
-        focused = barBtns[actionBarIndex];
-        screen.SetFocusWindow(focused);
+        SetFocus(barBtns[actionBarIndex]);
     }
 }
 
@@ -131,14 +129,12 @@ function bool HandleDPad(int dx, int dy)
             if (dx > 0 && headerIndex == HEADER_FROM)
             {
                 headerIndex = HEADER_SUBJECT;
-                focused = eScr.btnHeaderSubject;
-                screen.SetFocusWindow(focused);
+                SetFocus(eScr.btnHeaderSubject);
             }
             else if (dx < 0 && headerIndex == HEADER_SUBJECT)
             {
                 headerIndex = HEADER_FROM;
-                focused = eScr.btnHeaderFrom;
-                screen.SetFocusWindow(focused);
+                SetFocus(eScr.btnHeaderFrom);
             }
             return true;
         }
@@ -152,8 +148,7 @@ function bool HandleDPad(int dx, int dy)
                     barBtns, barCount, actionBarIndex);
             if (actionBarIndex < barCount)
             {
-                focused = barBtns[actionBarIndex];
-                screen.SetFocusWindow(focused);
+                SetFocus(barBtns[actionBarIndex]);
             }
             return true;
         }

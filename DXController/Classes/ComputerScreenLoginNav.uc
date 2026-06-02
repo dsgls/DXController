@@ -56,11 +56,10 @@ function OnEnter(ComputerUIWindow s)
     if (actionBarIndex < 0)
         actionBarIndex = 0;
 
-    focused = loginScr.editUserName;
     focusIndex = 0;
 
     // Sync engine focus so keyboard typing lands here.
-    s.SetFocusWindow(loginScr.editUserName);
+    SetFocus(loginScr.editUserName);
 
     class'DXControllerDebug'.static.DebugLog(
         "DXC-TERM LOGIN-INIT row=" $ string(rowIndex)
@@ -111,13 +110,11 @@ function MoveToRow(int newRow)
     rowIndex = newRow;
     focusIndex = newRow;
     w = GetRowWindow(newRow);
-    focused = w;
 
     // Engine-focus sync (per design's "Sync rule"): text fields and
     // buttons receive SetFocusWindow so keyboard typing routes correctly
     // and the vanilla focus-text-color indicator paints on buttons.
-    if (w != None && (IsButtonClass(w) || MenuUIEditWindow(w) != None))
-        screen.SetFocusWindow(w);
+    SetFocus(w);
 
     class'DXControllerDebug'.static.DebugLog(
         "DXC-TERM SUB-DPAD screen=" $ string(screen.Class)
@@ -146,9 +143,7 @@ function bool HandleDPad(int dx, int dy)
         else
             actionBarIndex = class'ComputerButtonBarNav'.static.MoveRight(
                 barBtns, barCount, actionBarIndex);
-        focused = barBtns[actionBarIndex];
-        if (focused != None)
-            screen.SetFocusWindow(focused);
+        SetFocus(barBtns[actionBarIndex]);
         class'DXControllerDebug'.static.DebugLog(
             "DXC-TERM SUB-DPAD screen=" $ string(screen.Class)
             $ " row=" $ string(rowIndex) $ " barIdx=" $ string(actionBarIndex));
@@ -212,7 +207,7 @@ function OnTick(float deltaSeconds)
     {
         rowIndex = ROW_USERNAME;
         focusIndex = ROW_USERNAME;
-        focused = loginScr.editUserName;
+        SetFocus(loginScr.editUserName);
         class'DXControllerDebug'.static.DebugLog(
             "DXC-TERM LOGIN-RESYNC row=USERNAME (vanilla reset detected)");
     }

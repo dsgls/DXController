@@ -24,9 +24,8 @@ function OnEnter(ComputerUIWindow s)
 
     if (barCount > 0)
     {
-        focused = barBtns[0];
         focusIndex = 0;
-        s.SetFocusWindow(focused);
+        SetFocus(barBtns[0]);
     }
 }
 

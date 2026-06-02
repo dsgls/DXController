@@ -64,9 +64,8 @@ function OnEnter(ComputerUIWindow s)
     if (firstSensitive >= 0)
     {
         rowIndex = firstSensitive;
-        focused = choices[firstSensitive];
         focusIndex = firstSensitive;
-        screen.SetFocusWindow(focused);
+        SetFocus(choices[firstSensitive]);
     }
     else
     {
@@ -108,8 +107,7 @@ function MoveToActionBar()
     focusIndex = rowIndex;
     if (actionBarIndex < barCount)
     {
-        focused = barBtns[actionBarIndex];
-        screen.SetFocusWindow(focused);
+        SetFocus(barBtns[actionBarIndex]);
     }
 }
 
@@ -119,9 +117,7 @@ function MoveToChoice(int idx)
         return;
     rowIndex = idx;
     focusIndex = idx;
-    focused = choices[idx];
-    if (focused != None)
-        screen.SetFocusWindow(focused);
+    SetFocus(choices[idx]);
 }
 
 function bool HandleDPad(int dx, int dy)
@@ -151,8 +147,7 @@ function bool HandleDPad(int dx, int dy)
                 barBtns, barCount, actionBarIndex);
         if (actionBarIndex < barCount)
         {
-            focused = barBtns[actionBarIndex];
-            screen.SetFocusWindow(focused);
+            SetFocus(barBtns[actionBarIndex]);
         }
     }
     return true;

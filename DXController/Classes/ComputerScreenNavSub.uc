@@ -10,14 +10,8 @@
 // HandleScroll/HandleScrollX/HandleTrigger (R-stick + triggers, used by
 // the Security screen for analog camera pan/zoom; no-op elsewhere).
 //
-// IsButtonClass / GetFocusedRect implement the suppress-frame-on-button
-// policy from the design doc: vanilla colText[1] (yellow) on a focused
-// button is enough cue; the MenuFocusOverlay frame would be a redundant
-// second indicator. Lists keep the frame (it tells the player which
-// list owns the gamepad tab-stop, distinct from the intra-list per-row
-// highlight). Edit fields keep the frame (the in-field blinking
-// insertion point is intra-field; the around-field frame is visually
-// distinct).
+// GetFocusedRect delegates to MenuNavController.HasStockFocusCue for
+// the suppress-frame-on-stock-cued-widgets policy.
 //=============================================================================
 class ComputerScreenNavSub extends Object abstract;
 
@@ -109,14 +103,6 @@ function ClearAxisCache()
 function bool BuildHints(MenuNavController nav)
 {
     return false;
-}
-
-// True for widgets whose own focus cue (yellow text on buttons) is
-// sufficient and the MenuFocusOverlay frame would double up.
-static function bool IsButtonClass(Window w)
-{
-    return MenuUIBorderButtonWindow(w) != None
-        || PersonaBorderButtonWindow(w) != None;
 }
 
 // Per the design's focus-indicator policy: return false (no frame)
