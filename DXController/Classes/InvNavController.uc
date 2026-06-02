@@ -28,6 +28,12 @@
 // ModApply sub-dialog: while applying a weapon mod, the D-pad moves the
 // focus frame over any inventory tile (mod stays selected), A applies
 // the mod to a focused eligible weapon, B cancels.
+//
+// In ModApply mode the overlay frame is the cursor indicator (see
+// GetFocusedRect override below): the base HasStockFocusCue policy
+// would otherwise suppress it because PersonaInventoryItemButton is
+// registered as having its own selection cue — but that cue is on the
+// mod, not on the candidate the cursor is over.
 //=============================================================================
 class InvNavController extends MenuNavController;
 
@@ -62,6 +68,36 @@ function InitFocus()
         SeedCursor(first);
         s.SelectInventory(PersonaItemButton(first));
     }
+}
+
+// Override the base policy in ModApply sub-mode. In that mode the
+// controller deliberately doesn't call SelectInventory on the focused
+// candidate (the mod itself stays bSelected) — so the candidate has no
+// vanilla cue and would have no indicator at all if the base
+// GetFocusedRect suppressed the overlay frame (which it does, because
+// PersonaInventoryItemButton is in HasStockFocusCue from Task C2). Force
+// the frame back on while ModApply is active; outside ModApply, fall
+// through to the base policy.
+function bool GetFocusedRect(out float x, out float y, out float w, out float h)
+{
+    local Window root;
+    local float lx, ly;
+
+    if (!IsFocusedLive())
+        return false;
+
+    if (subDialogActive == 'ModApply')
+    {
+        root = focused.GetRootWindow();
+        lx = 0;
+        ly = 0;
+        focused.ConvertCoordinates(focused, lx, ly, root, x, y);
+        w = focused.width;
+        h = focused.height;
+        return true;
+    }
+
+    return Super.GetFocusedRect(x, y, w, h);
 }
 
 // Place the cursor on an item's top-left tile. Used when focus is set
