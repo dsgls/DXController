@@ -1,5 +1,11 @@
 //=============================================================================
 // SkillsNavController — vertical list of PersonaSkillButtonWindow rows.
+//
+// SelectSkillButton on each focus update drives the vanilla selected-
+// state highlight on the focused skill button (PersonaSkillButtonWindow
+// .SelectButton(True)). The MenuFocusOverlay frame is suppressed by the
+// base GetFocusedRect because PersonaSkillButtonWindow is in
+// MenuNavController.HasStockFocusCue — one indicator, not two.
 //=============================================================================
 class SkillsNavController extends MenuNavController;
 
