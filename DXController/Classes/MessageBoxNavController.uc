@@ -10,6 +10,12 @@
 // A activates the focused button (PressButton fires the engine's
 // ButtonActivated → PostResult pipeline).
 //
+// SetFocus on each focus update keeps engine focus in lockstep with
+// gamepad focus, so the vanilla yellow-text cue on the focused button
+// follows D-pad presses (without it, the cue would stay on SetMode's
+// initial choice). Overlay frame is suppressed by the base
+// GetFocusedRect via HasStockFocusCue (MenuUIBorderButtonWindow).
+//
 // No special B handling needed: ControllerRootWindow's IK_Joy2 →
 // synthetic-IK_Escape forwarder (Task 8) hits
 // MenuUIMessageBoxWindow.VirtualKeyPressed, which already maps Escape
@@ -25,11 +31,13 @@ function InitFocus()
     if (s == None)
         return;
 
-    // Match the engine's SetFocusWindow choice in SetMode.
+    // Match the engine's SetFocusWindow choice in SetMode. SetFocus
+    // keeps gamepad focus and engine focus aligned on subsequent D-pad
+    // changes (vanilla SetMode only sets engine focus once).
     if (s.btnYes != None)
-        focused = s.btnYes;
+        SetFocus(s.btnYes);
     else if (s.btnOK != None)
-        focused = s.btnOK;
+        SetFocus(s.btnOK);
 }
 
 function bool HandleDPad(int dx, int dy)
@@ -47,12 +55,12 @@ function bool HandleDPad(int dx, int dy)
     // Two-button cycle. Left → No, right → Yes — natural reading order.
     if (dx < 0)
     {
-        focused = s.btnNo;
+        SetFocus(s.btnNo);
         side = "no";
     }
     else
     {
-        focused = s.btnYes;
+        SetFocus(s.btnYes);
         side = "yes";
     }
     class'DXControllerDebug'.static.DebugLog("DXC-NAV FOCUS msgbox=" $ side);
