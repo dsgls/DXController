@@ -13,6 +13,10 @@
 // to the far edge of the grid. An item's tile span is invSlotsX/invSlotsY
 // (each tile invButtonWidth/Height px); collapsing items to a single
 // center point — the old model — mis-picked neighbours of multi-slot items.
+// SelectInventory on each focus update drives the vanilla selected-
+// state highlight on the focused item. The MenuFocusOverlay frame is
+// suppressed by the base GetFocusedRect because
+// PersonaInventoryItemButton is in HasStockFocusCue.
 //
 // Activations:
 //   A (Joy1/200)          — on a weapon mod: enter apply-to-weapon mode;

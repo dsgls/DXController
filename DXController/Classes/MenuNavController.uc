@@ -252,7 +252,8 @@ static function bool HasStockFocusCue(Window w)
         return false;
     return MenuUIBorderButtonWindow(w) != None
         || PersonaBorderButtonWindow(w) != None
-        || PersonaSkillButtonWindow(w) != None;
+        || PersonaSkillButtonWindow(w) != None
+        || PersonaInventoryItemButton(w) != None;
 }
 
 // Atomically write `focused` and sync engine focus to it. Use this
