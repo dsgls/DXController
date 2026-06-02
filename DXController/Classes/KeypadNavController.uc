@@ -12,6 +12,12 @@
 // B closes the window via root.PopWindow() — HUDKeypadWindow doesn't
 // handle Escape, so the root's Escape-synthesis path is a dead end;
 // AllowsMenuToggle=false sends B to HandleActivate instead.
+//
+// Verification (2026-06-02 focus-indicator migration): HUDKeypadButton
+// has no engine-focus or selection stock cue — its DrawWindow does not
+// consult IsFocusWindow. The MenuFocusOverlay frame is therefore the
+// only indicator, which is correct per the policy. This controller
+// stays out of HasStockFocusCue.
 //=============================================================================
 class KeypadNavController extends MenuNavController;
 
