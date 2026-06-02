@@ -13,6 +13,13 @@
 // D-pad left/right toggles between paired regions (R/L arm, R/L leg).
 // On each focus change the matching body-part icon is selected so the
 // region highlight and description panel track gamepad focus.
+//
+// SetFocus drives the vanilla yellow-text cue on the focused heal
+// button (PersonaActionButtonWindow inherits the engine-focus cue
+// from PersonaBorderButtonWindow). The body-region silhouette
+// highlight (driven by partButtons[focusIndex].PressButton) remains
+// the primary cue. Overlay frame is suppressed by the base
+// GetFocusedRect via HasStockFocusCue.
 //=============================================================================
 class HealthNavController extends MenuNavController;
 
@@ -28,12 +35,12 @@ function ApplyFocus()
 
     if (focusIndex == 6)   // Heal All
     {
-        focused = s.btnHealAll;
+        SetFocus(s.btnHealAll);
         return;
     }
 
     if (s.regionWindows[focusIndex] != None)
-        focused = s.regionWindows[focusIndex].btnHeal;
+        SetFocus(s.regionWindows[focusIndex].btnHeal);
 
     if (s.partButtons[focusIndex] != None && s.partButtons[focusIndex].bIsSensitive)
         s.partButtons[focusIndex].PressButton();
