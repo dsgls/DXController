@@ -7,6 +7,13 @@
 // Slot buttons: PersonaScreenAugmentations.augItems[12] (fixed-size array,
 // populated from index 0 upward, trailing entries are None).
 // Buttons are direct winClient children; positions come from ConvertCoordinates.
+//
+// SelectAugmentation on each focus update drives the vanilla selected-
+// state highlight on the focused aug slot (PersonaAugmentationItemButton,
+// via PersonaItemButton.bSelected → DrawWindow's selection border). The
+// MenuFocusOverlay frame is suppressed by the base GetFocusedRect because
+// PersonaAugmentationItemButton is in HasStockFocusCue — one indicator,
+// not two.
 //=============================================================================
 class AugsNavController extends MenuNavController;
 
