@@ -22,6 +22,15 @@
 //   D-pad down past last enabled choice → enter action bar at primary
 //     (OK by codebase convention; first sensitive in L→R as fallback).
 //   D-pad up at first enabled choice → enter action bar at primary.
+//
+// Focus indicator: `focused` stays on the MenuUIChoice container (so
+// HandleActivate / cycle-value paths keep working). The vanilla
+// yellow-text cue is driven by SyncChoiceEngineFocus on each choice-
+// row focus change — it calls SetFocusWindow on choices[i].btnAction,
+// the inner MenuUIBorderButtonWindow. GetFocusedRect returns false on
+// choice rows to suppress the overlay frame around the (un-cued)
+// container. Action-bar mode uses SetFocus on the focused
+// MenuUIActionButtonWindow — overlay frame auto-suppressed there too.
 //=============================================================================
 class OptionsNavController extends MenuNavController;
 
@@ -45,6 +54,7 @@ function InitFocus()
         focused = choices[focusIndex];
     else
         focused = None;
+    SyncChoiceEngineFocus();
 }
 
 // Walk winClient's child list and collect MenuUIChoice instances in
@@ -118,6 +128,24 @@ function bool IsEnabled(MenuUIChoice w)
     return w.bIsSensitive;
 }
 
+// Sync engine focus to the focused choice's inner action button so
+// the vanilla yellow-text cue paints on the right widget. `focused`
+// stays on the MenuUIChoice container (so HandleActivate /
+// CycleNextValue keep working unchanged). Pair with the
+// GetFocusedRect override below to suppress the redundant overlay
+// frame on choice rows.
+function SyncChoiceEngineFocus()
+{
+    local MenuUIChoice ch;
+
+    if (bInActionBar || focused == None)
+        return;
+    ch = MenuUIChoice(focused);
+    if (ch == None || ch.btnAction == None || screen == None)
+        return;
+    screen.SetFocusWindow(ch.btnAction);
+}
+
 function bool HandleDPad(int dx, int dy)
 {
     local int step, newIdx, i;
@@ -140,7 +168,7 @@ function bool HandleDPad(int dx, int dy)
             actionBtnIdx = class'ActionBarNav'.static.MoveRight(
                 actionBtns, actionBtnCount, actionBtnIdx);
         if (actionBtnCount > 0)
-            focused = actionBtns[actionBtnIdx];
+            SetFocus(actionBtns[actionBtnIdx]);
         class'DXControllerDebug'.static.DebugLog(
             "DXC-NAV FOCUS options-ab idx=" $ string(actionBtnIdx));
         return true;
@@ -158,6 +186,7 @@ function bool HandleDPad(int dx, int dy)
                 focused = choices[focusIndex];
             else
                 focused = None;
+            SyncChoiceEngineFocus();
             class'DXControllerDebug'.static.DebugLog(
                 "DXC-NAV FOCUS options exit-ab → idx=" $ string(focusIndex));
             return true;
@@ -172,6 +201,7 @@ function bool HandleDPad(int dx, int dy)
                 focused = choices[focusIndex];
             else
                 focused = None;
+            SyncChoiceEngineFocus();
             class'DXControllerDebug'.static.DebugLog(
                 "DXC-NAV FOCUS options exit-ab ↑ idx=" $ string(focusIndex));
             return true;
@@ -211,6 +241,7 @@ function bool HandleDPad(int dx, int dy)
             {
                 focusIndex = newIdx;
                 focused = choices[focusIndex];
+                SyncChoiceEngineFocus();
                 class'DXControllerDebug'.static.DebugLog(
                     "DXC-NAV FOCUS options idx=" $ string(focusIndex));
                 return true;
@@ -251,7 +282,7 @@ function bool EnterActionBar()
 
     bInActionBar = true;
     actionBtnIdx = primaryIdx;
-    focused = actionBtns[actionBtnIdx];
+    SetFocus(actionBtns[actionBtnIdx]);
     class'DXControllerDebug'.static.DebugLog(
         "DXC-NAV FOCUS options enter-ab idx=" $ string(actionBtnIdx));
     return true;
@@ -293,11 +324,26 @@ function bool HandleActivate(byte button)
     return true;
 }
 
+// On a choice row, `focused` is the MenuUIChoice container — which
+// isn't in HasStockFocusCue (the cue lives on its btnAction, which we
+// drive via SyncChoiceEngineFocus). Suppress the overlay frame here so
+// the only indicator on choice rows is the inner-button yellow text.
+// In action-bar mode `focused` is a MenuUIActionButtonWindow which IS
+// in the registry, so the base GetFocusedRect already suppresses the
+// frame correctly — fall through to it.
+function bool GetFocusedRect(out float x, out float y, out float w, out float h)
+{
+    if (!bInActionBar)
+        return false;
+    return Super.GetFocusedRect(x, y, w, h);
+}
+
 function Detach()
 {
     bInActionBar = false;
     actionBtnCount = 0;
     actionBtnIdx = 0;
+    ClearFocus();
     Super.Detach();
 }
 
