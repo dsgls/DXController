@@ -33,6 +33,26 @@ function InitFocus()
 
     focused = None;
     focusIndex = -1;
+
+    // Prefer whichever button vanilla InitWindow already gave engine
+    // focus to (MenuSelectDifficulty.InitWindow calls
+    // SetFocusWindow(winButtons[1]) so "Medium" is the default). Without
+    // this our cursor would seed on winButtons[0] (the first sensitive
+    // slot) while the visible yellow-text cue stayed on vanilla's
+    // choice — leaving gamepad nav out of sync with the visible cue.
+    for (i = 0; i < ArrayCount(m.winButtons); i++)
+    {
+        if (m.winButtons[i] != None
+            && m.winButtons[i].bIsSensitive
+            && m.winButtons[i].IsFocusWindow())
+        {
+            focusIndex = i;
+            SetFocus(m.winButtons[i]);
+            return;
+        }
+    }
+
+    // No engine-focused button — fall back to first sensitive slot.
     for (i = 0; i < ArrayCount(m.winButtons); i++)
     {
         if (m.winButtons[i] != None && m.winButtons[i].bIsSensitive)
