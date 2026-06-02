@@ -50,6 +50,9 @@ var int   highlightedSlot; // 0..9 or -1 if in deadzone / wheel closed
 var Augmentation augSlots[10];  // null where slot is empty
 var Color colAugActive;
 var Color colAugInactive;
+// 0..1 brightness scale for the slice glow. DSTY_Translucent ignores
+// the colour's alpha, so we dim by scaling colBorder's R/G/B instead.
+var float HighlightIntensity;
 
 // Level.TimeSeconds value until which RS axis events should still be
 // swallowed after the wheel has closed. Prevents the camera from jerking
@@ -511,6 +514,7 @@ function DrawAugSlot(GC gc, int slotIdx, float cx, float cy,
 function DrawHighlightSlice(GC gc, float cx, float cy, int slotIdx)
 {
     local Texture tex;
+    local Color tinted;
 
     if (slotIdx < 0 || slotIdx > 9)
         return;
@@ -518,8 +522,13 @@ function DrawHighlightSlice(GC gc, float cx, float cy, int slotIdx)
     if (tex == None)
         return;
 
+    tinted.R = int(float(colBorder.R) * HighlightIntensity);
+    tinted.G = int(float(colBorder.G) * HighlightIntensity);
+    tinted.B = int(float(colBorder.B) * HighlightIntensity);
+    tinted.A = colBorder.A;
+
     gc.SetStyle(DSTY_Translucent);
-    gc.SetTileColor(colBorder);
+    gc.SetTileColor(tinted);
     gc.DrawStretchedTexture(cx - PlateDiameter * 0.5, cy - PlateDiameter * 0.5,
                             PlateDiameter, PlateDiameter,
                             0, 0, WedgeTexSize, WedgeTexSize,
@@ -719,6 +728,7 @@ defaultproperties
     highlightedSlot=-1
     colAugActive=(R=255,G=255,B=0,A=255)
     colAugInactive=(R=100,G=100,B=100,A=255)
+    HighlightIntensity=0.5
     wedgeTex(0)=Texture'DXController.Wedge0'
     wedgeTex(1)=Texture'DXController.Wedge1'
     wedgeTex(2)=Texture'DXController.Wedge2'
