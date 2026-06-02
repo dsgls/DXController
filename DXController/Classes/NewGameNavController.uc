@@ -27,6 +27,10 @@
 //     A         → NextPortrait (mirrors vanilla btnPortrait click).
 //     D-pad down → enter skills list at row 0.
 //     D-pad up   → enter action bar at Start Game (wraparound).
+//     Verification: btnPortrait is a plain ButtonWindow (not a
+//     MenuUIBorderButtonWindow / PersonaBorderButtonWindow subclass), so
+//     it has no engine-focus cue — region stays on overlay frame, no
+//     SetFocus call. Verified 2026-06-02.
 //
 //   REGION_Skills:
 //     D-pad up/down → MoveRow; on edge (MoveRow doesn't change focus
@@ -43,6 +47,8 @@
 //     D-pad up     → enter skills list at last row.
 //     D-pad down   → enter REGION_Portrait (wraparound).
 //     A            → PressButton on the focused action button.
+//     SetFocus drives the vanilla yellow-text cue on the focused action
+//     button. Overlay frame is suppressed by the base GetFocusedRect.
 //
 // EInputKey is not in scope from Object subclasses (CLAUDE.md). A=200,
 // X=202, Y=203, R-stick=209.
@@ -127,7 +133,7 @@ function bool HandleDPad(int dx, int dy)
                 actionBtnIdx = class'ActionBarNav'.static.MoveRight(
                     actionBtns, actionBtnCount, actionBtnIdx);
             if (actionBtnCount > 0)
-                focused = actionBtns[actionBtnIdx];
+                SetFocus(actionBtns[actionBtnIdx]);
             class'DXControllerDebug'.static.DebugLog(
                 "DXC-NAV FOCUS newgame ab-idx=" $ string(actionBtnIdx));
             return true;
@@ -261,7 +267,7 @@ function EnterActionBar(MenuScreenNewGame s)
     }
     region = REGION_ActionBar;
     actionBtnIdx = primaryIdx;
-    focused = actionBtns[actionBtnIdx];
+    SetFocus(actionBtns[actionBtnIdx]);
     class'DXControllerDebug'.static.DebugLog(
         "DXC-NAV FOCUS newgame region=ab ab-idx=" $ string(actionBtnIdx));
 }
