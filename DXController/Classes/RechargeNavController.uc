@@ -11,8 +11,10 @@
 // btnClose — matches the visible Close affordance and reuses the same
 // teardown path (root.PopWindow via ButtonActivated).
 //
-// SetFocusWindow lights up the vanilla focus text color on
-// PersonaBorderButtonWindow. Frame overlay still draws on top.
+// SetFocus drives the vanilla focus-text-color cue on the focused
+// button. The MenuFocusOverlay frame is suppressed by the base
+// GetFocusedRect because PersonaBorderButtonWindow is in
+// MenuNavController.HasStockFocusCue — one indicator, not two.
 //=============================================================================
 class RechargeNavController extends MenuNavController;
 
@@ -31,7 +33,7 @@ function InitFocus()
         focused = s.btnClose;
 
     if (focused != None)
-        s.SetFocusWindow(focused);
+        SetFocus(focused);
 }
 
 function bool HandleDPad(int dx, int dy)
@@ -54,8 +56,7 @@ function bool HandleDPad(int dx, int dy)
     if (candidate == None || !candidate.bIsSensitive)
         return true;   // disabled neighbour: stay put
 
-    focused = candidate;
-    s.SetFocusWindow(focused);
+    SetFocus(candidate);
 
     if (focused == s.btnRecharge)
         class'DXControllerDebug'.static.DebugLog("DXC-NAV FOCUS recharge=recharge");
