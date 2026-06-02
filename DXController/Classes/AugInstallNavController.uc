@@ -14,6 +14,16 @@
 // Button collection happens once at Attach time.  If the cannister list
 // changes mid-session (edge case) the controller keeps the stale list;
 // a re-attach at the next top-window change will re-collect.
+//
+// Selection-cue migration: HUDMedBotAugItemButton extends PersonaItemButton,
+// which paints a bright colSelectionBorder when bSelected is true (and the
+// subclass adds a dim unselected outline of its own). HUDMedBotAddAugsScreen
+// .SelectAugmentation drives that bSelected state via SelectButton(True/False)
+// on the focused/previous button, so the per-button vanilla cue is reliable.
+// Every focused = … site in this controller (InitFocus, RefreshIfStale,
+// HandleDPad) is paired with a SelectAugmentation call, so the cue tracks
+// focus without drift. HUDMedBotAugItemButton is therefore registered in
+// MenuNavController.HasStockFocusCue and the overlay frame stays off here.
 //=============================================================================
 class AugInstallNavController extends MenuNavController;
 
