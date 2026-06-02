@@ -199,24 +199,34 @@ function bool HandleDPad(int dx, int dy)
     return true;
 }
 
-// Transition to portrait region. Focus = btnPortrait.
+// Transition to portrait region. Focus = btnPortrait. SetFocusWindow
+// is called even though btnPortrait has no stock cue, so engine focus
+// moves off whichever action-bar button we just left — without this,
+// the action button keeps its yellow text while we're on the portrait.
 function EnterPortrait(MenuScreenNewGame s)
 {
     region = REGION_Portrait;
     focused = s.btnPortrait;
+    if (screen != None && s.btnPortrait != None)
+        screen.SetFocusWindow(s.btnPortrait);
     class'DXControllerDebug'.static.DebugLog(
         "DXC-NAV FOCUS newgame region=portrait");
 }
 
 // Transition to skills region, selecting the given row index. Uses
 // SetRow(... True, True) so ListSelectionChanged fires and updates
-// winSkillInfo / EnableButtons automatically.
+// winSkillInfo / EnableButtons automatically. Engine focus moves onto
+// lstSkills so the previously focused action-bar button releases its
+// yellow text — the list draws its own row-highlight cue, so engine
+// focus on it is invisible.
 function EnterSkillsAt(MenuScreenNewGame s, int targetIdx)
 {
     region = REGION_Skills;
     focused = s.lstSkills;          // sentinel
     if (s.lstSkills == None || s.lstSkills.GetNumRows() <= 0)
         return;
+    if (screen != None)
+        screen.SetFocusWindow(s.lstSkills);
     s.lstSkills.SetRow(s.lstSkills.IndexToRowId(targetIdx), True, True);
     class'DXControllerDebug'.static.DebugLog(
         "DXC-NAV FOCUS newgame region=skills row=" $ string(targetIdx));
