@@ -32,13 +32,13 @@ STEEL_COLOR          = (150, 165, 180)  # neutral steel: rim, spokes, hub ring
 # Plate geometry (fraction of radius R)
 DISC_RADIUS_FRAC     = 0.985
 RIM_WIDTH_FRAC       = 0.016            # ~3px at the ~360px final draw size
-HUB_RADIUS_FRAC      = 0.66             # doubled from the original ~0.33
+HUB_RADIUS_FRAC      = 0.35
 HUB_RING_WIDTH_FRAC  = 0.012
 SPOKE_WIDTH_FRAC     = 0.016            # ~3px final
 
 # Wedge highlight geometry
-WEDGE_INNER_FRAC     = 0.68             # just outside the hub
-WEDGE_OUTER_FRAC     = 0.92             # just inside the rim
+WEDGE_INNER_FRAC     = 0.37             # just outside the hub
+WEDGE_OUTER_FRAC     = 0.95             # just inside the rim
 WEDGE_HALF_DEG       = 16.0             # ±16° of the 18° half-wedge (spoke shows)
 WEDGE_EDGE_SOFT_DEG  = 3.0             # angular AA / glow softness
 WEDGE_EDGE_SOFT_FRAC = 0.02            # radial AA / glow softness

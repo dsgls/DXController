@@ -29,7 +29,7 @@ const FocusGrace        = 0.3;      // seconds after stick recentres where Close
 
 const WheelRadius      = 130.0;   // pixels from screen-centre to each icon's centre
 const IconSize         = 48.0;    // base icon edge length, pixels
-const NumberRadius     = 80.0;    // distance from centre to each slot-number label
+const NumberRadius     = 72.0;    // distance from centre to each slot-number label
 const PlateDiameter    = 360.0;   // backplate draw size, pixels (encloses the icon ring)
 const PlateTexSize     = 1024.0;  // WheelPlate source texture edge length
 const WedgeTexSize     = 1024.0;  // Wedge0..9 source texture edge length (matches the plate)
