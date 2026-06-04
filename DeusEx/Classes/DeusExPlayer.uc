@@ -357,7 +357,9 @@ const			NintendoDelay = 6.0;
 var Computers ActiveComputer;
 
 // === DXController additions: BEGIN ===
-var travel Class<PersonaScreenBaseWindow> LastPersonaScreen;
+// NOT travel-marked — UE1 doesn't support `var travel class<X>`; see
+// CLAUDE.md "UnrealScript quirks" and stock DeusExWeapon.uc:283.
+var Class<PersonaScreenBaseWindow> LastPersonaScreen;
 var bool bGamepadLeftTriggerHeld, bGamepadRightTriggerHeld;
 var bool bGamepadLBHeld;
 var bool bGamepadRBHeld;

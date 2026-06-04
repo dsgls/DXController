@@ -229,6 +229,23 @@ Prefix all such logs with `DXC-<area>`: `DXC-WHEEL`, `DXC-NAV`,
   `Error, 'Var' is not allowed here`. Move vars to the top of the class body
   (just below the `class ... extends ...;` line); the order of *functions*
   themselves is unconstrained.
+- **`var travel class<X>` is not supported — compiles fine, crashes on
+  next level transition.** UE1's travel serializer cannot round-trip
+  a `UClass` reference: on the destination side it tries to construct
+  a placeholder `UClass` with the freshly-possessed player pawn as
+  outer, and `UClass.ClassWithin == UPackage` makes the check fail
+  with `Object Class None created in JCDentonMale instead of Package`
+  fired from native and abort the game. Stock code documents the same
+  limitation in `../deusex-scripts/DeusEx/Classes/DeusExWeapon.uc:283`
+  (`// since we can't "var travel class" (AmmoName and ProjectileClass)`)
+  and works around it by saving the class **name** in a `travel name`
+  alongside a parallel `class<X>[]` lookup table. If you need to persist
+  a class ref across travel, follow that pattern; otherwise drop
+  `travel` and accept that the value resets on map change. Bit
+  `DeusExPlayer.LastPersonaScreen` (`DeusEx/Classes/DeusExPlayer.uc`
+  around line 360) — symptom was reliable crash on the
+  Mission 1 → Mission 2 transition immediately after `Possessed
+  PlayerPawn: ... in 01_NYC_UNATCOHQ.JCDentonMale1`.
 - **`Joy*`/`JoyPov*` bindings live in `[Extension.InputExt]` in `User.ini`,
   not `[Engine.Input]`.** Per the "Input flow" section above, the active
   `UInput` is `Extension.InputExt` (set via `[Engine.Engine] Input=Extension.InputExt`
