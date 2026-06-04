@@ -22,11 +22,16 @@ const NUM_ROWS       = 3;
 const HEADER_FROM    = 0;
 const HEADER_SUBJECT = 1;
 
+// R-stick smooth scroll of the email body (matches LogsNavController).
+const ScrollDeadzone  = 200.0;
+const ScrollThreshold = 500.0;
+
 var int rowIndex;
 var int headerIndex;        // 0 = btnHeaderFrom, 1 = btnHeaderSubject
 var int actionBarIndex;
 var MenuUIActionButtonWindow barBtns[5];
 var int barCount;
+var float scrollAccum;
 
 function OnEnter(ComputerUIWindow s)
 {
@@ -217,4 +222,47 @@ function bool GetFocusedRect(out float x, out float y, out float w, out float h)
     if (rowIndex == ROW_LIST && focused != None)
         return Super(ComputerScreenNavSub).GetFocusedRect(x, y, w, h);
     return false;  // headers + action bar: buttons — suppress frame
+}
+
+// R-stick Y scrolls winEmail's MenuUIScrollAreaWindow (parent's-parent of
+// the text window — see CreateEmailViewWindow). Positive ry = stick up =
+// content scrolls toward the top = StepUp.
+function bool HandleScroll(float ry)
+{
+    local ComputerScreenEmail eScr;
+    local MenuUIScrollAreaWindow winScroll;
+
+    eScr = ComputerScreenEmail(screen);
+    if (eScr == None || eScr.winEmail == None)
+        return false;
+
+    if (Abs(ry) < ScrollDeadzone)
+    {
+        scrollAccum = 0.0;
+        return false;
+    }
+
+    scrollAccum += ry;
+    if (Abs(scrollAccum) < ScrollThreshold)
+        return true;
+
+    winScroll = MenuUIScrollAreaWindow(eScr.winEmail.GetParent().GetParent());
+    if (winScroll == None || winScroll.vScale == None)
+    {
+        scrollAccum = 0.0;
+        return false;
+    }
+
+    if (scrollAccum > 0.0)
+        winScroll.vScale.MoveThumb(MOVETHUMB_StepUp);
+    else
+        winScroll.vScale.MoveThumb(MOVETHUMB_StepDown);
+
+    scrollAccum = 0.0;
+    return true;
+}
+
+function ClearAxisCache()
+{
+    scrollAccum = 0.0;
 }
