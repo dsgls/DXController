@@ -2,12 +2,16 @@
 // AugInstallNavController — MedBot aug installation screen navigation.
 //
 // The MedBot aug-install screen (HUDMedBotAddAugsScreen) shows a scrolling
-// list of available aug cannisters, each row holding two HUDMedBotAugItemButton
-// slots.  Navigation:
+// list of available aug cannisters, each row (HUDMedBotAugCanWindow) holding
+// two HUDMedBotAugItemButton slots — col 0 = btnAug1 (left), col 1 = btnAug2
+// (right) — for the two mutually-exclusive augs in that cannister.
+// Navigation:
 //
-//   D-pad up/down : move focus among aug item buttons (linear, with wrap).
-//                   Each focus change calls SelectAugmentation, so the
-//                   focused canister is always the one Install would commit.
+//   D-pad up/down : move row, preserve column. Each focus change calls
+//                   SelectAugmentation, so the focused canister is always
+//                   the one Install would commit. Wraps within rowCount.
+//   D-pad left/right : switch column (left = col 0, right = col 1) within
+//                   the current row. No wrap (only two slots per row).
 //   A             : press the Install button (if sensitive) to install the
 //                   focused aug. Matches the heal screen, where A also
 //                   commits the screen's single action.
@@ -36,21 +40,44 @@
 //=============================================================================
 class AugInstallNavController extends MenuNavController;
 
-// Flat array of all HUDMedBotAugItemButton instances on the screen.
-// Populated in CollectAugButtons; max 32 covers real canisters (2 per row × up
-// to ~12 cannisters in a typical run).
-var HUDMedBotAugItemButton augButtons[32];
-var int                    augButtonCount;
+// Per-row left/right slots. Each HUDMedBotAugCanWindow always populates
+// both btnAug1 and btnAug2 (HUDMedBotAugCanWindow.SetCan fills them with
+// augCan.GetAugmentation(0) and GetAugmentation(1)), so col 1 is reliably
+// present whenever col 0 is. 16 rows covers a typical run (canister count
+// caps well below).
+var HUDMedBotAugItemButton augRow1[16];     // col 0 — left
+var HUDMedBotAugItemButton augRow2[16];     // col 1 — right
+var int                    rowCount;
+
+// (row, col) of the currently-focused canister. col 0 = left (btnAug1),
+// col 1 = right (btnAug2). focused mirrors ColButton(focusRow, focusCol).
+var int focusRow;
+var int focusCol;
 
 // ---- Attach / InitFocus ----------------------------------------------------
+
+function HUDMedBotAugItemButton ColButton(int row, int col)
+{
+    if (row < 0 || row >= rowCount)
+        return None;
+    if (col == 0)
+        return augRow1[row];
+    return augRow2[row];
+}
 
 function CollectAugButtons()
 {
     local HUDMedBotAddAugsScreen s;
     local Window rowWin;
     local HUDMedBotAugCanWindow row;
+    local int i;
 
-    augButtonCount = 0;
+    rowCount = 0;
+    for (i = 0; i < ArrayCount(augRow1); i++)
+    {
+        augRow1[i] = None;
+        augRow2[i] = None;
+    }
 
     s = HUDMedBotAddAugsScreen(screen);
     if (s == None || s.winAugsTile == None)
@@ -61,30 +88,25 @@ function CollectAugButtons()
     // GetHigherSibling walks toward later-created rows.  This matches the
     // visual top-to-bottom order of the cannister list.
     rowWin = s.winAugsTile.GetBottomChild();
-    while (rowWin != None && augButtonCount < ArrayCount(augButtons))
+    while (rowWin != None && rowCount < ArrayCount(augRow1))
     {
         row = HUDMedBotAugCanWindow(rowWin);
-        if (row != None)
+        if (row != None && row.btnAug1 != None
+                && row.btnAug1.GetClientObject() != None)
         {
-            // Only add a button if it carries a real augmentation reference.
-            // Buttons with no client object represent empty cannister slots.
-            if (row.btnAug1 != None && row.btnAug1.GetClientObject() != None)
-            {
-                augButtons[augButtonCount] = row.btnAug1;
-                augButtonCount++;
-            }
-            if (augButtonCount < ArrayCount(augButtons)
-                    && row.btnAug2 != None && row.btnAug2.GetClientObject() != None)
-            {
-                augButtons[augButtonCount] = row.btnAug2;
-                augButtonCount++;
-            }
+            augRow1[rowCount] = row.btnAug1;
+            // btnAug2 is the paired slot — always present alongside btnAug1
+            // for real canisters. Tolerate a missing client object defensively
+            // (col 1 is then treated as empty for that row).
+            if (row.btnAug2 != None && row.btnAug2.GetClientObject() != None)
+                augRow2[rowCount] = row.btnAug2;
+            rowCount++;
         }
         rowWin = rowWin.GetHigherSibling();
     }
 
     class'DXControllerDebug'.static.DebugLog(
-        "DXC-NAV AugInstall collected=" $ string(augButtonCount));
+        "DXC-NAV AugInstall collected rows=" $ string(rowCount));
 }
 
 // Detect that PopulateAugCanList has rebuilt the cannister tree since the
@@ -96,11 +118,17 @@ function RefreshIfStale()
 {
     local int i;
     local bool bStale;
+    local HUDMedBotAugItemButton btn;
 
     bStale = false;
-    for (i = 0; i < augButtonCount; i++)
+    for (i = 0; i < rowCount; i++)
     {
-        if (augButtons[i] == None || augButtons[i].GetClientObject() == None)
+        if (augRow1[i] == None || augRow1[i].GetClientObject() == None)
+        {
+            bStale = true;
+            break;
+        }
+        if (augRow2[i] != None && augRow2[i].GetClientObject() == None)
         {
             bStale = true;
             break;
@@ -112,16 +140,18 @@ function RefreshIfStale()
     class'DXControllerDebug'.static.DebugLog("DXC-NAV AugInstall stale-refresh");
     CollectAugButtons();
 
-    focusIndex = -1;
-    focused    = None;
-    for (i = 0; i < augButtonCount; i++)
+    focusRow = -1;
+    focusCol = 0;
+    focused  = None;
+    if (rowCount > 0)
     {
-        if (augButtons[i] != None)
+        focusRow = 0;
+        focusCol = 0;
+        btn      = ColButton(0, 0);
+        if (btn != None)
         {
-            focusIndex = i;
-            focused    = augButtons[i];
-            HUDMedBotAddAugsScreen(screen).SelectAugmentation(augButtons[i]);
-            return;
+            focused = btn;
+            HUDMedBotAddAugsScreen(screen).SelectAugmentation(btn);
         }
     }
 }
@@ -163,26 +193,28 @@ function bool GetFocusedRect(out float x, out float y, out float w, out float h)
 
 function InitFocus()
 {
-    local int i;
+    local HUDMedBotAugItemButton btn;
 
     // screen is set by the base Attach before InitFocus is called.
     CollectAugButtons();
 
-    focusIndex = -1;
-    focused    = None;
+    focusRow = -1;
+    focusCol = 0;
+    focused  = None;
 
-    for (i = 0; i < augButtonCount; i++)
+    if (rowCount == 0)
+        return;
+
+    focusRow = 0;
+    focusCol = 0;
+    btn      = ColButton(0, 0);
+    if (btn != None)
     {
-        if (augButtons[i] != None)
-        {
-            focusIndex = i;
-            focused    = augButtons[i];
-            // Pre-select the first button so the install screen shows info.
-            HUDMedBotAddAugsScreen(screen).SelectAugmentation(augButtons[i]);
-            class'DXControllerDebug'.static.DebugLog(
-                "DXC-NAV AugInstall focus init idx=" $ string(i));
-            return;
-        }
+        focused = btn;
+        // Pre-select the first button so the install screen shows info.
+        HUDMedBotAddAugsScreen(screen).SelectAugmentation(btn);
+        class'DXControllerDebug'.static.DebugLog(
+            "DXC-NAV AugInstall focus init row=0 col=0");
     }
 }
 
@@ -190,32 +222,60 @@ function InitFocus()
 
 function bool HandleDPad(int dx, int dy)
 {
-    local int step, i, idx;
+    local int newRow, newCol;
+    local HUDMedBotAugItemButton btn;
 
     RefreshIfStale();
-    if (augButtonCount == 0 || dy == 0)
-        return true;    // consume; left/right ignored on this screen
+    if (rowCount == 0)
+        return true;
 
-    if (dy > 0)
-        step = 1;
-    else
-        step = -1;
-
-    idx = focusIndex;
-    for (i = 0; i < augButtonCount; i++)
+    if (dy != 0)
     {
-        idx = (idx + step + augButtonCount) % augButtonCount;
-        if (augButtons[idx] != None)
+        // Up/down: change row, preserve column. Wrap within rowCount.
+        if (dy > 0)
+            newRow = (focusRow + 1) % rowCount;
+        else
+            newRow = (focusRow - 1 + rowCount) % rowCount;
+        newCol = focusCol;
+        btn = ColButton(newRow, newCol);
+        if (btn == None)
         {
-            focusIndex = idx;
-            focused    = augButtons[idx];
-            // Selecting the aug button also updates the info panel.
-            HUDMedBotAddAugsScreen(screen).SelectAugmentation(augButtons[idx]);
-            class'DXControllerDebug'.static.DebugLog(
-                "DXC-NAV AugInstall focus idx=" $ string(idx));
-            return true;
+            // Target column is empty in this row (defensive — pairs are
+            // normally always present). Fall back to col 0.
+            btn = ColButton(newRow, 0);
+            if (btn != None)
+                newCol = 0;
         }
     }
+    else if (dx != 0)
+    {
+        // Left/right: pick the column directly. No wrap (only two slots).
+        if (dx > 0)
+            newCol = 1;
+        else
+            newCol = 0;
+        newRow = focusRow;
+        if (newCol == focusCol)
+            return true;        // already on that side
+        btn = ColButton(newRow, newCol);
+        if (btn == None)
+            return true;        // target column empty (defensive)
+    }
+    else
+    {
+        return true;
+    }
+
+    if (btn == None)
+        return true;
+
+    focusRow = newRow;
+    focusCol = newCol;
+    focused  = btn;
+    HUDMedBotAddAugsScreen(screen).SelectAugmentation(btn);
+    class'DXControllerDebug'.static.DebugLog(
+        "DXC-NAV AugInstall focus row=" $ string(newRow)
+            $ " col=" $ string(newCol));
     return true;
 }
 
