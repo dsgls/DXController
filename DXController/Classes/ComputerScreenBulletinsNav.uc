@@ -230,3 +230,9 @@ function ClearAxisCache()
 {
     scrollAccum = 0.0;
 }
+
+function bool BuildHints(MenuNavController nav)
+{
+    nav.AddHint("rs", "Scroll text");
+    return false;   // fall through to dispatcher's default strip
+}
