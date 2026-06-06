@@ -299,7 +299,7 @@ event bool KeyEvent(EInputKey Key, EInputAction Action, FLOAT Delta)
 // Forward stick axes (X/Y/U/V) to the class-scoped (global) handler so
 // those consumers receive their events. Triggers (IK_JoyZ/IK_JoyR) are
 // deliberately not forwarded: OnGamepadRightTrigger raises bFire and
-// OnGamepadLeftTrigger toggles scope/laser, and Fire()'s RestrictInput()
+// OnGamepadLeftTrigger drives scope (hold) / laser (toggle), and Fire()'s RestrictInput()
 // guard does not catch the menu-open case (it only fires for
 // Interpolating/Dying/Paralyzed). Non-axis events stay on stock Menuing
 // semantics: Super.KeyEvent resolves to Console.state Menuing.KeyEvent,

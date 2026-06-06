@@ -12155,31 +12155,34 @@ exec function TogglePlayerMenuWindow()
     InvokeUIScreen(LastPersonaScreen);
 }
 
-// LT-trigger target. Toggles scope if equipped weapon has one, else
-// laser if it has one, else no-op.
-exec function ToggleScopeOrLaser()
-{
-    local DeusExWeapon w;
-
-    w = DeusExWeapon(Weapon);
-    if (w == None)
-        return;
-    if (w.bHasScope)
-        w.ScopeToggle();
-    else if (w.bHasLaser)
-        w.LaserToggle();
-}
-
-// Called by ControllerConsole on every IK_JoyZ axis event.
+// Called by ControllerConsole on every IK_JoyZ axis event. Scope and
+// laser sight share the LT binding but use different semantics: scope
+// is hold-to-view (on while LT is held, off on release) so a sniper
+// can dip into the scope without committing to a toggle; laser sight
+// is press-edge toggle (matches the stock keyboard binding —
+// hold-to-view would be useless for a hands-free aiming aid).
 function OnGamepadLeftTrigger(float value)
 {
     local bool nowHeld;
+    local DeusExWeapon w;
     nowHeld = (value >= GamepadTriggerThreshold);
     if (nowHeld == bGamepadLeftTriggerHeld)
         return;
     bGamepadLeftTriggerHeld = nowHeld;
-    if (nowHeld)
-        ToggleScopeOrLaser();
+    w = DeusExWeapon(Weapon);
+    if (w == None)
+        return;
+    if (w.bHasScope)
+    {
+        if (nowHeld)
+            w.ScopeOn();
+        else
+            w.ScopeOff();
+    }
+    else if (w.bHasLaser && nowHeld)
+    {
+        w.LaserToggle();
+    }
 }
 
 // Called by ControllerConsole on every IK_JoyR axis event. Mirrors the
