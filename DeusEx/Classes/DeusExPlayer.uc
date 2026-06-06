@@ -10737,6 +10737,24 @@ exec function AllSkillPoints()
 	SkillPointsAvail = 115900;
 }
 
+// === DXController additions: BEGIN ===
+// Add a configurable amount to the player's skill points, instead of
+// AllSkillPoints' hardcoded jump to 115900. Bumps SkillPointsTotal and
+// SkillPointsAvail in lockstep (Total tracks lifetime earned, Avail
+// tracks unspent — same shape AllSkillPoints uses). Negative values
+// subtract.
+//
+// Usage from the console: AddSkillPoints 5000
+exec function AddSkillPoints(int numPoints)
+{
+	if (!bCheatsEnabled)
+		return;
+
+	SkillPointsTotal += numPoints;
+	SkillPointsAvail += numPoints;
+}
+// === DXController additions: END ===
+
 // ----------------------------------------------------------------------
 // AllAugs()
 // ----------------------------------------------------------------------
