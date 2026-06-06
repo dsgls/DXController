@@ -10,6 +10,7 @@
 // D-pad inside list: edge-detect via GetFocusRow() before/after MoveRow.
 // At edge, wrap to ActionBarRow @ primary.
 // A on list row: consumed no-op (selection drives auto-display).
+// R-stick Y scrolls winBulletin's MenuUIScrollAreaWindow.
 //=============================================================================
 class ComputerScreenBulletinsNav extends ComputerScreenNavSub;
 
@@ -17,10 +18,15 @@ const ROW_LIST       = 0;
 const ROW_ACTIONBAR  = 1;
 const NUM_ROWS       = 2;
 
+// R-stick smooth scroll of the bulletin body (matches ComputerScreenEmailNav).
+const ScrollDeadzone  = 200.0;
+const ScrollThreshold = 500.0;
+
 var int rowIndex;
 var int actionBarIndex;
 var MenuUIActionButtonWindow barBtns[5];
 var int barCount;
+var float scrollAccum;
 
 function OnEnter(ComputerUIWindow s)
 {
@@ -180,4 +186,47 @@ function bool GetFocusedRect(out float x, out float y, out float w, out float h)
     if (rowIndex == ROW_ACTIONBAR)
         return false;  // buttons suppressed
     return false;
+}
+
+// R-stick Y scrolls winBulletin's MenuUIScrollAreaWindow (parent's-parent
+// of the text window — see CreateBulletinViewWindow). Positive ry = stick
+// up = content scrolls toward the top = StepUp.
+function bool HandleScroll(float ry)
+{
+    local ComputerScreenBulletins bScr;
+    local MenuUIScrollAreaWindow winScroll;
+
+    bScr = ComputerScreenBulletins(screen);
+    if (bScr == None || bScr.winBulletin == None)
+        return false;
+
+    if (Abs(ry) < ScrollDeadzone)
+    {
+        scrollAccum = 0.0;
+        return false;
+    }
+
+    scrollAccum += ry;
+    if (Abs(scrollAccum) < ScrollThreshold)
+        return true;
+
+    winScroll = MenuUIScrollAreaWindow(bScr.winBulletin.GetParent().GetParent());
+    if (winScroll == None || winScroll.vScale == None)
+    {
+        scrollAccum = 0.0;
+        return false;
+    }
+
+    if (scrollAccum > 0.0)
+        winScroll.vScale.MoveThumb(MOVETHUMB_StepUp);
+    else
+        winScroll.vScale.MoveThumb(MOVETHUMB_StepDown);
+
+    scrollAccum = 0.0;
+    return true;
+}
+
+function ClearAxisCache()
+{
+    scrollAccum = 0.0;
 }
