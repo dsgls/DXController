@@ -70,6 +70,13 @@ UseDirectInput=False
 UseJoystick=False
 ```
 
+By default, the controller sticks use a linear curve. I recommend the following settings for exponential curves with better feel. In `[DeusExe]`:
+
+```ini
+XInputLeftStickExponent=2
+XInputRightStickExponent=5
+```
+
 ### `System\User.ini`
 
 Paste the block below into `[Extension.InputExt]` section, replacing any
