@@ -59,20 +59,12 @@ CXInput::CXInput()
  m_bHasPrevMousePos(false)
 {
     assert(GConfig);
-    GConfig->GetInt(PROJECTNAME, L"XInputLeftStickDeadzone",  m_iLeftStickDeadzone);
-    GConfig->GetInt(PROJECTNAME, L"XInputRightStickDeadzone", m_iRightStickDeadzone);
-    GConfig->GetInt(PROJECTNAME, L"XInputTriggerThreshold",   m_iTriggerThreshold);
-    GConfig->GetInt(PROJECTNAME, L"XInputMouseActivityPx",    m_iMouseActivityPx);
-    GConfig->GetInt(PROJECTNAME, L"XInputPadActiveGraceMs",   m_iPadActiveGraceMs);
-    GConfig->GetInt(PROJECTNAME, L"XInputHotplugScanMs",      m_iHotplugScanMs);
-    GConfig->GetFloat(PROJECTNAME, L"XInputLeftStickExponent",  m_fLeftStickExponent);
-    GConfig->GetFloat(PROJECTNAME, L"XInputRightStickExponent", m_fRightStickExponent);
-
-    //Guard against ini typos that would produce NaN/Inf in pow() or the
-    //fCurvedMag/fPostMag scale factor. Range is wide enough to cover every
-    //sensible feel.
-    m_fLeftStickExponent  = std::min(10.0f, std::max(0.1f, m_fLeftStickExponent));
-    m_fRightStickExponent = std::min(10.0f, std::max(0.1f, m_fRightStickExponent));
+    GConfig->GetInt(L"DXController", L"StickDeadzoneLeft",  m_iLeftStickDeadzone);
+    GConfig->GetInt(L"DXController", L"StickDeadzoneRight", m_iRightStickDeadzone);
+    GConfig->GetInt(L"DXController", L"TriggerThreshold",   m_iTriggerThreshold);
+    GConfig->GetInt(L"DXController", L"MouseActivityPx",    m_iMouseActivityPx);
+    GConfig->GetInt(L"DXController", L"PadActiveGraceMs",   m_iPadActiveGraceMs);
+    GConfig->GetInt(L"DXController", L"HotplugScanMs",      m_iHotplugScanMs);
 }
 
 void CXInput::EmitButtonChanges(UEngine* const pEngine, UViewport* const pViewport, const WORD iNewButtons)
