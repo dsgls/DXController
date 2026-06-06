@@ -6,9 +6,11 @@
 // slots.  Navigation:
 //
 //   D-pad up/down : move focus among aug item buttons (linear, with wrap).
-//   A             : press the focused aug button, which calls SelectAugmentation
-//                   on the screen and enables the Install button.
-//   Y             : press the Install button (if sensitive) to confirm.
+//                   Each focus change calls SelectAugmentation, so the
+//                   focused canister is always the one Install would commit.
+//   A             : press the Install button (if sensitive) to install the
+//                   focused aug. Matches the heal screen, where A also
+//                   commits the screen's single action.
 //   B / Back      : close the screen (handled upstream by ControllerRootWindow).
 //
 // Button collection happens once at Attach time.  If the cannister list
@@ -228,19 +230,10 @@ function bool HandleActivate(byte button)
     if (s == None)
         return true;
 
-    // A (IK_Joy1 = 0xC8 = 200): press focused aug button to select it.
+    // A (IK_Joy1 = 0xC8 = 200): install the focused aug. D-pad already
+    // pre-selected it via SelectAugmentation, so btnInstall is sensitive
+    // whenever the focused canister is installable.
     if (button == 200)
-    {
-        if (focused != None && focused.bIsSensitive)
-        {
-            HUDMedBotAugItemButton(focused).PressButton();
-            class'DXControllerDebug'.static.DebugLog("DXC-NAV AugInstall select");
-        }
-        return true;
-    }
-
-    // Y (IK_Joy4 = 0xCB = 203): confirm installation.
-    if (button == 203)
     {
         if (s.btnInstall != None && s.btnInstall.bIsSensitive)
         {
@@ -250,14 +243,14 @@ function bool HandleActivate(byte button)
         return true;
     }
 
-    // X (IK_Joy3 = 0xCA = 202) / R-stick click (IK_Joy10 = 0xD1 = 209): no-op.
+    // X (IK_Joy3 = 0xCA = 202) / Y (IK_Joy4 = 0xCB = 203) /
+    // R-stick click (IK_Joy10 = 0xD1 = 209): no-op.
     return true;
 }
 
 function BuildHints()
 {
-    AddHint("a", "Select");
-    AddHint("y", "Install");
+    AddHint("a", "Install");
     AddHint("b", "Close");
 }
 
