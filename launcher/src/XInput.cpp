@@ -30,6 +30,59 @@ namespace
         { XINPUT_GAMEPAD_DPAD_LEFT,      IK_JoyPovLeft  },
         { XINPUT_GAMEPAD_DPAD_RIGHT,     IK_JoyPovRight },
     };
+
+    //Case-insensitive parse of the curve-type INI token. Returns eDefault when
+    //pszToken is null or doesn't match any of the four expected tokens.
+    CXInput::EStickCurveType ParseStickCurveType(const wchar_t* const pszToken,
+                                                 const CXInput::EStickCurveType eDefault)
+    {
+        if (!pszToken)
+        {
+            return eDefault;
+        }
+        if (_wcsicmp(pszToken, L"Linear")  == 0) return CXInput::EStickCurveType::Linear;
+        if (_wcsicmp(pszToken, L"Power")   == 0) return CXInput::EStickCurveType::Power;
+        if (_wcsicmp(pszToken, L"Expo")    == 0) return CXInput::EStickCurveType::Expo;
+        if (_wcsicmp(pszToken, L"Sigmoid") == 0) return CXInput::EStickCurveType::Sigmoid;
+        return eDefault;
+    }
+
+    //Pure: shape a normalized magnitude u (>= 0) into a shaped magnitude.
+    //Endpoints pinned: returns 0 at u <= 0, ~1 at u = 1. Linear short-circuits.
+    //May return > 1 for u > 1 (diagonal overflow); caller clamps final axes.
+    float ShapeStickMagnitude(const float fU, const CXInput::SStickCurve& Curve)
+    {
+        if (fU <= 0.0f)
+        {
+            return 0.0f;
+        }
+        switch (Curve.eType)
+        {
+        case CXInput::EStickCurveType::Power:
+            return std::pow(fU, Curve.fPower);
+
+        case CXInput::EStickCurveType::Expo:
+        {
+            const float e = Curve.fExpo;
+            return (1.0f - e) * fU + e * fU * fU * fU;
+        }
+
+        case CXInput::EStickCurveType::Sigmoid:
+        {
+            const float k  = Curve.fSigSteepness;
+            const float c  = Curve.fSigMidpoint;
+            const float w  = Curve.fSigStrength;
+            const float lo = 1.0f / (1.0f + std::exp(  k * c));
+            const float hi = 1.0f / (1.0f + std::exp(-k * (1.0f - c)));
+            const float s  = (1.0f / (1.0f + std::exp(-k * (fU - c))) - lo) / (hi - lo);
+            return (1.0f - w) * fU + w * s;
+        }
+
+        case CXInput::EStickCurveType::Linear:
+        default:
+            return fU;
+        }
+    }
 }
 
 CXInput::CXInput()
@@ -39,8 +92,6 @@ CXInput::CXInput()
  m_iMouseActivityPx(4),
  m_iPadActiveGraceMs(500),
  m_iHotplugScanMs(1000),
- m_fLeftStickExponent(2.0f),
- m_fRightStickExponent(2.0f),
  m_iActiveSlot(static_cast<DWORD>(-1)),
  m_bConnected(false),
  m_iPrevButtons(0),
@@ -65,6 +116,34 @@ CXInput::CXInput()
     GConfig->GetInt(L"DXController", L"MouseActivityPx",    m_iMouseActivityPx);
     GConfig->GetInt(L"DXController", L"PadActiveGraceMs",   m_iPadActiveGraceMs);
     GConfig->GetInt(L"DXController", L"HotplugScanMs",      m_iHotplugScanMs);
+
+    //Per-stick response curves. String token chosen so adding/removing curve
+    //types in future never invalidates a hand-edited ini. Each numeric param is
+    //clamped to guard against typos producing NaN/Inf in pow/exp.
+    m_LeftStickCurve.eType  = ParseStickCurveType(GConfig->GetStr(L"DXController", L"StickCurveLeft"),  m_LeftStickCurve.eType);
+    m_RightStickCurve.eType = ParseStickCurveType(GConfig->GetStr(L"DXController", L"StickCurveRight"), m_RightStickCurve.eType);
+
+    GConfig->GetFloat(L"DXController", L"StickCurvePowerLeft",             m_LeftStickCurve.fPower);
+    GConfig->GetFloat(L"DXController", L"StickCurvePowerRight",            m_RightStickCurve.fPower);
+    GConfig->GetFloat(L"DXController", L"StickCurveExpoLeft",              m_LeftStickCurve.fExpo);
+    GConfig->GetFloat(L"DXController", L"StickCurveExpoRight",             m_RightStickCurve.fExpo);
+    GConfig->GetFloat(L"DXController", L"StickCurveSigmoidSteepnessLeft",  m_LeftStickCurve.fSigSteepness);
+    GConfig->GetFloat(L"DXController", L"StickCurveSigmoidSteepnessRight", m_RightStickCurve.fSigSteepness);
+    GConfig->GetFloat(L"DXController", L"StickCurveSigmoidMidpointLeft",   m_LeftStickCurve.fSigMidpoint);
+    GConfig->GetFloat(L"DXController", L"StickCurveSigmoidMidpointRight",  m_RightStickCurve.fSigMidpoint);
+    GConfig->GetFloat(L"DXController", L"StickCurveSigmoidStrengthLeft",   m_LeftStickCurve.fSigStrength);
+    GConfig->GetFloat(L"DXController", L"StickCurveSigmoidStrengthRight",  m_RightStickCurve.fSigStrength);
+
+    auto ClampCurve = [](SStickCurve& Curve)
+    {
+        Curve.fPower        = std::min(10.0f,  std::max(0.1f,  Curve.fPower));
+        Curve.fExpo         = std::min(1.0f,   std::max(0.0f,  Curve.fExpo));
+        Curve.fSigSteepness = std::min(12.0f,  std::max(1.0f,  Curve.fSigSteepness));
+        Curve.fSigMidpoint  = std::min(0.85f,  std::max(0.15f, Curve.fSigMidpoint));
+        Curve.fSigStrength  = std::min(1.0f,   std::max(0.0f,  Curve.fSigStrength));
+    };
+    ClampCurve(m_LeftStickCurve);
+    ClampCurve(m_RightStickCurve);
 }
 
 void CXInput::EmitButtonChanges(UEngine* const pEngine, UViewport* const pViewport, const WORD iNewButtons)
@@ -109,53 +188,42 @@ static constexpr float kAxisRange = 1000.0f;
 
 void CXInput::EmitStickAxes(UEngine* const pEngine, UViewport* const pViewport,
                             const SHORT iRawX, const SHORT iRawY, const int iDeadzone,
-                            const float fExponent,
+                            const SStickCurve& Curve,
                             const EInputKey eKeyX, const EInputKey eKeyY,
                             float& fOutX, float& fOutY)
 {
     //fOutX/fOutY are passed by reference and hold the previous tick's
-    //post-deadzone value on entry. Snapshot before the existing logic
-    //overwrites them so we can detect the non-zero -> zero edge below.
+    //post-deadzone value on entry. Snapshot before the new value overwrites
+    //them so we can detect the non-zero -> zero edge below.
     const float fPrevX = fOutX;
     const float fPrevY = fOutY;
 
-    //Map SHORT -> -kAxisRange..kAxisRange directly. 32767.0f for both signs and
-    //clamp handles the asymmetric -32768 case.
-    constexpr float kShortToAxis = kAxisRange / 32767.0f;
-    const float fX = std::max(-kAxisRange, static_cast<float>(iRawX) * kShortToAxis);
-    const float fY = std::max(-kAxisRange, static_cast<float>(iRawY) * kShortToAxis);
+    //Work entirely in normalized magnitude [0, 1]; scale to axis units once at
+    //the end. fRawMag can exceed 32767 on a diagonal (~46340 at full 45 deg);
+    //the curve extrapolates monotonically and the per-axis clamp catches it.
+    const float fXf     = static_cast<float>(iRawX);
+    const float fYf     = static_cast<float>(iRawY);
+    const float fRawMag = std::sqrt(fXf * fXf + fYf * fYf);
+    const float fU      = fRawMag / 32767.0f;
+    const float fCDz    = static_cast<float>(iDeadzone) / 32767.0f;
 
-    const float fMag = std::sqrt(fX * fX + fY * fY);
-    const float fDz  = static_cast<float>(iDeadzone) * kShortToAxis;
-
-    if (fMag <= fDz || fMag <= 0.0f)
+    if (fU <= fCDz || fRawMag <= 0.0f)
     {
         fOutX = 0.0f;
         fOutY = 0.0f;
     }
     else
     {
-        //Radial deadzone: remap magnitude so fDz->0 and kAxisRange->kAxisRange (linear).
-        const float fScale = (fMag - fDz) * kAxisRange / ((kAxisRange - fDz) * fMag);
-        fOutX = std::min(kAxisRange, std::max(-kAxisRange, fX * fScale));
-        fOutY = std::min(kAxisRange, std::max(-kAxisRange, fY * fScale));
-
-        //Response curve: pow(m/kAxisRange, exp) * kAxisRange, applied to the
-        //post-deadzone magnitude. Both endpoints (0 and kAxisRange) are fixed
-        //for any exp>0, so the player can always reach full speed at full
-        //deflection. exp>1 gives finer aim near zero; exp<1 is snappier.
-        //Skip when exp == 1 to keep the default path bit-identical.
-        if (fExponent != 1.0f)
-        {
-            const float fPostMag = std::sqrt(fOutX * fOutX + fOutY * fOutY);
-            if (fPostMag > 0.0f)
-            {
-                const float fCurvedMag  = std::pow(fPostMag / kAxisRange, fExponent) * kAxisRange;
-                const float fCurveScale = fCurvedMag / fPostMag;
-                fOutX = std::min(kAxisRange, std::max(-kAxisRange, fOutX * fCurveScale));
-                fOutY = std::min(kAxisRange, std::max(-kAxisRange, fOutY * fCurveScale));
-            }
-        }
+        //Radial deadzone: remap (cDz, 1] to (0, 1] linearly. Curve shapes that
+        //post-deadzone magnitude. Direction preserved: a single combined
+        //scale = out_axis_mag / raw_mag applied to raw X/Y yields
+        //direction * out_axis_mag with no intermediate sqrt.
+        const float fR      = (fU - fCDz) / (1.0f - fCDz);
+        const float fS      = ShapeStickMagnitude(fR, Curve);
+        const float fOutMag = fS * kAxisRange;
+        const float fScale  = fOutMag / fRawMag;
+        fOutX = std::min(kAxisRange, std::max(-kAxisRange, fXf * fScale));
+        fOutY = std::min(kAxisRange, std::max(-kAxisRange, fYf * fScale));
     }
 
     if (fOutX != 0.0f)
@@ -298,12 +366,12 @@ void CXInput::Poll(UEngine* const pEngine, UViewport* const pViewport, const boo
     EmitButtonChanges(pEngine, pViewport, State.Gamepad.wButtons);
     EmitStickAxes(pEngine, pViewport,
                   State.Gamepad.sThumbLX, State.Gamepad.sThumbLY, m_iLeftStickDeadzone,
-                  m_fLeftStickExponent,
+                  m_LeftStickCurve,
                   IK_JoyX, IK_JoyY,
                   m_fPrevLeftStickX, m_fPrevLeftStickY);
     EmitStickAxes(pEngine, pViewport,
                   State.Gamepad.sThumbRX, State.Gamepad.sThumbRY, m_iRightStickDeadzone,
-                  m_fRightStickExponent,
+                  m_RightStickCurve,
                   IK_JoyU, IK_JoyV,
                   m_fPrevRightStickX, m_fPrevRightStickY);
     m_fPrevLeftTrigger  = EmitTriggerAxis(pEngine, pViewport, State.Gamepad.bLeftTrigger,  m_fPrevLeftTrigger,  IK_JoyZ);
