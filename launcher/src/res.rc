@@ -163,13 +163,13 @@ BEGIN
     BEGIN
         BLOCK "041304b0"
         BEGIN
-            VALUE "CompanyName", "Marijn Kentie"
-            VALUE "FileDescription", "Deus Ex"
+            VALUE "CompanyName", "Davíð Steinn Geirsson"
+            VALUE "FileDescription", "Deus Ex with XInput controller support"
             VALUE "FileVersion", "8.1.0.0"
-            VALUE "InternalName", "DeusExe"
-            VALUE "LegalCopyright", "Copyright (C) 2016 Marijn Kentie"
+            VALUE "InternalName", "DXController"
+            VALUE "LegalCopyright", "Copyright (C) 2024-2026 Davíð Steinn Geirsson, (C) 2016 Marijn Kentie"
             VALUE "OriginalFilename", "DeusEx.exe"
-            VALUE "ProductName", "Deus Exe"
+            VALUE "ProductName", "DXController"
             VALUE "ProductVersion", "8.1.0.0"
         END
     END
