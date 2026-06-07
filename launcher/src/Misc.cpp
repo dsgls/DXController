@@ -24,7 +24,7 @@ Returns game directory in user documents directory
 void Misc::GetUserDocsDir(wchar_t(&pszBuf)[MAX_PATH])
 {
     SHGetFolderPath(NULL,CSIDL_PERSONAL,NULL,NULL,pszBuf);
-    PathAppend(pszBuf, FRIENDLYGAMENAME);
+    PathAppend(pszBuf, L"Deus Ex");
 }
 
 /**

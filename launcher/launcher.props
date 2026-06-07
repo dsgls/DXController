@@ -1,16 +1,18 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <PropertyGroup>
     <_ProjectFileVersion>10.0.30319.1</_ProjectFileVersion>
     <OutDir>$(SolutionDir)\$(Configuration)\</OutDir>
     <IntDir>$(SolutionDir)\_work\intermediate\$(Configuration)\$(ProjectName)\</IntDir>
     <LinkIncremental>false</LinkIncremental>
-    <TargetName>$(GAMENAME)</TargetName>
+    <TargetName>DeusEx</TargetName>
   </PropertyGroup>
   <ItemDefinitionGroup>
     <ClCompile>
-      <AdditionalIncludeDirectories>../games/$(GAMENAME)/engine/inc;../games/$(GAMENAME)/core/inc;../games/$(GAMENAME)/window/inc;../games/$(GAMENAME)/deusex/inc;../games/$(GAMENAME)/extension/inc;../detours;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <PreprocessorDefinitions>PROJECTNAME=L"$(ProjectName)";_USE_MATH_DEFINES;NOMINMAX;_REALLY_WANT_DEBUG;WINDOWS_IGNORE_PACKING_MISMATCH;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>../games/DeusEx/engine/inc;../games/DeusEx/core/inc;../games/DeusEx/window/inc;../games/DeusEx/deusex/inc;../games/DeusEx/extension/inc;../detours;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <!-- PROJECTNAME=L"DeusExe" intentionally hardcoded: this names the section in users' DeusEx.ini.
+           Derived from $(ProjectName) would silently orphan existing user settings after the rename. -->
+      <PreprocessorDefinitions>PROJECTNAME=L"DeusExe";_USE_MATH_DEFINES;NOMINMAX;_REALLY_WANT_DEBUG;WINDOWS_IGNORE_PACKING_MISMATCH;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <StructMemberAlignment>4Bytes</StructMemberAlignment>
       <TreatWChar_tAsBuiltInType>false</TreatWChar_tAsBuiltInType>
       <WarningLevel>Level4</WarningLevel>
@@ -23,17 +25,14 @@
       <LanguageStandard>Default</LanguageStandard>
     </ClCompile>
     <Link>
-      <AdditionalDependencies>uxtheme.lib;version.lib;Shlwapi.lib;Comctl32.lib;Xinput.lib;../games/$(GAMENAME)/engine/lib/engine.lib;../games/$(GAMENAME)/core/lib/core.lib;../games/$(GAMENAME)/extension/lib/extension.lib;../games/$(GAMENAME)/window/lib/window.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>uxtheme.lib;version.lib;Shlwapi.lib;Comctl32.lib;Xinput.lib;../games/DeusEx/engine/lib/engine.lib;../games/DeusEx/core/lib/core.lib;../games/DeusEx/extension/lib/extension.lib;../games/DeusEx/window/lib/window.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <BaseAddress>
       </BaseAddress>
-      <OutputFile>$(OutDir)$(GAMEEXE)</OutputFile>
+      <OutputFile>$(OutDir)DeusEx.exe</OutputFile>
       <DataExecutionPrevention>false</DataExecutionPrevention>
       <StackReserveSize>2097152</StackReserveSize>
       <LargeAddressAware>true</LargeAddressAware>
     </Link>
-    <PostBuildEvent>
-      <Command>if exist "$(GAMEDIR)\system\" copy "$(TargetPath) " "$(GAMEDIR)\system\"</Command>
-    </PostBuildEvent>
     <PreBuildEvent>
       <Command>
       </Command>
