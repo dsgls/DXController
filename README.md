@@ -57,48 +57,12 @@ Console=DXController.ControllerConsole
 Root=DXController.ControllerRootWindow
 ```
 
-Under `[DeusEx.DeusExPlayer]`:
-
-```ini
-bToggleCrouch=True
-```
-
-Under `[WinDrv.WindowsClient]`:
-
-```ini
-UseDirectInput=False
-UseJoystick=False
-```
-
-### `System\User.ini`
-
-Paste the block below into `[Extension.InputExt]` section, replacing any
-existing `Joy*` lines:
-
-```ini
-Joy1=Jump
-Joy2=ReloadWeapon
-Joy3=ParseRightClick
-Joy4=
-Joy5=
-Joy6=
-Joy7=TogglePlayerMenuWindow
-Joy8=ShowMainMenu
-Joy9=
-Joy10=
-Joy15=
-Joy16=
-JoyPovUp=ActivateBelt 1
-JoyPovLeft=ActivateBelt 2
-JoyPovRight=ActivateBelt 3
-JoyPovDown=ActivateBelt 4
-JoyX=Axis aStrafe
-JoyY=Axis aBaseY
-JoyU=Axis aTurn
-JoyV=Axis aLookUp
-JoyZ=
-JoyR=
-```
+This is the only manual .ini edit. The remaining recommended config
+(`bToggleCrouch`, WinDrv joystick disables, recommended `Joy*` bindings)
+is applied from within the game: launch, open **Settings → Controller**
+from the main menu, and choose **Apply recommended controller config**.
+The dialog confirms what will change before writing; `UseDirectInput` /
+`UseJoystick` take effect on the next launch.
 
 ## Controls
 

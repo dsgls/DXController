@@ -539,6 +539,34 @@ Prefix all such logs with `DXC-<area>`: `DXC-WHEEL`, `DXC-NAV`,
   `DXControllerTextures.uc`. The same pattern would work for any
   small fixed-size texture lookup (per-slot, per-state, per-quadrant)
   in the DXController package.
+- **UE1 `var config` writes to `[Package.ClassName]`, not arbitrary
+  section names — coordinate with the native side if it also reads.**
+  A `class Foo extends Object config(Bar);` writes to
+  `[Pkg.Foo]` in `Bar.ini`, where `Pkg` is the class's package. There
+  is no way from script to flatten the section header. If a native
+  component reads the same keys, it must name the section
+  `[Pkg.Foo]` too — the launcher (`DeusExe-XInput`) does this for
+  `[DXController.ControllerSettings]` via
+  `GConfig->GetInt(L"DXController.ControllerSettings", L"<Key>", ...)`.
+  A naked `[DXController]` section in ini is invisible to script's
+  `var config` and an `[DXController.SomeOtherClass]` write is invisible
+  to the launcher — both sides have to spell the same section.
+- **Mid-game launcher state changes via `ConsoleCommand` exec hooks.**
+  The launcher exposes three exec commands consumed by
+  `MenuScreenController` / `ControllerCurvePreview`:
+  - `XInputReload` — re-reads `[DXController.ControllerSettings]` and
+    re-applies clamps. Called by every `MenuChoice_*` after
+    `SaveConfig()` so stick-feel changes take effect without restart.
+  - `XInputSampleCurve <Left|Right> <N>` — returns N comma-separated
+    curve outputs sampled at `x = i/(N-1)`. `ControllerCurvePreview`
+    uses this to render the static curve without re-implementing
+    `ShapeStickMagnitude` script-side.
+  - `XInputGetRawMag` — returns `"L=<f> R=<f>"` (per-stick raw
+    magnitude in `[0,1]`). Polled per Tick by the preview windows for
+    the live input dot.
+  This is the canonical pattern when a native runtime component owns
+  state that script-side UI needs to read or react to. Add new exec
+  commands on the native side; parse the string return from script.
 
 ## Source overlay model
 
