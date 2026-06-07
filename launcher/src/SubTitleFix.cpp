@@ -19,7 +19,7 @@ void CSubtitleFix::ReplacementFunc(XWindow& XWinThis, CSubtitleFix& /*Context*/,
     //Constructor function comparison is for early-out for most windows
     if (pNewClass->ClassConstructor == &XModalWindow::InternalConstructor && wcscmp(pNewClass->GetFullName(), L"Class DeusEx.ConWindowActive") == 0)
     {
-        UClass* const pReplacementClass = LoadClass<UObject>(nullptr, L"DeusExe.ConWindowActive2", L"DeusExe", 0, nullptr);
+        UClass* const pReplacementClass = LoadClass<UObject>(nullptr, L"DXController.ConWindowActive2", L"DXController", 0, nullptr);
         if (pReplacementClass)
         {
             pNewClass = pReplacementClass;

@@ -149,15 +149,15 @@ function RegisterNavControllers()
     // the controller's AllowsMenuToggle=false routes B and gates
     // Start/Back. See ConversationNavController for binding details.
     //
-    // The DeusExe launcher (../DeusExe-XInput/DeusExe/SubTitleFix.cpp)
-    // hooks NewChild and silently swaps DeusEx.ConWindowActive for its
-    // own DeusExe.ConWindowActive2 (a widescreen subtitle fix), so the
+    // The launcher (launcher/src/SubTitleFix.cpp) hooks NewChild and
+    // silently swaps DeusEx.ConWindowActive for its own
+    // DXController.ConWindowActive2 (a widescreen subtitle fix), so the
     // runtime class is the subclass. FindNavIndex matches on exact class
     // identity, so we register both — the base class for any caller that
     // bypasses the launcher swap, and the subclass for the normal path.
     RegisterNav(Class'DeusEx.ConWindow',           Class'ConversationNavController');
     RegisterNav(Class'DeusEx.ConWindowActive',     Class'ConversationNavController');
-    RegisterNav(Class'DeusExe.ConWindowActive2',   Class'ConversationNavController');
+    RegisterNav(Class'DXController.ConWindowActive2', Class'ConversationNavController');
 
     // In-world network terminals. Phase 1: shell dispatch + Computer
     // pane sub-controllers (Login/Bulletins/Email/SpecialOptions/ATM*).
