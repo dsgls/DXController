@@ -9,11 +9,13 @@ Two modes:
     (i,i,i)), no key, for non-masked additive textures (the wheel's
     slice-highlight wedges).
 
-Usage: png-to-pcx.py [SRC_DIR] [DST_DIR] [--size SIZE] [--mode masked|grey]
+Usage: png-to-pcx.py [SRC_DIR] [DST_DIR] [--size SIZE|native] [--mode masked|grey]
 
 SRC_DIR and DST_DIR are optional and default to the XboxSeries/ and
 XboxSeries-pcx/ directories next to this script. SIZE is the output edge
-length in pixels (default: 64)."""
+length in pixels — square (default: 64), or pass 'native' to preserve
+each PNG's natural dimensions (used by the menu-bg tile set, which has
+mixed 256x256 and 32x256 tiles)."""
 
 import argparse
 from pathlib import Path
@@ -101,8 +103,9 @@ def main() -> None:
         help="directory for output .pcx files (default: XboxSeries-pcx/)",
     )
     parser.add_argument(
-        "--size", type=int, default=DEFAULT_SIZE,
-        help=f"output edge length in pixels, square (default: {DEFAULT_SIZE})",
+        "--size", default=str(DEFAULT_SIZE),
+        help=f"output edge length in pixels (square), or 'native' to use "
+             f"each PNG's natural dimensions (default: {DEFAULT_SIZE})",
     )
     parser.add_argument(
         "--mode", choices=["masked", "grey"], default="masked",
@@ -114,12 +117,21 @@ def main() -> None:
     if not args.src_dir.is_dir():
         parser.error(f"source directory does not exist: {args.src_dir}")
 
+    native = args.size.lower() == "native"
+    sq = 0
+    if not native:
+        try:
+            sq = int(args.size)
+        except ValueError:
+            parser.error(f"--size must be an integer or 'native', got {args.size!r}")
+
     args.dst_dir.mkdir(parents=True, exist_ok=True)
     pngs = sorted(args.src_dir.glob("*.png"))
     convert = convert_masked if args.mode == "masked" else convert_grey
     for src in pngs:
         dst = args.dst_dir / (src.stem + ".pcx")
-        convert(src, dst, (args.size, args.size))
+        size = Image.open(src).size if native else (sq, sq)
+        convert(src, dst, size)
         print(f"{src.name} -> {dst.name}")
     print(f"\n{len(pngs)} files converted to {args.dst_dir}")
 
