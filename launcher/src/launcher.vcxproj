@@ -162,4 +162,7 @@
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>
+  <Target Name="GenerateVersionHeader" BeforeTargets="ClCompile;ResourceCompile">
+    <Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -File &quot;$(MSBuildProjectDirectory)\..\gen-version.ps1&quot; -OutputPath &quot;$(MSBuildProjectDirectory)\version_generated.h&quot;" />
+  </Target>
 </Project>

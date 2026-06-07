@@ -16,5 +16,6 @@ gamedir
 /launcher/_work/
 /launcher/detours/
 /launcher/.vs/
+/launcher/src/version_generated.h
 *.vcxproj.user
 *.suo
