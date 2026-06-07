@@ -1343,7 +1343,7 @@ protected:
 		INT HashNext;
 		TK Key;
 		TI Value;
-		TPair( TTypeInfo<TK>::ConstInitType InKey, TTypeInfo<TI>::ConstInitType InValue )
+		TPair( typename TTypeInfo<TK>::ConstInitType InKey, typename TTypeInfo<TI>::ConstInitType InValue )
 		: Key( InKey ), Value( InValue )
 		{}
 		TPair()
@@ -1385,7 +1385,7 @@ protected:
 		Rehash();
 		unguardSlow;
 	}
-	TI& Add( TTypeInfo<TK>::ConstInitType InKey, TTypeInfo<TI>::ConstInitType InValue )
+	TI& Add( typename TTypeInfo<TK>::ConstInitType InKey, typename TTypeInfo<TI>::ConstInitType InValue )
 	{
 		guardSlow(TMapBase::Add);
 		TPair& Pair   = *new(Pairs)TPair( InKey, InValue );
@@ -1448,7 +1448,7 @@ public:
 		Rehash();
 		unguardSlow;
 	}
-	TI& Set( TTypeInfo<TK>::ConstInitType InKey, TTypeInfo<TI>::ConstInitType InValue )
+	TI& Set( typename TTypeInfo<TK>::ConstInitType InKey, typename TTypeInfo<TI>::ConstInitType InValue )
 	{
 		guardSlow(TMap::Set);
 		for( INT i=Hash[(GetTypeHash(InKey) & (HashCount-1))]; i!=INDEX_NONE; i=Pairs(i).HashNext )
@@ -1457,7 +1457,7 @@ public:
 		return Add( InKey, InValue );
 		unguardSlow;
 	}
-	INT Remove( TTypeInfo<TK>::ConstInitType InKey )
+	INT Remove( typename TTypeInfo<TK>::ConstInitType InKey )
 	{
 		guardSlow(TMapBase::Remove);
 		INT Count=0;
@@ -1558,18 +1558,18 @@ public:
 				new(Values)TI(Pairs(i).Value);
 		unguardSlow;
 	}
-	TI& Add( TTypeInfo<TK>::ConstInitType InKey, TTypeInfo<TI>::ConstInitType InValue )
+	TI& Add( typename TTypeInfo<TK>::ConstInitType InKey, typename TTypeInfo<TI>::ConstInitType InValue )
 	{
 		return TMapBase<TK,TI>::Add( InKey, InValue );
 	}
-	TI& AddUnique( TTypeInfo<TK>::ConstInitType InKey, TTypeInfo<TI>::ConstInitType InValue )
+	TI& AddUnique( typename TTypeInfo<TK>::ConstInitType InKey, typename TTypeInfo<TI>::ConstInitType InValue )
 	{
 		for( INT i=Hash[(GetTypeHash(InKey) & (HashCount-1))]; i!=INDEX_NONE; i=Pairs(i).HashNext )
 			if( Pairs(i).Key==InKey && Pairs(i).Value==InValue )
 				return Pairs(i).Value;
 		return Add( InKey, InValue );
 	}
-	INT RemovePair( TTypeInfo<TK>::ConstInitType InKey, TTypeInfo<TI>::ConstInitType InValue )
+	INT RemovePair( typename TTypeInfo<TK>::ConstInitType InKey, typename TTypeInfo<TI>::ConstInitType InValue )
 	{
 		guardSlow(TMap::Remove);
 		INT Count=0;
