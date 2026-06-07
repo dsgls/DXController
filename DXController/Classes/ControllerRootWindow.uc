@@ -365,6 +365,8 @@ event DescendantAdded(Window descendant)
     local int idx;
     local bool bIsModalScreen;
     local string parentName;  // diagnostic
+    local PersonaScreenBaseWindow persona;
+    local DeusExPlayer p;
 
     Super.DescendantAdded(descendant);
 
@@ -372,6 +374,21 @@ event DescendantAdded(Window descendant)
     {
         class'DXControllerDebug'.static.DebugLog("DXC-NAV DESC-ADD descendant=None");  // diagnostic
         return;
+    }
+
+    // Track the most recently opened persona tab so closing via any
+    // path (B/Joy2 → Escape → PopWindow, keyboard Esc, mouse) restores
+    // the right tab on next open. TogglePlayerMenuWindow's own save is
+    // redundant once this fires but harmless. FindPersonaScreenIndex
+    // filters to the 8 registered tab classes, excluding medbot
+    // subclasses (HUDMedBotAddAugsScreen, HUDMedBotHealthScreen) which
+    // are not valid InvokeUIScreen targets outside their medbot context.
+    persona = PersonaScreenBaseWindow(descendant);
+    if (persona != None && FindPersonaScreenIndex(persona.Class) >= 0)
+    {
+        p = DeusExPlayer(parentPawn);
+        if (p != None)
+            p.LastPersonaScreen = persona.Class;
     }
 
     if (descendant.GetParent() != None)
