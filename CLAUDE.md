@@ -73,6 +73,13 @@ next session.
 If a finding belongs in two files, document concisely in both — the
 quirk form in `development.md`, the user-facing form in `README.md`.
 
+For `development.md` and `CLAUDE.md`, only document **high-level
+information** (what someone getting up to speed on the project would
+want) or **things that are not obvious and not easily discoverable by
+reading the code**. "To build the project, run
+`nix run .#sync-and-build`" is relevant; "the build script does X then
+Y then waits for Z then frobs the fizz" is useless verbosity.
+
 ## Flag, don't compensate
 
 **User-owned native code:** the launcher executable and its XInput shim
