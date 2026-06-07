@@ -101,12 +101,14 @@ namespace
 }
 
 CXInput::CXInput()
-:m_iLeftStickDeadzone(2500),
- m_iRightStickDeadzone(2500),
+:m_iLeftStickDeadzone(3500),
+ m_iRightStickDeadzone(3500),
  m_iTriggerThreshold(XINPUT_GAMEPAD_TRIGGER_THRESHOLD),
  m_iMouseActivityPx(4),
  m_iPadActiveGraceMs(500),
  m_iHotplugScanMs(1000),
+ m_LeftStickCurve{  EStickCurveType::Power,   2.0f, 0.60f, 6.0f, 0.60f, 0.60f },
+ m_RightStickCurve{ EStickCurveType::Sigmoid, 2.0f, 0.60f, 8.0f, 0.70f, 0.90f },
  m_iActiveSlot(static_cast<DWORD>(-1)),
  m_bConnected(false),
  m_iPrevButtons(0),

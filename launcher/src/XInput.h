@@ -12,12 +12,12 @@ public:
 
     struct SStickCurve
     {
-        EStickCurveType eType = EStickCurveType::Power;
-        float fPower         = 2.0f;
-        float fExpo          = 0.60f;
-        float fSigSteepness  = 6.0f;
-        float fSigMidpoint   = 0.60f;
-        float fSigStrength   = 0.60f;
+        EStickCurveType eType;
+        float fPower;
+        float fExpo;
+        float fSigSteepness;
+        float fSigMidpoint;
+        float fSigStrength;
     };
 
     CXInput();
