@@ -5,49 +5,24 @@ on:
     branches: [master]
     tags: ['v*']
 
+permissions:
+  contents: write
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
-    runs-on: ubuntu-latest
-
-    permissions:
-      # Default GITHUB_TOKEN is read-only on public repos; the release
-      # step needs write access to push assets + create releases.
-      contents: write
-
-    env:
-      WINEDEBUG: -all
-      # Suppress wine's prompt to download mono/gecko on first run — UCC
-      # needs neither and the prompt would block the build.
-      WINEDLLOVERRIDES: "mscoree,mshtml="
-      # DeusExe-XInput release tag to bundle into the release zip.
-      # Must match a published tag at
-      # https://github.com/dsgls/DeusExe-XInput/releases — the workflow
-      # downloads DeusExe-XInput-${DEUSEXE_XINPUT_VERSION}.zip from
-      # that release.
-      DEUSEXE_XINPUT_VERSION: v1.0.3
+    runs-on: windows-latest
 
     steps:
-      - name: Install wine
-        run: |
-          sudo dpkg --add-architecture i386
-          sudo apt-get update
-          # dos2unix provides unix2dos, used by the overlay step to
-          # convert the LF-stored .uc sources to the CRLF UCC.exe wants.
-          # python3-pil (Pillow) + python3-numpy drive the texture
-          # generation step below (gen-wheel.py + png-to-pcx.py).
-          sudo apt-get install -y --no-install-recommends \
-            wine wine32 wine64 dos2unix python3-pil python3-numpy
-
-      - name: Initialize wine prefix
-        run: |
-          wineboot --init
-          # Wait for wineserver to settle before the first real wine
-          # invocation; otherwise the next step can race the prefix
-          # creation.
-          wineserver -w
-
       - name: Checkout DXController
         uses: actions/checkout@v6
+        with:
+          # gen-version.ps1 falls back to `git describe` on non-tag pushes;
+          # needs the full history + tags.
+          fetch-depth: 0
 
       - name: Load buildtools deploy key
         uses: webfactory/ssh-agent@v0.10.0
@@ -55,158 +30,166 @@ jobs:
           ssh-private-key: ${{ secrets.BUILDTOOLS_DEPLOY_KEY }}
 
       - name: Clone deusex-buildtools (shallow)
+        shell: pwsh
         run: |
-          git clone --depth=1 \
-            git@github.com:dsgls/deusex-buildtools.git \
-            "$RUNNER_TEMP/build"
+          git clone --depth=1 `
+            git@github.com:dsgls/deusex-buildtools.git `
+            "$env:RUNNER_TEMP\build"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Install Python deps for texture generation
+        shell: pwsh
+        run: pip install pillow numpy
 
       - name: Overlay DXController and DeusEx sources
+        shell: pwsh
         run: |
-          # The repo stores .uc as LF; the ancient UCC.exe wants CRLF.
-          # unix2dos -n reads each LF source and writes a CRLF copy
-          # straight into the build dir — only the overlay sources are
-          # touched, the full stock DeusEx/Classes/ tree is left alone.
-          for pkg in DXController DeusEx; do
-            dst="$RUNNER_TEMP/build/$pkg/Classes"
-            mkdir -p "$dst"
-            for f in "$pkg"/Classes/*.uc; do
-              [ -e "$f" ] || continue
-              unix2dos -n "$f" "$dst/$(basename "$f")"
-            done
-          done
-          # Generate the texture set and convert to 8-bit PCX into the
-          # DXController package's Textures/ dir, mirroring sync-and-build.sh.
-          # The #exec lines in DXControllerTextures.uc reference
-          # FILE=Textures\<name>.pcx (relative to the package dir).
-          TEXDIR="$RUNNER_TEMP/build/DXController/Textures"
-          mkdir -p "$TEXDIR"
-          WHEELSRC="$(mktemp -d)"
-          python3 assets/gen-wheel.py "$WHEELSRC"
-          python3 assets/png-to-pcx.py assets/XboxSeries "$TEXDIR" --size 64   --mode masked
-          python3 assets/png-to-pcx.py "$WHEELSRC"        "$TEXDIR" --size 1024 --mode masked
-          python3 assets/png-to-pcx.py "$WHEELSRC/wedges" "$TEXDIR" --size 1024 --mode grey
+          # The repo stores .uc as LF (pinned via .gitattributes); UCC.exe wants CRLF.
+          # Convert each overlay source into the build dir.
+          foreach ($pkg in @('DXController', 'DeusEx')) {
+              $dst = Join-Path $env:RUNNER_TEMP "build\$pkg\Classes"
+              New-Item -ItemType Directory -Force -Path $dst | Out-Null
+              foreach ($f in Get-ChildItem -File "$pkg\Classes\*.uc") {
+                  $content = (Get-Content -Raw -LiteralPath $f.FullName) -replace "`r`n", "`n" -replace "`n", "`r`n"
+                  Set-Content -NoNewline -LiteralPath (Join-Path $dst $f.Name) -Value $content
+              }
+          }
+          # Generate textures and convert to 8-bit PCX into the DXController package.
+          $texDir = Join-Path $env:RUNNER_TEMP "build\DXController\Textures"
+          New-Item -ItemType Directory -Force -Path $texDir | Out-Null
+          $wheelSrc = New-Item -ItemType Directory -Path (Join-Path $env:RUNNER_TEMP "wheel-src") -Force
+          $menuBgSrc = New-Item -ItemType Directory -Path (Join-Path $env:RUNNER_TEMP "menu-bg-src") -Force
+          python assets/gen-wheel.py "$($wheelSrc.FullName)"
+          python assets/gen-menu-bg.py "$($menuBgSrc.FullName)"
+          python assets/png-to-pcx.py assets/XboxSeries "$texDir" --size 64 --mode masked
+          python assets/png-to-pcx.py "$($wheelSrc.FullName)" "$texDir" --size 1024 --mode masked
+          python assets/png-to-pcx.py "$(Join-Path $wheelSrc.FullName 'wedges')" "$texDir" --size 1024 --mode grey
+          python assets/png-to-pcx.py "$($menuBgSrc.FullName)" "$texDir" --size native --mode grey
 
-      - name: Register mod packages with the compiler
+      - name: Register DXController in DeusEx.ini EditPackages
+        shell: pwsh
         run: |
-          # Insert EditPackages=DXController inside the [Editor.EditorEngine]
-          # EditPackages block — appending to EOF would land it under a later
-          # section and UCC would never see it. The ini ships CRLF (buildtools'
-          # .gitattributes forces it), so:
-          #   - anchor with [[:space:]]* to absorb the trailing \r when matching;
-          #   - emit the inserted line with a trailing \r so it lands as CRLF too
-          #     (a bare LF line wedged into CRLF context breaks UE1's ini reader).
-          INI="$RUNNER_TEMP/build/System/DeusEx.ini"
-          INSERT=$'EditPackages=DXController\r'
-          if ! grep -qxF "$INSERT" "$INI"; then
-            sed -i -E "/^EditPackages=DeusEx[[:space:]]*\$/a${INSERT}" "$INI"
-          fi
-          echo "--- EditPackages block after edit ---"
-          grep -n EditPackages "$INI"
+          $ini = Join-Path $env:RUNNER_TEMP "build\System\DeusEx.ini"
+          $content = Get-Content -Raw -LiteralPath $ini
+          $insert = "EditPackages=DXController"
+          if (-not ($content -match [regex]::Escape($insert))) {
+              # ini ships CRLF; preserve it. Insert the new line after `EditPackages=DeusEx`.
+              $content = $content -replace "EditPackages=DeusEx`r`n", "EditPackages=DeusEx`r`nEditPackages=DXController`r`n"
+              Set-Content -NoNewline -LiteralPath $ini -Value $content
+          }
+          Write-Host "--- EditPackages block ---"
+          Select-String -Path $ini -Pattern 'EditPackages'
 
       - name: Build pass 1 — DeusEx.u
+        shell: pwsh
         working-directory: ${{ runner.temp }}/build/System
         run: |
-          rm -f DeusEx.u
-          # UCC prompts to overwrite DeusEx/Inc/DeusExClasses.h; 'n'
-          # lets the build proceed. UCC then GPFs while loading the
-          # rebuilt package — DeusEx.u is on disk before the crash.
-          # The GPF happens before UCC reaches the DXController build,
-          # so pass 2 is responsible for that.
-          # `|| true` tolerates the GPF; the size check below is the
-          # real success signal.
-          echo n | wine UCC.exe make || true
-          if [ ! -f DeusEx.u ]; then
-            echo "::error::DeusEx.u was not produced"
-            exit 1
-          fi
-          SIZE=$(stat -c%s DeusEx.u)
-          if [ "$SIZE" -lt 1048576 ]; then
-            echo "::error::DeusEx.u is $SIZE bytes (< 1 MiB) — UCC silent failure"
-            exit 1
-          fi
-          echo "DeusEx.u OK ($SIZE bytes)"
+          Remove-Item -ErrorAction SilentlyContinue DeusEx.u
+          # UCC prompts to overwrite DeusEx/Inc/DeusExClasses.h; 'n' lets it proceed.
+          # UCC then GPFs while loading the rebuilt DeusEx.u — file is on disk before the crash.
+          "n" | & .\UCC.exe make
+          $global:LASTEXITCODE = 0
+          if (-not (Test-Path DeusEx.u)) {
+              Write-Host "::error::DeusEx.u was not produced"
+              exit 1
+          }
+          $size = (Get-Item DeusEx.u).Length
+          if ($size -lt 1MB) {
+              Write-Host "::error::DeusEx.u is $size bytes (< 1 MiB) — UCC silent failure"
+              exit 1
+          }
+          Write-Host "DeusEx.u OK ($size bytes)"
 
       - name: Build pass 2 — DXController.u
+        shell: pwsh
         working-directory: ${{ runner.temp }}/build/System
         run: |
-          rm -f DXController.u
-          wine UCC.exe make
-          if [ ! -f DXController.u ]; then
-            echo "::error::DXController.u was not produced"
-            exit 1
-          fi
-          DXSIZE=$(stat -c%s DXController.u)
-          if [ "$DXSIZE" -lt 102400 ]; then
-            echo "::error::DXController.u is $DXSIZE bytes (< 100 KiB) — UCC silent failure"
-            exit 1
-          fi
-          echo "DXController.u OK ($DXSIZE bytes)"
+          Remove-Item -ErrorAction SilentlyContinue DXController.u
+          & .\UCC.exe make
+          if ($LASTEXITCODE -ne 0) {
+              Write-Host "::error::UCC returned $LASTEXITCODE"
+              exit 1
+          }
+          if (-not (Test-Path DXController.u)) {
+              Write-Host "::error::DXController.u was not produced"
+              exit 1
+          }
+          $size = (Get-Item DXController.u).Length
+          if ($size -lt 100KB) {
+              Write-Host "::error::DXController.u is $size bytes (< 100 KiB) — UCC silent failure"
+              exit 1
+          }
+          Write-Host "DXController.u OK ($size bytes)"
 
-      - name: Stage artifact files
+      - name: Add MSBuild to PATH
+        uses: microsoft/setup-msbuild@v3
+
+      - name: Build launcher
+        shell: pwsh
         run: |
-          cp "$RUNNER_TEMP/build/System/DeusEx.u" .
-          cp "$RUNNER_TEMP/build/System/DXController.u" .
+          # Tag pushes get authoritative version from github.ref_name; non-tag
+          # pushes fall through to gen-version.ps1's `git describe` path against
+          # the fetch-depth: 0 checkout.
+          if ($env:GITHUB_REF -like 'refs/tags/*') {
+              $env:LAUNCHER_VERSION = $env:GITHUB_REF_NAME
+          }
+          msbuild launcher\launcher.sln /p:Configuration=Release /p:Platform=Win32 /m -verbosity:minimal -nologo
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if (-not (Test-Path launcher\Release\DeusEx.exe)) {
+              Write-Host "::error::launcher build did not produce DeusEx.exe"
+              exit 1
+          }
+          Write-Host "launcher OK"
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v7
         with:
           name: dxcontroller-build
           path: |
-            DeusEx.u
-            DXController.u
+            ${{ runner.temp }}/build/System/DeusEx.u
+            ${{ runner.temp }}/build/System/DXController.u
+            launcher/Release/DeusEx.exe
+            launcher/Release/DeusEx.pdb
 
       - name: Stage release contents
         if: startsWith(github.ref, 'refs/tags/v')
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: pwsh
         run: |
-          REL="$RUNNER_TEMP/release/DXController-${GITHUB_REF_NAME}"
-          mkdir -p "$REL"
-          cp README.md "$REL/"
-          cp "$RUNNER_TEMP/build/System/DeusEx.u" "$REL/"
-          cp "$RUNNER_TEMP/build/System/DXController.u" "$REL/"
-
-          # Bundle the matching DeusExe-XInput launcher executable from
-          # the upstream release zip. Upstream zip extracts to
-          # DeusExe-XInput-<ver>/{deusex.exe, ...}; we flatten the .exe
-          # into $REL so end users get a single directory. The launcher
-          # currently ships as lowercase deusex.exe — rename to
-          # DeusEx.exe on the way in (case-insensitive find tolerates an
-          # upstream fix without a workflow change).
-          DXX_ASSET="DeusExe-XInput-${DEUSEXE_XINPUT_VERSION}.zip"
-          DXX_ZIP="$RUNNER_TEMP/$DXX_ASSET"
-          gh release download "$DEUSEXE_XINPUT_VERSION" \
-            --repo dsgls/DeusExe-XInput \
-            --pattern "$DXX_ASSET" \
-            --output "$DXX_ZIP"
-          DXX_DIR="$RUNNER_TEMP/deusexe-xinput"
-          rm -rf "$DXX_DIR"
-          mkdir -p "$DXX_DIR"
-          unzip -q "$DXX_ZIP" -d "$DXX_DIR"
-          EXE=$(find "$DXX_DIR" -iname 'deusex.exe' -print -quit)
-          if [ -z "$EXE" ]; then
-            echo "::error::$DXX_ASSET is missing deusex.exe"
-            exit 1
-          fi
-          cp "$EXE"  "$REL/DeusEx.exe"
+          $stage = "$env:RUNNER_TEMP\release\DXController-$env:GITHUB_REF_NAME"
+          New-Item -ItemType Directory -Force -Path $stage | Out-Null
+          Copy-Item README.md $stage\
+          Copy-Item "$env:RUNNER_TEMP\build\System\DeusEx.u" $stage\
+          Copy-Item "$env:RUNNER_TEMP\build\System\DXController.u" $stage\
+          Copy-Item launcher\Release\DeusEx.exe $stage\
+          Copy-Item launcher\Release\DeusEx.pdb $stage\
 
       - name: Create release zip
         if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
         working-directory: ${{ runner.temp }}/release
         run: |
-          zip -r "DXController-${GITHUB_REF_NAME}.zip" \
-            "DXController-${GITHUB_REF_NAME}/"
+          Compress-Archive -Path "DXController-$env:GITHUB_REF_NAME" `
+                           -DestinationPath "DXController-$env:GITHUB_REF_NAME.zip"
 
       - name: Create or update GitHub release
         if: startsWith(github.ref, 'refs/tags/v')
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: pwsh
         run: |
-          ZIP="$RUNNER_TEMP/release/DXController-${GITHUB_REF_NAME}.zip"
-          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
-            gh release upload "$GITHUB_REF_NAME" "$ZIP" --clobber
-          else
-            gh release create "$GITHUB_REF_NAME" "$ZIP" \
-              --title "DXController $GITHUB_REF_NAME" \
-              --generate-notes
-          fi
+          $zip = "$env:RUNNER_TEMP\release\DXController-$env:GITHUB_REF_NAME.zip"
+          $exists = $false
+          gh release view $env:GITHUB_REF_NAME 2>$null
+          if ($LASTEXITCODE -eq 0) { $exists = $true }
+          $global:LASTEXITCODE = 0
+          if ($exists) {
+              gh release upload $env:GITHUB_REF_NAME $zip --clobber
+          } else {
+              gh release create $env:GITHUB_REF_NAME $zip `
+                  --title "DXController $env:GITHUB_REF_NAME" `
+                  --generate-notes
+          }
