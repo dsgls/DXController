@@ -243,14 +243,19 @@ def compose():
 
 
 def main():
-    out_dir = Path(sys.argv[1]) if len(sys.argv) > 1 else Path(__file__).parent / "menu-bg-gen"
+    standalone = len(sys.argv) <= 1
+    out_dir = Path(sys.argv[1]) if not standalone else Path(__file__).parent / "menu-bg-gen"
     out_dir.mkdir(parents=True, exist_ok=True)
     full = compose()
     for name, (x0, y0, x1, y1) in TILES:
         tile = full.crop((x0, y0, x1, y1))
         tile.save(out_dir / f"{name}.png")
-    full.save(out_dir / "MenuBg_full.png")  # composite for visual sanity check
-    print(f"wrote 6 tiles + composite to {out_dir}")
+    # The composite is a visual sanity check for standalone runs; suppress
+    # it when invoked from the build so png-to-pcx doesn't ship a stray
+    # MenuBg_full.pcx alongside the real tiles.
+    if standalone:
+        full.save(out_dir / "MenuBg_full.png")
+    print(f"wrote 6 tiles{' + composite' if standalone else ''} to {out_dir}")
 
 
 if __name__ == "__main__":

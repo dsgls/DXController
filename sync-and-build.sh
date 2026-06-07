@@ -106,12 +106,16 @@ if (( DRY_RUN )); then
     echo "sync-and-build: (dry-run) would generate textures into $TEXDIR"
 else
     WHEELSRC="$(mktemp -d)"
-    trap 'rm -rf "$WHEELSRC"' EXIT
+    MENUBGSRC="$(mktemp -d)"
+    trap 'rm -rf "$WHEELSRC" "$MENUBGSRC"' EXIT
     mkdir -p "$TEXDIR"
     python3 "$REPO_DIR/assets/gen-wheel.py" "$WHEELSRC"
-    python3 "$REPO_DIR/assets/png-to-pcx.py" "$REPO_DIR/assets/XboxSeries" "$TEXDIR" --size 64   --mode masked
-    python3 "$REPO_DIR/assets/png-to-pcx.py" "$WHEELSRC"         "$TEXDIR" --size 1024 --mode masked
-    python3 "$REPO_DIR/assets/png-to-pcx.py" "$WHEELSRC/wedges"  "$TEXDIR" --size 1024 --mode grey
+    python3 "$REPO_DIR/assets/gen-menu-bg.py" "$MENUBGSRC"
+    python3 "$REPO_DIR/assets/png-to-pcx.py" "$REPO_DIR/assets/XboxSeries" "$TEXDIR" --size 64     --mode masked
+    python3 "$REPO_DIR/assets/png-to-pcx.py" "$WHEELSRC"         "$TEXDIR" --size 1024   --mode masked
+    python3 "$REPO_DIR/assets/png-to-pcx.py" "$WHEELSRC/wedges"  "$TEXDIR" --size 1024   --mode grey
+    # Menu-bg tiles have mixed sizes (256x256 + 32x256), so preserve native dims.
+    python3 "$REPO_DIR/assets/png-to-pcx.py" "$MENUBGSRC"        "$TEXDIR" --size native --mode grey
     echo "sync-and-build: generated textures into $TEXDIR"
 fi
 
