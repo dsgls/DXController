@@ -106,6 +106,23 @@ else
     echo "sync-and-build: generated textures into $TEXDIR"
 fi
 
+# Build the native launcher (msbuild via WSL → Windows-side VS).
+# find-msbuild.sh hard-fails if no MSBuild reachable; that's the right
+# behaviour — sync-and-build is the canonical install path and partial
+# installs (stale .exe + fresh .u) hide which side broke.
+MSBUILD="$("$REPO_DIR/launcher/find-msbuild.sh")"
+if (( DRY_RUN )); then
+    echo "sync-and-build: (dry-run) would run msbuild via $MSBUILD"
+    echo "sync-and-build: (dry-run) would install DeusEx.exe + DeusEx.pdb to $BUILD_DIR/System/"
+else
+    "$MSBUILD" "$(wslpath -w "$REPO_DIR/launcher/launcher.sln")" \
+        -p:Configuration=Release -p:Platform=Win32 \
+        -m -verbosity:minimal -nologo
+    cp "$REPO_DIR/launcher/Release/DeusEx.exe" "$BUILD_DIR/System/DeusEx.exe"
+    cp "$REPO_DIR/launcher/Release/DeusEx.pdb" "$BUILD_DIR/System/DeusEx.pdb"
+    echo "sync-and-build: installed DeusEx.exe + DeusEx.pdb to $BUILD_DIR/System/"
+fi
+
 if (( DRY_RUN )); then
     echo "sync-and-build: dry run — skipping .u delete and build"
     exit 0
