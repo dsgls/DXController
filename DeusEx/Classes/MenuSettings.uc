@@ -5,6 +5,23 @@
 class MenuSettings expands MenuUIMenuWindow;
 
 // ----------------------------------------------------------------------
+// InitWindow
+//
+// `ButtonNames` is `var localized` -- its values are loaded from the
+// `[MenuSettings]` section of DeusEx.int, which still has the stock
+// 7-button layout (slot 6 = "Previous Menu"). Override the entries we
+// changed in defaultproperties before Super.InitWindow runs CreateMenuButtons.
+// ----------------------------------------------------------------------
+
+event InitWindow()
+{
+    ButtonNames[6] = "Controller";
+    ButtonNames[7] = "Previous Menu";
+
+    Super.InitWindow();
+}
+
+// ----------------------------------------------------------------------
 // ----------------------------------------------------------------------
 
 defaultproperties
