@@ -1,20 +1,18 @@
 //=============================================================================
 // MenuScreenController — the Settings → Controller page.
 //
-// Hosts up to 15 MenuUIChoice rows on the left (one Apply action, plus
-// 7 per stick: deadzone, curve type, and 5 curve-param rows of which
-// only the active curve's are shown) and two ControllerCurvePreview
-// windows on the right (one per stick, stacked vertically).
+// Hosts up to 14 MenuUIChoice rows on the left (7 per stick: deadzone,
+// curve type, and up to 5 curve-param rows of which only the active
+// curve's are shown — at most 5 visible per stick, 10 at once) and two
+// ControllerCurvePreview windows on the right (one per stick, stacked
+// vertically).
 //
 // All rows are spawned at InitWindow regardless of curve type; visibility
 // toggling is handled by RepackLayout. Stock CreateChoices iterates the
-// 13-slot choices[] array, which we exceed (15 rows), so we override
+// 13-slot choices[] array, which we exceed (14 rows), so we override
 // CreateChoices and spawn directly via winClient.NewChild.
 //=============================================================================
 class MenuScreenController extends MenuUIScreenWindow;
-
-// Apply action.
-var MenuChoice_StickApplyRecommended btnApply;
 
 // Per-stick rows.
 var MenuChoice_StickDeadzone         rowDeadzoneL, rowDeadzoneR;
@@ -32,15 +30,8 @@ var ControllerCurvePreview vizLeft, vizRight;
 // line drawn between the two stick blocks.
 var int dividerRightY;
 
-// Confirm-dialog state shared between OnApplyRecommendedPressed and the
-// BoxOptionSelected callback. mode 0 = "ask to apply" (Yes/No), mode 1 =
-// "applied, single-button dismiss".
-var int applyDialogMode;
-
 function CreateChoices()
 {
-    btnApply       = MenuChoice_StickApplyRecommended(winClient.NewChild(Class'MenuChoice_StickApplyRecommended'));
-
     rowDeadzoneL   = MenuChoice_StickDeadzone(  winClient.NewChild(Class'MenuChoice_StickDeadzoneLeft' ));
     rowCurveTypeL  = MenuChoice_StickCurveType( winClient.NewChild(Class'MenuChoice_StickCurveTypeLeft'));
     rowPowerL      = MenuChoice_StickFloatParam(winClient.NewChild(Class'MenuChoice_StickCurvePowerLeft'));
@@ -101,7 +92,6 @@ function RepackLayout()
     rightType = Class'ControllerSettings'.Default.StickCurveRight;
 
     n = 0;
-    n = PlaceRow(btnApply,      n);
 
     // Left stick block.
     n = PlaceRow(rowDeadzoneL,  n);
@@ -166,103 +156,6 @@ function OnCurveTypeChanged(byte stickIdx)
 function OnCurveParamChanged(byte stickIdx)
 {
     if (stickIdx == 0) vizLeft.Refresh(); else vizRight.Refresh();
-}
-
-// Entry point invoked by the Apply Recommended row. Pops a Yes/No
-// confirm dialog; the actual ini write is deferred to ApplyRecommended()
-// from BoxOptionSelected so the user can back out.
-function OnApplyRecommendedPressed()
-{
-    local DeusExRootWindow root;
-
-    root = DeusExRootWindow(GetRootWindow());
-    applyDialogMode = 0;
-    root.MessageBox(
-        "Apply recommended controller config?",
-        "This will apply the recommended controller .ini settings:" $ Chr(13) $ Chr(13) $
-        "  - bToggleCrouch = True" $ Chr(13) $
-        "  - UseDirectInput = False" $ Chr(13) $
-        "  - UseJoystick = False" $ Chr(13) $
-        "  - [Extension.InputExt] Joy* bindings (replaces existing)" $ Chr(13) $ Chr(13) $
-        "The Joy* bindings change is destructive -- your current gamepad" $ Chr(13) $
-        "button bindings will be overwritten with the defaults." $ Chr(13) $ Chr(13) $
-        "UseDirectInput / UseJoystick take effect on next launch.",
-        0,                  // MB_YesNo per MenuUIMessageBoxWindow.SetMode
-        False,              // hideCurrentScreen
-        Self);              // notifyWindow -> BoxOptionSelected
-}
-
-// MessageBox callback. Stock signature from DeusExRootWindow:510. For the
-// Yes/No confirm, buttonNumber 0 = Yes (Apply), 1 = No (Cancel). For the
-// follow-up MB_OK acknowledgement (mode==1 here), the single OK posts
-// buttonNumber 0 and just dismisses.
-event bool BoxOptionSelected(Window button, int buttonNumber)
-{
-    local DeusExRootWindow root;
-
-    root = DeusExRootWindow(GetRootWindow());
-
-    if (applyDialogMode == 0)
-    {
-        root.PopWindow();
-        if (buttonNumber == 0)
-        {
-            ApplyRecommended();
-            applyDialogMode = 1;
-            root.MessageBox(
-                "Applied",
-                "Restart the game for UseDirectInput / UseJoystick to take effect.",
-                1,                  // MB_OK per MenuUIMessageBoxWindow.SetMode
-                False,
-                Self);
-        }
-        return True;
-    }
-
-    if (applyDialogMode == 1)
-    {
-        root.PopWindow();
-        return True;
-    }
-
-    return False;
-}
-
-// Three-step recommended-config write. Each block is independent so a
-// partial failure (e.g. p == None) just skips that block.
-//
-// 1) bToggleCrouch: live + persists via player config.
-// 2) WinDrv keys: ini-only (effective next launch). Stock precedent for
-//    `set ini:` is Engine/Classes/PlayerPawn.uc:361.
-// 3) Bindings: live via `set InputExt`. The `set ini:Extension.InputExt`
-//    follow-up forces persistence even if the runtime path doesn't write
-//    through (stock CustomizeKeys relies on the runtime write alone, but
-//    belt-and-braces is cheap here).
-function ApplyRecommended()
-{
-    local DeusExPlayer p;
-    local int i;
-    local string key, alias;
-
-    p = DeusExPlayer(GetPlayerPawn());
-    if (p == None) return;
-
-    p.bToggleCrouch = True;
-    p.SaveConfig();
-
-    p.ConsoleCommand("set ini:WinDrv.WindowsClient UseDirectInput False");
-    p.ConsoleCommand("set ini:WinDrv.WindowsClient UseJoystick False");
-    p.ConsoleCommand("flush");
-
-    for (i = 0; i < 20; i++)
-    {
-        key = Class'ControllerRecommendedBindings'.Default.keys[i];
-        if (key == "") break;
-        alias = Class'ControllerRecommendedBindings'.Default.aliases[i];
-        p.ConsoleCommand("set InputExt " $ key $ " " $ alias);
-        p.ConsoleCommand("set ini:Extension.InputExt " $ key $ " " $ alias);
-    }
-    p.ConsoleCommand("flush");
 }
 
 event bool VirtualKeyPressed(EInputKey key, bool bRepeat)
