@@ -1,3 +1,6 @@
 #!/bin/sh
-MSBUILD="/mnt/c/Program Files/Microsoft Visual Studio/18/Community/MSBuild/Current/Bin/MSBuild.exe"
-"$MSBUILD" "$(wslpath -w launcher.sln)" -p:Configuration=Release -p:Platform=Win32 -m -verbosity:minimal -nologo
+# Build the launcher locally. Run from the launcher/ dir.
+set -e
+MSBUILD="$("$(dirname "$0")/find-msbuild.sh")"
+"$MSBUILD" "$(wslpath -w launcher.sln)" \
+    -p:Configuration=Release -p:Platform=Win32 -m -verbosity:minimal -nologo
