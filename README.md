@@ -23,7 +23,6 @@ The release `.zip` contains everything you need:
 |---------------------|--------------------------------------------------------|
 | `DeusEx.exe`       | Launcher with the built-in XInput controller driver    |
 | `DeusEx.u`          | Stock package with small controller hooks added        |
-| `DeusExe.u`         | Launcher support package                               |
 | `DXController.u`    | The mod                                                |
 
 ## Requirements
@@ -38,14 +37,15 @@ The release `.zip` contains everything you need:
 
 ## Install
 
-1. Copy all four files from the release `.zip` into the game's `System`
-   folder (e.g. `C:\GOG Games\Deus Ex GOTY\System\`), overwriting
-   `DeusEx.u`.
+1. Copy `DeusEx.exe`, `DeusEx.u`, and `DXController.u` from the release
+   `.zip` into the game's `System` folder (e.g.
+   `C:\GOG Games\Deus Ex GOTY\System\`), overwriting the existing
+   `DeusEx.exe` and `DeusEx.u`.
 
 2. Apply the `.ini` edits below.
 
-4. Launch the game with **`DeusEx.exe`** (not the stock `DeusEx.exe`).
-   Controller input is only delivered through this launcher.
+3. Launch the game with **`DeusEx.exe`**. Controller input is only
+   delivered through this launcher.
 
 ### `System\DeusEx.ini`
 
