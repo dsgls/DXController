@@ -37,32 +37,10 @@ The release `.zip` contains everything you need:
 
 ## Install
 
-1. Copy `DeusEx.exe`, `DeusEx.u`, and `DXController.u` from the release
+Copy `DeusEx.exe`, `DeusEx.u`, and `DXController.u` from the release
    `.zip` into the game's `System` folder (e.g.
    `C:\GOG Games\Deus Ex GOTY\System\`), overwriting the existing
    `DeusEx.exe` and `DeusEx.u`.
-
-2. Apply the `.ini` edits below.
-
-3. Launch the game with **`DeusEx.exe`**. Controller input is only
-   delivered through this launcher.
-
-### `System\DeusEx.ini`
-
-Under `[Engine.Engine]`, replace the existing `Console=` and `Root=`
-lines with:
-
-```ini
-Console=DXController.ControllerConsole
-Root=DXController.ControllerRootWindow
-```
-
-This is the only manual .ini edit. The remaining recommended config
-(`bToggleCrouch`, WinDrv joystick disables, recommended `Joy*` bindings)
-is applied from within the game: launch, open **Settings → Controller**
-from the main menu, and choose **Apply recommended controller config**.
-The dialog confirms what will change before writing; `UseDirectInput` /
-`UseJoystick` take effect on the next launch.
 
 ## Controls
 
@@ -93,9 +71,6 @@ inventory and persona screens.
 
 ## Troubleshooting
 
-- Verify that you replaced the original .ini file settings, and didn't
-  duplicate the existing key.
-- Make sure `UseDirectInput` and `UseJoystick` are both `False`.
 - If you have any other mods installed, start with a fresh game install
   and install only DXController. Compatibility with other mods has not
   been tested.
