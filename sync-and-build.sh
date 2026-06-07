@@ -5,18 +5,13 @@
 # Layout:
 #   $REPO_DIR/DXController/Classes/*.uc   — our package's sources
 #   $REPO_DIR/DeusEx/Classes/*.uc         — overlay edits to stock DeusEx
-#   $REPO_DIR/DeusExe/Classes/*.uc        — vendored from the
-#                                           ../DeusExe-XInput/ sister repo
-#                                           (currently just
-#                                           ConWindowActive2.uc, which
-#                                           subclasses ConWindowActive for
-#                                           the widescreen subtitle fix
-#                                           and is swapped in by the
-#                                           launcher's native NewChild
-#                                           hook). DXController references
-#                                           Class'DeusExe.ConWindowActive2'
-#                                           so DeusExe must be compiled
-#                                           alongside.
+#   $REPO_DIR/DeusExe/Classes/*.uc        — launcher overlay classes;
+#                                           currently empty after the
+#                                           ConWindowActive2 migration
+#                                           into DXController.u (Task 9).
+#                                           DeusExe.u is still compiled
+#                                           (EditPackages=DeusExe remains
+#                                           in the build) pending cleanup.
 #
 # The DeusEx overlay assumes $BUILD_DIR/DeusEx/Classes/ already contains
 # the full stock source (from a one-time

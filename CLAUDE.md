@@ -20,10 +20,11 @@ itself.
 
 ### Sister repos and their roles
 
-The full project spans four repos. This one is the script-side mod; the
-others are sibling working trees you can `cd ../<name>` to:
+The full project spans three repos. This one is the script-side mod and
+includes the launcher source under `launcher/`; the others are sibling
+working trees you can `cd ../<name>` to:
 
-- **`../DeusExe-XInput/`** — fork of [Deus Exe](https://kentie.net/article/dxguide/)
+- **`launcher/`** (in this repo) — fork of [Deus Exe](https://kentie.net/article/dxguide/)
   that builds the launcher executable (`DeusEx.exe`) used to run the
   game. This is **the only user-owned native code in the project**. It
   loads the stock engine DLLs, polls XInput once per engine tick, and
@@ -53,7 +54,7 @@ others are sibling working trees you can `cd ../<name>` to:
 
 | Component                          | Repo                       | Modifiable? |
 |------------------------------------|----------------------------|-------------|
-| `DeusEx.exe` launcher / XInput shim / WinDrv runtime patches | `../DeusExe-XInput/` | yes |
+| `DeusEx.exe` launcher / XInput shim / WinDrv runtime patches | `launcher/` (this repo) | yes |
 | `DXController.u` (this mod)        | this repo                  | yes |
 | Edits to `DeusEx.u` classes (overlay) | `DeusEx/Classes/` here  | yes (rebuilt) |
 | `Engine.dll`, `Core.dll`, `Extension.dll`, `WinDrv.dll`, `Render.dll`, `*.u` packages other than `DeusEx.u` | stock game install | **no** (in-memory patches only, via the launcher) |
@@ -134,8 +135,8 @@ form in this file, the user-facing form in `README.md`.
 ### Suspected native-side bugs: flag, don't compensate
 
 **User-owned native code:** the launcher executable and its XInput shim
-in `../DeusExe-XInput/`, plus the runtime byte patches it applies to
-`WinDrv.dll` at startup (`DeusExe/WinDrvPatch.cpp`). These can be fixed
+in `launcher/`, plus the runtime byte patches it applies to
+`WinDrv.dll` at startup (`launcher/src/WinDrvPatch.cpp`). These can be fixed
 at the source.
 
 **Stock native code:** `Engine.dll`, `Core.dll`, `Extension.dll`
@@ -563,7 +564,7 @@ Prefix all such logs with `DXC-<area>`: `DXC-WHEEL`, `DXC-NAV`,
   `[Pkg.Foo]` in `Bar.ini`, where `Pkg` is the class's package. There
   is no way from script to flatten the section header. If a native
   component reads the same keys, it must name the section
-  `[Pkg.Foo]` too — the launcher (`DeusExe-XInput`) does this for
+  `[Pkg.Foo]` too — the launcher (`launcher/`) does this for
   `[DXController.ControllerSettings]` via
   `GConfig->GetInt(L"DXController.ControllerSettings", L"<Key>", ...)`.
   A naked `[DXController]` section in ini is invisible to script's
@@ -602,7 +603,7 @@ the line-ending conversion is the one allowed deviation from "verbatim"
 — it changes no code, and it keeps `git diff <vendor>..<edit>` showing
 exactly our delta against upstream rather than whole-file line-ending
 noise. The same applies when vendoring into `DeusExe/Classes/` from
-`../DeusExe-XInput/`.
+`launcher/`.
 
 Within each modified file, additions live in a banner-delimited block:
 
@@ -715,7 +716,7 @@ stock `Console.state Typing.KeyEvent`'s use of `global.KeyEvent` at
 [OS / XInput pad]
        │
        ▼
-[XInput shim in ../DeusExe-XInput/DeusExe/XInput.cpp]
+[XInput shim in launcher/src/XInput.cpp]
    per-tick poll, deadzone + response curve, edge dedup,
    focus-loss synthetic releases
        │  IK_Joy*/IK_JoyPov*/IK_JoyX/Y/U/V/Z/R + IST_Press/Release/Axis
@@ -752,7 +753,7 @@ re-enable `UseJoystick`: the legacy path has known bugs (see
 `../deusex-native-re/docs/windrv-input.md`) and would race the shim for
 the same `IK_Joy*` slots.
 
-The launcher (`../DeusExe-XInput/`) also applies in-memory byte
+The launcher (`launcher/`) also applies in-memory byte
 patches to `WinDrv.dll` at startup that fix two stock bugs:
 
 - **Bug 1**: `joyGetPosEx`-loop bitmap-index off-by-`0xc8`, which would
@@ -766,7 +767,7 @@ patches to `WinDrv.dll` at startup that fix two stock bugs:
   buttons) would be released the same tick.
 
 Both fixes are documented in `../deusex-native-re/docs/windrv-input.md`
-("Bug 1" and "Bug 2") and applied by `DeusExe/WinDrvPatch.cpp`. With
+("Bug 1" and "Bug 2") and applied by `launcher/src/WinDrvPatch.cpp`. With
 `UseJoystick=False` the joy-loop path is dead anyway, so Bug 1 is moot
 for current behaviour, but the patches are present for defence in
 depth (and for the case where someone flips the ini back). If you see
@@ -828,7 +829,7 @@ its own edge filter.
 ### XInput → UE event mapping
 
 The C++-side XInput shim
-(`../DeusExe-XInput/DeusExe/XInput.cpp`, see `kButtonMap` at the top of
+(`launcher/src/XInput.cpp`, see `kButtonMap` at the top of
 the file for the source of truth) feeds these `EInputKey` slots into
 `Console.KeyEvent`:
 

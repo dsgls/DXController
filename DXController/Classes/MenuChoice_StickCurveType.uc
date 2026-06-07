@@ -3,7 +3,7 @@
 //
 // Cycles the enum {Linear, Power, Expo, Sigmoid}. Saved as a string;
 // the launcher matches case-insensitively and falls back to Linear for
-// unknown values (DeusExe-XInput/DeusExe/XInput.cpp:43-46).
+// unknown values (launcher/src/XInput.cpp:43-46).
 //
 // Subclasses override Get/Set to bind to either StickCurveLeft or
 // StickCurveRight on ControllerSettings.

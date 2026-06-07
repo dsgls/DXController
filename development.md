@@ -9,7 +9,8 @@ This is the script-side mod for the DXController project. It builds the
 ```
 DXController/Classes/*.uc   the mod — one package, compiles to DXController.u
 DeusEx/Classes/*.uc         overlay edits to stock DeusEx classes (rebuilds DeusEx.u)
-DeusExe/Classes/*.uc        classes vendored from the DeusExe-XInput launcher repo
+DeusExe/Classes/*.uc        launcher overlay classes (now empty; pending removal)
+launcher/                   launcher source (fork of Deus Exe, builds DeusEx.exe)
 assets/                     source art + generators for the DXController textures
 sync-and-build.sh           rsync + two-pass UCC build
 .github/workflows/build.yml CI build and release packaging
@@ -25,12 +26,15 @@ subclassing and repointing an `.ini` binding instead.
 
 ## Sister repos
 
-The other three repos are sibling working trees (`cd ../<name>`):
+The other two repos are sibling working trees (`cd ../<name>`):
 
-- [DeusExe-XInput](https://github.com/dsgls/DeusExe-XInput) — fork of
-  [Deus Exe](https://kentie.net/article/dxguide/) that adds XIpnut
-  support, and also applies some runtime binary patches to Extension.dll
-  to fix engine bugs. This builds DeusEx.exe.
+- `../deusex-native-re/` — Ghidra RE notes for the stock `.dll` binaries;
+  read-only reference.
+- `../deusex-scripts/` — batch-exported `.uc` files for every stock
+  package; read-only reference.
+
+The launcher is in-tree under `launcher/`; there is no external launcher
+sibling repo.
 
 CI also clones a private `deusex-buildtools` repo that holds a stock
 game tree (engine `.u` files, `UCC.exe`, base `.ini`s) so the build can
@@ -95,12 +99,8 @@ Output lands in `gamedir/System/`: `DeusEx.u`, `DeusExe.u`,
 
 `.github/workflows/build.yml` builds on every push to `master` and, on
 a `v*` tag, assembles the release `.zip`: the three built `.u` files,
-`README.md`, and the matching
-`DeusExe.exe` downloaded from the
-[DeusExe-XInput releases](https://github.com/dsgls/DeusExe-XInput/releases).
-The bundled launcher version is pinned by `DEUSEXE_XINPUT_VERSION` in
-the workflow — bump it when cutting a release that needs a newer
-launcher.
+`README.md`, and `DeusExe.exe` built from `launcher/` via
+`launcher/build.sh` (MSBuild).
 
 To cut a release, push a `v*` tag.
 

@@ -8,12 +8,12 @@
 // Refresh() is called explicitly by the parent screen whenever the
 // stick's settings change. Live dot updates per Tick. No curve math
 // runs in this class — all sampling is delegated to the launcher to
-// avoid divergence with DeusExe-XInput/DeusExe/XInput.cpp ShapeStickMagnitude.
+// avoid divergence with launcher/src/XInput.cpp ShapeStickMagnitude.
 //=============================================================================
 class ControllerCurvePreview extends Window;
 
 // Deadzone is configured in raw XInput SHORT units (0..32767),
-// matching the launcher (DeusExe-XInput/DeusExe/XInput.cpp:208).
+// matching the launcher (launcher/src/XInput.cpp:208).
 // This is the only place in script that knows the 32767 constant.
 const KSHORT_RANGE = 32767;
 
