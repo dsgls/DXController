@@ -1,4 +1,5 @@
 #include "stdafx.h"
+#include "ConfigOverride.h"
 #include "FileManagerDeusExe.h"
 #include "Misc.h"
 #include "RawInput.h"
@@ -121,15 +122,51 @@ CLauncher::CLauncher()
             }
         }
 
+        //Override ini-driven engine settings without persisting them to the
+        //user's DeusEx.ini / User.ini. CConfigOverride snapshots each key
+        //(value, present-or-absent, file's Dirty flag) on construction and
+        //restores it on destruction, so a drop-in binary + .u install needs no
+        //manual ini edits. The list outlives pEngine->Init() and is torn down
+        //before appExit() flushes the config cache to disk.
+        std::list<CConfigOverride> ConfigOverrides;
+        ConfigOverrides.emplace_back(L"Engine.Engine",        L"Console",      L"DXController.ControllerConsole");
+        ConfigOverrides.emplace_back(L"Engine.Engine",        L"Root",         L"DXController.ControllerRootWindow");
+        ConfigOverrides.emplace_back(L"WinDrv.WindowsClient", L"UseJoystick",  L"False");
         if (m_bRawInput) //If raw input is enabled, disable DirectInput
         {
-            GConfig->SetBool(L"WinDrv.WindowsClient", L"UseDirectInput", FALSE);
+            ConfigOverrides.emplace_back(L"WinDrv.WindowsClient", L"UseDirectInput", L"False");
         }
-
         if (m_bBorderlessFullscreenWindow) //In borderless mode, disable normal full screen
         {
-            GConfig->SetBool(L"WinDrv.WindowsClient", L"StartupFullscreen", FALSE);
+            ConfigOverrides.emplace_back(L"WinDrv.WindowsClient", L"StartupFullscreen", L"False");
         }
+
+        //Gamepad bindings, in User.ini. XInputExt synthesizes Joy* events from
+        //the launcher's XInput shim; UseJoystick=False above just suppresses
+        //DirectInput's joystick enumeration so it doesn't double up.
+        const wchar_t* const pszUserIni = *static_cast<FConfigCacheIni*>(GConfig)->UserIni;
+        ConfigOverrides.emplace_back(L"Extension.InputExt", L"Joy1",        L"Jump",                   pszUserIni);
+        ConfigOverrides.emplace_back(L"Extension.InputExt", L"Joy2",        L"ReloadWeapon",           pszUserIni);
+        ConfigOverrides.emplace_back(L"Extension.InputExt", L"Joy3",        L"ParseRightClick",        pszUserIni);
+        ConfigOverrides.emplace_back(L"Extension.InputExt", L"Joy4",        L"",                       pszUserIni);
+        ConfigOverrides.emplace_back(L"Extension.InputExt", L"Joy5",        L"",                       pszUserIni);
+        ConfigOverrides.emplace_back(L"Extension.InputExt", L"Joy6",        L"",                       pszUserIni);
+        ConfigOverrides.emplace_back(L"Extension.InputExt", L"Joy7",        L"TogglePlayerMenuWindow", pszUserIni);
+        ConfigOverrides.emplace_back(L"Extension.InputExt", L"Joy8",        L"ShowMainMenu",           pszUserIni);
+        ConfigOverrides.emplace_back(L"Extension.InputExt", L"Joy9",        L"",                       pszUserIni);
+        ConfigOverrides.emplace_back(L"Extension.InputExt", L"Joy10",       L"",                       pszUserIni);
+        ConfigOverrides.emplace_back(L"Extension.InputExt", L"Joy15",       L"",                       pszUserIni);
+        ConfigOverrides.emplace_back(L"Extension.InputExt", L"Joy16",       L"",                       pszUserIni);
+        ConfigOverrides.emplace_back(L"Extension.InputExt", L"JoyPovUp",    L"ActivateBelt 1",         pszUserIni);
+        ConfigOverrides.emplace_back(L"Extension.InputExt", L"JoyPovLeft",  L"ActivateBelt 2",         pszUserIni);
+        ConfigOverrides.emplace_back(L"Extension.InputExt", L"JoyPovRight", L"ActivateBelt 3",         pszUserIni);
+        ConfigOverrides.emplace_back(L"Extension.InputExt", L"JoyPovDown",  L"ActivateBelt 4",         pszUserIni);
+        ConfigOverrides.emplace_back(L"Extension.InputExt", L"JoyX",        L"Axis aStrafe",           pszUserIni);
+        ConfigOverrides.emplace_back(L"Extension.InputExt", L"JoyY",        L"Axis aBaseY",            pszUserIni);
+        ConfigOverrides.emplace_back(L"Extension.InputExt", L"JoyU",        L"Axis aTurn",             pszUserIni);
+        ConfigOverrides.emplace_back(L"Extension.InputExt", L"JoyV",        L"Axis aLookUp",           pszUserIni);
+        ConfigOverrides.emplace_back(L"Extension.InputExt", L"JoyZ",        L"",                       pszUserIni);
+        ConfigOverrides.emplace_back(L"Extension.InputExt", L"JoyR",        L"",                       pszUserIni);
 
         //Init windowing
         InitWindowing();

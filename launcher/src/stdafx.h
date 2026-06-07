@@ -21,6 +21,7 @@
 #include <string>
 #include <limits>
 #include <array>
+#include <list>
 #include <memory>
 #include <cassert>
 #include <unordered_map>

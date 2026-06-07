@@ -57,6 +57,9 @@
     <ClCompile Include="FileManagerDeusExe.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="ConfigOverride.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="NativeHooks.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -102,6 +105,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="FileManagerDeusExe.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="ConfigOverride.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="NativeHooks.h">

@@ -112,6 +112,7 @@
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Use</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Use</PrecompiledHeader>
     </ClCompile>
+    <ClCompile Include="ConfigOverride.cpp" />
     <ClCompile Include="NativeHooks.cpp" />
     <ClCompile Include="WinDrvPatch.cpp" />
     <ClCompile Include="RawInput.cpp">
@@ -139,6 +140,7 @@
     <ClInclude Include="Launcher.h" />
     <ClInclude Include="LauncherDialog.h" />
     <ClInclude Include="Misc.h" />
+    <ClInclude Include="ConfigOverride.h" />
     <ClInclude Include="NativeHooks.h" />
     <ClInclude Include="OutputDeviceFileFlush.h" />
     <ClInclude Include="WinDrvPatch.h" />
