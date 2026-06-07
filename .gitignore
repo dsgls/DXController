@@ -4,3 +4,8 @@ gamedir
 
 /docs/superpowers
 /docs/tmp
+
+# Standalone-run output dirs for the asset generators (sync-and-build uses
+# mktemp instead). Kept out of version control because they're regenerated.
+/assets/menu-bg-gen
+/assets/wheel-gen
