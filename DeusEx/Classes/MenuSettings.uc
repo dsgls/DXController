@@ -7,16 +7,30 @@ class MenuSettings expands MenuUIMenuWindow;
 // ----------------------------------------------------------------------
 // InitWindow
 //
-// `ButtonNames` is `var localized` -- its values are loaded from the
-// `[MenuSettings]` section of DeusEx.int, which still has the stock
-// 7-button layout (slot 6 = "Previous Menu"). Override the entries we
-// changed in defaultproperties before Super.InitWindow runs CreateMenuButtons.
+// Two MenuSettings-side fixes layered on the stock screen:
+//
+// 1. `ButtonNames` is `var localized` -- DeusEx.int's [MenuSettings] section
+//    still has the stock 7-button layout (slot 6 = "Previous Menu"), which
+//    silently overrides our defaultproperties at load. Re-write the entries
+//    we changed before Super.InitWindow runs CreateMenuButtons.
+//
+// 2. The Class'DXController.MenuScreenController' literal in defaultproperties
+//    can resolve to None at runtime if DXController.u hasn't been demand-loaded
+//    by the time DeusEx.u parses these defaults. DynamicLoadObject forces the
+//    package load and gives us a guaranteed-valid class ref to write into
+//    buttonDefaults[6].invoke.
 // ----------------------------------------------------------------------
 
 event InitWindow()
 {
+    local Class controllerScreenClass;
+
     ButtonNames[6] = "Controller";
     ButtonNames[7] = "Previous Menu";
+
+    controllerScreenClass = Class(DynamicLoadObject("DXController.MenuScreenController", Class'Class', True));
+    if (controllerScreenClass != None)
+        buttonDefaults[6].invoke = controllerScreenClass;
 
     Super.InitWindow();
 }
@@ -42,8 +56,8 @@ defaultproperties
      buttonDefaults(3)=(Y=121,Action=MA_MenuScreen,Invoke=Class'DeusEx.MenuScreenDisplay')
      buttonDefaults(4)=(Y=157,Action=MA_MenuScreen,Invoke=Class'DeusEx.MenuScreenAdjustColors')
      buttonDefaults(5)=(Y=193,Action=MA_MenuScreen,Invoke=Class'DeusEx.MenuScreenSound')
-     buttonDefaults(6)=(Y=229,Action=MA_MenuScreen,Invoke=Class'DXController.MenuScreenController')
-     buttonDefaults(7)=(Y=302,Action=MA_Previous)
+     buttonDefaults(6)=(Y=229,Action=MA_MenuScreen)
+     buttonDefaults(7)=(Y=265,Action=MA_Previous)
      Title="Settings"
      ClientWidth=294
      ClientHeight=308
