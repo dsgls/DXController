@@ -8,7 +8,8 @@
 // vertically).
 //
 // All rows are spawned at InitWindow regardless of curve type; visibility
-// toggling is handled by RepackLayout. Stock CreateChoices iterates the
+// toggling is handled by RepackLayout, which also swaps the background to
+// the variant matching the visible-row count. Stock CreateChoices iterates the
 // 13-slot choices[] array, which we exceed (14 rows), so we override
 // CreateChoices and spawn directly via winClient.NewChild.
 //=============================================================================
@@ -25,6 +26,17 @@ var MenuChoice_StickFloatParam       rowSigStrL, rowSigStrR;
 
 // Curve previews (one per stick).
 var ControllerCurvePreview vizLeft, vizRight;
+
+// Background tile sets, one per possible visible-row total. Declared one
+// array per line: UE1 UCC does not reliably accept multiple sized arrays
+// in a single `var` statement. SelectBackground picks the set matching
+// the row count RepackLayout computed and pushes it into winClient.
+var Texture bgTiles4[6];
+var Texture bgTiles5[6];
+var Texture bgTiles6[6];
+var Texture bgTiles7[6];
+var Texture bgTiles8[6];
+var Texture bgTiles10[6];
 
 // Y position where the Right-stick block begins; used by a future divider
 // line drawn between the two stick blocks.
@@ -113,6 +125,8 @@ function RepackLayout()
     n = PlaceVisibleParam(rowSigSteepR, rightType, 'Sigmoid', n);
     n = PlaceVisibleParam(rowSigMidR,   rightType, 'Sigmoid', n);
     n = PlaceVisibleParam(rowSigStrR,   rightType, 'Sigmoid', n);
+
+    SelectBackground(n);
 }
 
 function int PlaceRow(MenuUIChoice row, int n)
@@ -136,6 +150,27 @@ function int PlaceVisibleParam(MenuChoice_StickFloatParam row, string activeType
     {
         row.Hide();
         return n;
+    }
+}
+
+// Swap the live client background to the tile set whose recesses match
+// the number of rows now visible. winClient redraws from clientTextures
+// each frame, so overwriting them takes effect next frame with no
+// re-init. rowCount is always one of {4,5,6,7,8,10} by construction; the
+// default falls back to the tallest (10-row) set if that ever changes.
+function SelectBackground(int rowCount)
+{
+    local int i;
+
+    switch (rowCount)
+    {
+        case 4:  for (i = 0; i < 6; i++) winClient.SetClientTexture(i, bgTiles4[i]);  break;
+        case 5:  for (i = 0; i < 6; i++) winClient.SetClientTexture(i, bgTiles5[i]);  break;
+        case 6:  for (i = 0; i < 6; i++) winClient.SetClientTexture(i, bgTiles6[i]);  break;
+        case 7:  for (i = 0; i < 6; i++) winClient.SetClientTexture(i, bgTiles7[i]);  break;
+        case 8:  for (i = 0; i < 6; i++) winClient.SetClientTexture(i, bgTiles8[i]);  break;
+        case 10: for (i = 0; i < 6; i++) winClient.SetClientTexture(i, bgTiles10[i]); break;
+        default: for (i = 0; i < 6; i++) winClient.SetClientTexture(i, bgTiles10[i]); break;
     }
 }
 
@@ -204,12 +239,42 @@ defaultproperties
     Title="Controller"
     ClientWidth=720
     ClientHeight=480
-    clientTextures(0)=Texture'DXController.MenuBg_1'
-    clientTextures(1)=Texture'DXController.MenuBg_2'
-    clientTextures(2)=Texture'DXController.MenuBg_3'
-    clientTextures(3)=Texture'DXController.MenuBg_4'
-    clientTextures(4)=Texture'DXController.MenuBg_5'
-    clientTextures(5)=Texture'DXController.MenuBg_6'
+    bgTiles4(0)=Texture'DXController.MenuControllerBackground_4_1'
+    bgTiles4(1)=Texture'DXController.MenuControllerBackground_4_2'
+    bgTiles4(2)=Texture'DXController.MenuControllerBackground_4_3'
+    bgTiles4(3)=Texture'DXController.MenuControllerBackground_4_4'
+    bgTiles4(4)=Texture'DXController.MenuControllerBackground_4_5'
+    bgTiles4(5)=Texture'DXController.MenuControllerBackground_4_6'
+    bgTiles5(0)=Texture'DXController.MenuControllerBackground_5_1'
+    bgTiles5(1)=Texture'DXController.MenuControllerBackground_5_2'
+    bgTiles5(2)=Texture'DXController.MenuControllerBackground_5_3'
+    bgTiles5(3)=Texture'DXController.MenuControllerBackground_5_4'
+    bgTiles5(4)=Texture'DXController.MenuControllerBackground_5_5'
+    bgTiles5(5)=Texture'DXController.MenuControllerBackground_5_6'
+    bgTiles6(0)=Texture'DXController.MenuControllerBackground_6_1'
+    bgTiles6(1)=Texture'DXController.MenuControllerBackground_6_2'
+    bgTiles6(2)=Texture'DXController.MenuControllerBackground_6_3'
+    bgTiles6(3)=Texture'DXController.MenuControllerBackground_6_4'
+    bgTiles6(4)=Texture'DXController.MenuControllerBackground_6_5'
+    bgTiles6(5)=Texture'DXController.MenuControllerBackground_6_6'
+    bgTiles7(0)=Texture'DXController.MenuControllerBackground_7_1'
+    bgTiles7(1)=Texture'DXController.MenuControllerBackground_7_2'
+    bgTiles7(2)=Texture'DXController.MenuControllerBackground_7_3'
+    bgTiles7(3)=Texture'DXController.MenuControllerBackground_7_4'
+    bgTiles7(4)=Texture'DXController.MenuControllerBackground_7_5'
+    bgTiles7(5)=Texture'DXController.MenuControllerBackground_7_6'
+    bgTiles8(0)=Texture'DXController.MenuControllerBackground_8_1'
+    bgTiles8(1)=Texture'DXController.MenuControllerBackground_8_2'
+    bgTiles8(2)=Texture'DXController.MenuControllerBackground_8_3'
+    bgTiles8(3)=Texture'DXController.MenuControllerBackground_8_4'
+    bgTiles8(4)=Texture'DXController.MenuControllerBackground_8_5'
+    bgTiles8(5)=Texture'DXController.MenuControllerBackground_8_6'
+    bgTiles10(0)=Texture'DXController.MenuControllerBackground_10_1'
+    bgTiles10(1)=Texture'DXController.MenuControllerBackground_10_2'
+    bgTiles10(2)=Texture'DXController.MenuControllerBackground_10_3'
+    bgTiles10(3)=Texture'DXController.MenuControllerBackground_10_4'
+    bgTiles10(4)=Texture'DXController.MenuControllerBackground_10_5'
+    bgTiles10(5)=Texture'DXController.MenuControllerBackground_10_6'
     textureRows=2
     textureCols=3
     helpPosY=438

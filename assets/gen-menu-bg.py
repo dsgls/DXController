@@ -1,26 +1,33 @@
 #!/usr/bin/env python3
-"""Generate the DXController menu-background tile set.
+"""Generate the DXController controller-settings menu-background tile sets.
 
-Outputs 6 PNGs into OUT_DIR (default: 'menu-bg-gen' next to this script).
-The composite is a 768x512 image cut into a 2x3 grid of 256x256 tiles so
-MenuUIClientWindow's hardcoded 256-grid placement (texturePosX/Y[i] =
-col*256, row*256) drops each tile in the right place:
+The controller settings page (MenuScreenController) shows a variable
+number of option rows depending on the selected stick response curves.
+Each stick contributes 2 rows (Linear), 3 (Power/Expo), or 5 (Sigmoid),
+and the page packs them contiguously from the top, so the panel only ever
+needs recesses for the *total* visible-row count. We render one tile set
+per possible total (ROW_COUNTS below) and the menu swaps to the matching
+set at runtime.
 
-  MenuBg_1.png  256x256  at (  0,   0)
-  MenuBg_2.png  256x256  at (256,   0)
-  MenuBg_3.png  256x256  at (512,   0)  [right 48 px clipped]
-  MenuBg_4.png  256x256  at (  0, 256)
-  MenuBg_5.png  256x256  at (256, 256)
-  MenuBg_6.png  256x256  at (512, 256)  [right 48 px and bottom 32 px clipped]
+For each row count N, the composite is a 768x512 image cut into a 2x3
+grid of 256x256 tiles so MenuUIClientWindow's hardcoded 256-grid
+placement (texturePosX/Y[i] = col*256, row*256) drops each tile in the
+right place:
+
+  MenuControllerBackground_N_1.png  256x256  at (  0,   0)
+  MenuControllerBackground_N_2.png  256x256  at (256,   0)
+  MenuControllerBackground_N_3.png  256x256  at (512,   0)  [right 48 px clipped]
+  MenuControllerBackground_N_4.png  256x256  at (  0, 256)
+  MenuControllerBackground_N_5.png  256x256  at (256, 256)
+  MenuControllerBackground_N_6.png  256x256  at (512, 256)  [right 48/bottom 32 clipped]
 
 MenuScreenController has ClientWidth=720, ClientHeight=480, so the
 composite right-edge 48 px and bottom 32 px fall outside the visible
 client area and need no special content. The visible border lives at
 x=719 and y=479 in texture space.
 
-Layout drawn into the visible 720x480 area mirrors the worst-case
-(sigmoid+sigmoid) row count: 11 rows of [action-button | value-button]
-recesses plus the help-text bar. Dimensions taken from:
+Each visible row is an [action-button | value-button] recess pair; the
+layout mirrors MenuUIScreenWindow + MenuUIChoice. Dimensions taken from:
 
   MenuScreenController.uc       (ClientWidth/Height, helpPosY)
   MenuUIScreenWindow.uc         (choiceStartX/Y, choiceVerticalGap)
@@ -64,15 +71,17 @@ CLIENT_H = 480
 # bottom-edge waste in exchange for the visible area we need.
 W, H = 768, 512
 
-# Row layout — mirrors MenuUIScreenWindow + MenuUIChoice. NUM_ROWS is the
-# sigmoid+sigmoid maximum: 1 Apply + 5 left-stick (deadzone, curve type,
-# 3 sigmoid params) + 5 right-stick (same). Other curve combinations
-# show fewer rows but the recesses we render still line up with rows
-# 0..N-1.
+# Visible-row totals the controller settings page can show. Each stick
+# contributes 2 rows (Linear), 3 (Power/Expo), or 5 (Sigmoid); the page
+# shows the sum. 9 is unreachable (no two of {2,3,5} sum to 9). One tile
+# set is rendered per total -> [4, 5, 6, 7, 8, 10].
+ROW_COUNTS = sorted({l + r for l in (2, 3, 5) for r in (2, 3, 5)})
+
+# Row layout — mirrors MenuUIScreenWindow + MenuUIChoice. Every visible
+# row is an [action-button | value-button] recess pair.
 ROW_X     = 7
 ROW_Y0    = 27
 ROW_GAP   = 36
-NUM_ROWS  = 11
 BTN_W     = 243
 BTN_H     = 19
 VAL_X     = ROW_X + 270   # row pos + MenuUIChoiceEnum.defaultInfoPosX
@@ -97,13 +106,15 @@ HALO_BOOST = [0, 48, 38, 30, 22, 16, 11, 7, 4, 2]
 
 BLACK = (0, 0, 0)
 
-TILES = [
-    ("MenuBg_1", (0,   0,   256, 256)),
-    ("MenuBg_2", (256, 0,   512, 256)),
-    ("MenuBg_3", (512, 0,   768, 256)),
-    ("MenuBg_4", (0,   256, 256, 512)),
-    ("MenuBg_5", (256, 256, 512, 512)),
-    ("MenuBg_6", (512, 256, 768, 512)),
+# Crop rectangles (left, top, right, bottom) for the six 256x256 tiles of
+# the 768x512 composite. Tile index (1..6) is the list position + 1.
+TILE_RECTS = [
+    (0,   0,   256, 256),
+    (256, 0,   512, 256),
+    (512, 0,   768, 256),
+    (0,   256, 256, 512),
+    (256, 256, 512, 512),
+    (512, 256, 768, 512),
 ]
 # ============================================================================
 
@@ -222,8 +233,8 @@ def stamp_row_recess(img, x, y, w, h, all_interiors, halo_seeds,
     stamp_element(img, interior, INSET_HI, INSET_LO, all_interiors, halo_seeds)
 
 
-def compose():
-    """Build the full 768x512 composite.
+def compose(num_rows):
+    """Build the full 768x512 composite for a `num_rows`-row layout.
 
     Content sits inside the visible 720x480 client area. The 48-px right
     and 32-px bottom strips outside that rectangle hold only scanlined
@@ -242,17 +253,13 @@ def compose():
     all_interiors = set()
     halo_seeds = set()
 
-    # Row recesses: [action button | value button] for the max-case
-    # 11-row layout. Rows beyond what the active curve combination
-    # displays are still drawn — the texture is static, but the empty
-    # recesses read as part of the panel layout rather than noise.
-    # Row 0 (Apply Recommended) has no value-cycling control, so its
-    # value-column slot stays empty.
-    for n in range(NUM_ROWS):
+    # Row recesses: an [action button | value button] pair per visible
+    # row. Every row has a value-cycling control, so both columns are
+    # stamped for all rows.
+    for n in range(num_rows):
         y = ROW_Y0 + n * ROW_GAP
         stamp_row_recess(img, ROW_X, y, BTN_W, BTN_H, all_interiors, halo_seeds)
-        if n != 0:
-            stamp_row_recess(img, VAL_X, y, VAL_W, VAL_H, all_interiors, halo_seeds)
+        stamp_row_recess(img, VAL_X, y, VAL_W, VAL_H, all_interiors, halo_seeds)
 
     # Help/info bar — wider, taller, larger corner notches than the row
     # recesses to give it visual weight as a separate region.
@@ -270,16 +277,18 @@ def main():
     standalone = len(sys.argv) <= 1
     out_dir = Path(sys.argv[1]) if not standalone else Path(__file__).parent / "menu-bg-gen"
     out_dir.mkdir(parents=True, exist_ok=True)
-    full = compose()
-    for name, (x0, y0, x1, y1) in TILES:
-        tile = full.crop((x0, y0, x1, y1))
-        tile.save(out_dir / f"{name}.png")
-    # The composite is a visual sanity check for standalone runs; suppress
-    # it when invoked from the build so png-to-pcx doesn't ship a stray
-    # MenuBg_full.pcx alongside the real tiles.
-    if standalone:
-        full.save(out_dir / "MenuBg_full.png")
-    print(f"wrote 6 tiles{' + composite' if standalone else ''} to {out_dir}")
+    for num_rows in ROW_COUNTS:
+        full = compose(num_rows)
+        for idx, (x0, y0, x1, y1) in enumerate(TILE_RECTS, start=1):
+            tile = full.crop((x0, y0, x1, y1))
+            tile.save(out_dir / f"MenuControllerBackground_{num_rows}_{idx}.png")
+        # The composites are a visual sanity check for standalone runs;
+        # suppress them from the build so png-to-pcx doesn't ship stray
+        # *_full.pcx files alongside the real tiles.
+        if standalone:
+            full.save(out_dir / f"MenuControllerBackground_{num_rows}_full.png")
+    n_tiles = len(ROW_COUNTS) * len(TILE_RECTS)
+    print(f"wrote {n_tiles} tiles{' + composites' if standalone else ''} to {out_dir}")
 
 
 if __name__ == "__main__":
