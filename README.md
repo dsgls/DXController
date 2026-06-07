@@ -42,6 +42,8 @@ Copy `DeusEx.exe`, `DeusEx.u`, and `DXController.u` from the release
    `C:\GOG Games\Deus Ex GOTY\System\`), overwriting the existing
    `DeusEx.exe` and `DeusEx.u`.
 
+I highly recommend enabling "Toggle Crouch" in the control settings.
+
 ## Controls
 
 | Button         | Action                          |
