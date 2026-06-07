@@ -46,7 +46,7 @@ INT_PTR CALLBACK CLauncherDialog::LauncherDialogProc(HWND hwndDlg,UINT uMsg,WPAR
 
             pThis->m_hWndWebsite = GetDlgItem(hwndDlg, IDC_WEBSITE);
 
-            wchar_t buffer[25];
+            wchar_t buffer[128];
             swprintf_s(buffer, L"Version %s", Misc::GetVersion());
             SetDlgItemText(hwndDlg,IDC_VERSION,buffer);
 
