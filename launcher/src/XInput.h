@@ -8,6 +8,8 @@ class CXInput
 public:
     enum class EStickCurveType { Linear, Power, Expo, Sigmoid };
 
+    enum class EStick { Left, Right };
+
     struct SStickCurve
     {
         EStickCurveType eType = EStickCurveType::Power;
@@ -42,8 +44,26 @@ public:
     // back to mouse.
     void NotifyMouseActivity(int iX, int iY);
 
+    // Re-reads the [DXController.ControllerSettings] section into the in-memory
+    // settings. Safe to call between Poll() invocations; the next Poll uses
+    // the new settings. Held-stick cached values are deliberately preserved so
+    // live tuning doesn't produce a spurious release/zero frame.
+    void Reload();
+
+    // Samples the current stick curve at iCount evenly spaced points across
+    // the full normalized input range [0, 1] and writes a CSV of normalized
+    // [0, 1] output magnitudes to Ar (single Logf call). iCount is clamped to
+    // [2, 256]. Includes the deadzone flat region as leading zeros so the
+    // preview reflects the player experience.
+    void SampleCurve(EStick eStick, int iCount, FOutputDevice& Ar) const;
+
+    // Writes "L=%.4f R=%.4f" to Ar: the most recent raw (pre-deadzone,
+    // pre-curve) stick magnitudes, normalized to [0, 1]. Zero when the
+    // controller is disconnected or the window has lost focus.
+    void GetRawStickMags(FOutputDevice& Ar) const;
+
 private:
-    //Settings (read once in constructor)
+    //Settings (loaded by LoadSettings(); refreshed by Reload())
     int m_iLeftStickDeadzone;       //SHORT magnitude, 0..32767
     int m_iRightStickDeadzone;      //SHORT magnitude, 0..32767
     int m_iTriggerThreshold;        //BYTE, 0..255
@@ -68,6 +88,8 @@ private:
     float m_fPrevRightStickY;
     float m_fPrevLeftTrigger;
     float m_fPrevRightTrigger;
+    float m_fLeftStickRawMag;   //Most recent raw (pre-deadzone, pre-curve) left-stick magnitude, normalized to [0, 1]. Read by GetRawStickMags().
+    float m_fRightStickRawMag;  //Same for right stick.
     DWORD m_iPrevPacket;
     ULONGLONG m_iLastHotplugScanMs;
     ULONGLONG m_iLastPadActivityMs;
@@ -77,6 +99,12 @@ private:
     bool      m_bHasPrevMousePos;
 
     //Helpers
+
+    //Reads all 18 keys from [DXController.ControllerSettings] into the
+    //corresponding members and clamps the curve parameters into their
+    //valid ranges. Called from the constructor and from Reload().
+    void LoadSettings();
+
     void EmitButtonChanges(UEngine* pEngine, UViewport* pViewport, WORD iNewButtons);
     void ReleaseHeldButtons(UEngine* pEngine, UViewport* pViewport);
 

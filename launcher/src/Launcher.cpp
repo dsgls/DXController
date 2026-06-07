@@ -517,6 +517,33 @@ UBOOL CLauncher::Exec(const TCHAR * Cmd, FOutputDevice & Ar)
         }
         return FALSE;
     }
+    else if (ParseCommand(&Cmd, TEXT("XInputReload")))
+    {
+        m_XInput.Reload();
+        Ar.Logf(TEXT("XInput: settings reloaded from [DXController.ControllerSettings]"));
+        return TRUE;
+    }
+    else if (ParseCommand(&Cmd, TEXT("XInputSampleCurve")))
+    {
+        wchar_t szSide[8] = {};
+        if (!ParseToken(Cmd, szSide, _countof(szSide), 0))
+        {
+            return TRUE;
+        }
+        CXInput::EStick eStick;
+        if      (_wcsicmp(szSide, L"Left")  == 0) eStick = CXInput::EStick::Left;
+        else if (_wcsicmp(szSide, L"Right") == 0) eStick = CXInput::EStick::Right;
+        else                                      return TRUE;
+
+        const int iCount = appAtoi(Cmd);
+        m_XInput.SampleCurve(eStick, iCount, Ar);
+        return TRUE;
+    }
+    else if (ParseCommand(&Cmd, TEXT("XInputGetRawMag")))
+    {
+        m_XInput.GetRawStickMags(Ar);
+        return TRUE;
+    }
     else
     {
         return FExecHook::Exec(Cmd, Ar);

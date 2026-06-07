@@ -47,6 +47,21 @@ namespace
         return eDefault;
     }
 
+    //Inverse of ParseStickCurveType: maps the enum back to the canonical
+    //token. Defaults to L"Linear" so the function is total even if the
+    //enum is extended without updating this helper.
+    const wchar_t* StickCurveTypeToString(const CXInput::EStickCurveType eType)
+    {
+        switch (eType)
+        {
+        case CXInput::EStickCurveType::Linear:  return L"Linear";
+        case CXInput::EStickCurveType::Power:   return L"Power";
+        case CXInput::EStickCurveType::Expo:    return L"Expo";
+        case CXInput::EStickCurveType::Sigmoid: return L"Sigmoid";
+        }
+        return L"Linear";
+    }
+
     //Pure: shape a normalized magnitude u (>= 0) into a shaped magnitude.
     //Endpoints pinned: returns 0 at u <= 0, ~1 at u = 1. Linear short-circuits.
     //May return > 1 for u > 1 (diagonal overflow); caller clamps final axes.
@@ -101,6 +116,8 @@ CXInput::CXInput()
  m_fPrevRightStickY(0.0f),
  m_fPrevLeftTrigger(0.0f),
  m_fPrevRightTrigger(0.0f),
+ m_fLeftStickRawMag(0.0f),
+ m_fRightStickRawMag(0.0f),
  m_iPrevPacket(0),
  m_iLastHotplugScanMs(0),
  m_iLastPadActivityMs(0),
@@ -109,30 +126,49 @@ CXInput::CXInput()
  m_iPrevMouseY(0),
  m_bHasPrevMousePos(false)
 {
+    LoadSettings();
+}
+
+void CXInput::LoadSettings()
+{
     assert(GConfig);
-    GConfig->GetInt(L"DXController", L"StickDeadzoneLeft",  m_iLeftStickDeadzone);
-    GConfig->GetInt(L"DXController", L"StickDeadzoneRight", m_iRightStickDeadzone);
-    GConfig->GetInt(L"DXController", L"TriggerThreshold",   m_iTriggerThreshold);
-    GConfig->GetInt(L"DXController", L"MouseActivityPx",    m_iMouseActivityPx);
-    GConfig->GetInt(L"DXController", L"PadActiveGraceMs",   m_iPadActiveGraceMs);
-    GConfig->GetInt(L"DXController", L"HotplugScanMs",      m_iHotplugScanMs);
+
+    //Track absence per key. Each Get* indicates absence via UBOOL==0 (numeric
+    //reads) or UBOOL==0 from GetString (string reads). For absent keys we leave
+    //the field alone -- a fresh-constructed CXInput keeps its initializer-list
+    //default; a reload preserves the last-loaded value. After clamping, every
+    //absent key is written back so the ini is self-documenting and UScript's
+    //var config always finds a value.
+    static const wchar_t* const kSection = L"DXController.ControllerSettings";
+
+    bool bMissDeadzoneLeft       = !GConfig->GetInt(kSection, L"StickDeadzoneLeft",  m_iLeftStickDeadzone);
+    bool bMissDeadzoneRight      = !GConfig->GetInt(kSection, L"StickDeadzoneRight", m_iRightStickDeadzone);
+    bool bMissTriggerThreshold   = !GConfig->GetInt(kSection, L"TriggerThreshold",   m_iTriggerThreshold);
+    bool bMissMouseActivityPx    = !GConfig->GetInt(kSection, L"MouseActivityPx",    m_iMouseActivityPx);
+    bool bMissPadActiveGraceMs   = !GConfig->GetInt(kSection, L"PadActiveGraceMs",   m_iPadActiveGraceMs);
+    bool bMissHotplugScanMs      = !GConfig->GetInt(kSection, L"HotplugScanMs",      m_iHotplugScanMs);
 
     //Per-stick response curves. String token chosen so adding/removing curve
     //types in future never invalidates a hand-edited ini. Each numeric param is
     //clamped to guard against typos producing NaN/Inf in pow/exp.
-    m_LeftStickCurve.eType  = ParseStickCurveType(GConfig->GetStr(L"DXController", L"StickCurveLeft"),  m_LeftStickCurve.eType);
-    m_RightStickCurve.eType = ParseStickCurveType(GConfig->GetStr(L"DXController", L"StickCurveRight"), m_RightStickCurve.eType);
+    //Absence is detected via the UBOOL return of GetString rather than a nullptr
+    //check (GetStr always returns a static buffer, never nullptr).
+    TCHAR szCurveToken[64];
+    bool bMissCurveLeftType  = !GConfig->GetString(kSection, L"StickCurveLeft",  szCurveToken, ARRAY_COUNT(szCurveToken));
+    m_LeftStickCurve.eType   = ParseStickCurveType(bMissCurveLeftType  ? nullptr : szCurveToken, m_LeftStickCurve.eType);
+    bool bMissCurveRightType = !GConfig->GetString(kSection, L"StickCurveRight", szCurveToken, ARRAY_COUNT(szCurveToken));
+    m_RightStickCurve.eType  = ParseStickCurveType(bMissCurveRightType ? nullptr : szCurveToken, m_RightStickCurve.eType);
 
-    GConfig->GetFloat(L"DXController", L"StickCurvePowerLeft",             m_LeftStickCurve.fPower);
-    GConfig->GetFloat(L"DXController", L"StickCurvePowerRight",            m_RightStickCurve.fPower);
-    GConfig->GetFloat(L"DXController", L"StickCurveExpoLeft",              m_LeftStickCurve.fExpo);
-    GConfig->GetFloat(L"DXController", L"StickCurveExpoRight",             m_RightStickCurve.fExpo);
-    GConfig->GetFloat(L"DXController", L"StickCurveSigmoidSteepnessLeft",  m_LeftStickCurve.fSigSteepness);
-    GConfig->GetFloat(L"DXController", L"StickCurveSigmoidSteepnessRight", m_RightStickCurve.fSigSteepness);
-    GConfig->GetFloat(L"DXController", L"StickCurveSigmoidMidpointLeft",   m_LeftStickCurve.fSigMidpoint);
-    GConfig->GetFloat(L"DXController", L"StickCurveSigmoidMidpointRight",  m_RightStickCurve.fSigMidpoint);
-    GConfig->GetFloat(L"DXController", L"StickCurveSigmoidStrengthLeft",   m_LeftStickCurve.fSigStrength);
-    GConfig->GetFloat(L"DXController", L"StickCurveSigmoidStrengthRight",  m_RightStickCurve.fSigStrength);
+    bool bMissPowerLeft           = !GConfig->GetFloat(kSection, L"StickCurvePowerLeft",             m_LeftStickCurve.fPower);
+    bool bMissPowerRight          = !GConfig->GetFloat(kSection, L"StickCurvePowerRight",            m_RightStickCurve.fPower);
+    bool bMissExpoLeft            = !GConfig->GetFloat(kSection, L"StickCurveExpoLeft",              m_LeftStickCurve.fExpo);
+    bool bMissExpoRight           = !GConfig->GetFloat(kSection, L"StickCurveExpoRight",             m_RightStickCurve.fExpo);
+    bool bMissSigSteepLeft        = !GConfig->GetFloat(kSection, L"StickCurveSigmoidSteepnessLeft",  m_LeftStickCurve.fSigSteepness);
+    bool bMissSigSteepRight       = !GConfig->GetFloat(kSection, L"StickCurveSigmoidSteepnessRight", m_RightStickCurve.fSigSteepness);
+    bool bMissSigMidLeft          = !GConfig->GetFloat(kSection, L"StickCurveSigmoidMidpointLeft",   m_LeftStickCurve.fSigMidpoint);
+    bool bMissSigMidRight         = !GConfig->GetFloat(kSection, L"StickCurveSigmoidMidpointRight",  m_RightStickCurve.fSigMidpoint);
+    bool bMissSigStrengthLeft     = !GConfig->GetFloat(kSection, L"StickCurveSigmoidStrengthLeft",   m_LeftStickCurve.fSigStrength);
+    bool bMissSigStrengthRight    = !GConfig->GetFloat(kSection, L"StickCurveSigmoidStrengthRight",  m_RightStickCurve.fSigStrength);
 
     auto ClampCurve = [](SStickCurve& Curve)
     {
@@ -144,6 +180,96 @@ CXInput::CXInput()
     };
     ClampCurve(m_LeftStickCurve);
     ClampCurve(m_RightStickCurve);
+
+    //Backfill: write only the keys that were missing this load. Present keys
+    //are not rewritten -- a present-but-out-of-range hand-edit gets clamped
+    //in memory but its ini line is left alone.
+    bool bAnyMissing = false;
+    if (bMissDeadzoneLeft)     { GConfig->SetInt(kSection, L"StickDeadzoneLeft",                          m_iLeftStickDeadzone);              bAnyMissing = true; }
+    if (bMissDeadzoneRight)    { GConfig->SetInt(kSection, L"StickDeadzoneRight",                         m_iRightStickDeadzone);             bAnyMissing = true; }
+    if (bMissTriggerThreshold) { GConfig->SetInt(kSection, L"TriggerThreshold",                           m_iTriggerThreshold);               bAnyMissing = true; }
+    if (bMissMouseActivityPx)  { GConfig->SetInt(kSection, L"MouseActivityPx",                            m_iMouseActivityPx);                bAnyMissing = true; }
+    if (bMissPadActiveGraceMs) { GConfig->SetInt(kSection, L"PadActiveGraceMs",                           m_iPadActiveGraceMs);               bAnyMissing = true; }
+    if (bMissHotplugScanMs)    { GConfig->SetInt(kSection, L"HotplugScanMs",                              m_iHotplugScanMs);                  bAnyMissing = true; }
+
+    if (bMissCurveLeftType)    { GConfig->SetString(kSection, L"StickCurveLeft",                          StickCurveTypeToString(m_LeftStickCurve.eType));  bAnyMissing = true; }
+    if (bMissCurveRightType)   { GConfig->SetString(kSection, L"StickCurveRight",                         StickCurveTypeToString(m_RightStickCurve.eType)); bAnyMissing = true; }
+
+    if (bMissPowerLeft)        { GConfig->SetFloat(kSection, L"StickCurvePowerLeft",                      m_LeftStickCurve.fPower);           bAnyMissing = true; }
+    if (bMissPowerRight)       { GConfig->SetFloat(kSection, L"StickCurvePowerRight",                     m_RightStickCurve.fPower);          bAnyMissing = true; }
+    if (bMissExpoLeft)         { GConfig->SetFloat(kSection, L"StickCurveExpoLeft",                       m_LeftStickCurve.fExpo);            bAnyMissing = true; }
+    if (bMissExpoRight)        { GConfig->SetFloat(kSection, L"StickCurveExpoRight",                      m_RightStickCurve.fExpo);           bAnyMissing = true; }
+    if (bMissSigSteepLeft)     { GConfig->SetFloat(kSection, L"StickCurveSigmoidSteepnessLeft",           m_LeftStickCurve.fSigSteepness);    bAnyMissing = true; }
+    if (bMissSigSteepRight)    { GConfig->SetFloat(kSection, L"StickCurveSigmoidSteepnessRight",          m_RightStickCurve.fSigSteepness);   bAnyMissing = true; }
+    if (bMissSigMidLeft)       { GConfig->SetFloat(kSection, L"StickCurveSigmoidMidpointLeft",            m_LeftStickCurve.fSigMidpoint);     bAnyMissing = true; }
+    if (bMissSigMidRight)      { GConfig->SetFloat(kSection, L"StickCurveSigmoidMidpointRight",           m_RightStickCurve.fSigMidpoint);    bAnyMissing = true; }
+    if (bMissSigStrengthLeft)  { GConfig->SetFloat(kSection, L"StickCurveSigmoidStrengthLeft",            m_LeftStickCurve.fSigStrength);     bAnyMissing = true; }
+    if (bMissSigStrengthRight) { GConfig->SetFloat(kSection, L"StickCurveSigmoidStrengthRight",           m_RightStickCurve.fSigStrength);    bAnyMissing = true; }
+
+    if (bAnyMissing)
+    {
+        GConfig->Flush(FALSE);
+    }
+}
+
+void CXInput::Reload()
+{
+    LoadSettings();
+}
+
+void CXInput::SampleCurve(const EStick eStick, int iCount, FOutputDevice& Ar) const
+{
+    //Clamp to [2, 256]: 2 to have well-defined endpoints, 256 well above any
+    //plausible preview pixel-width need. The buffer below is sized for the
+    //upper bound.
+    if (iCount < 2)   iCount = 2;
+    if (iCount > 256) iCount = 256;
+
+    const SStickCurve& Curve   = (eStick == EStick::Left) ? m_LeftStickCurve    : m_RightStickCurve;
+    const int          iDz     = (eStick == EStick::Left) ? m_iLeftStickDeadzone : m_iRightStickDeadzone;
+    const float        fCDz    = static_cast<float>(iDz) / 32767.0f;
+    const float        fDenom  = static_cast<float>(iCount - 1);
+
+    //"%.4f," is 7 chars per value; 256 * 7 + 1 = 1793.
+    wchar_t szBuffer[2048];
+    int     iWritten = 0;
+    for (int i = 0; i < iCount; ++i)
+    {
+        const float fU = static_cast<float>(i) / fDenom;
+        float fY;
+        if (fU <= fCDz)
+        {
+            fY = 0.0f;
+        }
+        else
+        {
+            const float fR = (fU - fCDz) / (1.0f - fCDz);
+            fY = ShapeStickMagnitude(fR, Curve);
+        }
+
+        //ShapeStickMagnitude is pinned to 0 and 1 across all four curves on
+        //inputs in [0, 1]; clamp defensively against accumulated float error.
+        if (fY < 0.0f) fY = 0.0f;
+        if (fY > 1.0f) fY = 1.0f;
+
+        const int iCap = static_cast<int>(_countof(szBuffer)) - iWritten;
+        const int iN   = _snwprintf_s(szBuffer + iWritten, iCap, _TRUNCATE,
+                                      (i + 1 < iCount) ? L"%.4f," : L"%.4f", fY);
+        if (iN < 0)
+        {
+            break;
+        }
+        iWritten += iN;
+    }
+
+    Ar.Logf(L"%s", szBuffer);
+}
+
+void CXInput::GetRawStickMags(FOutputDevice& Ar) const
+{
+    wchar_t szBuffer[32];
+    _snwprintf_s(szBuffer, _TRUNCATE, L"L=%.4f R=%.4f", m_fLeftStickRawMag, m_fRightStickRawMag);
+    Ar.Logf(L"%s", szBuffer);
 }
 
 void CXInput::EmitButtonChanges(UEngine* const pEngine, UViewport* const pViewport, const WORD iNewButtons)
@@ -308,6 +434,8 @@ void CXInput::Poll(UEngine* const pEngine, UViewport* const pViewport, const boo
     {
         ReleaseHeldButtons(pEngine, pViewport);
         FlushHeldAxes(pEngine, pViewport);
+        m_fLeftStickRawMag  = 0.0f;
+        m_fRightStickRawMag = 0.0f;
         return;
     }
     if (!m_bConnected)
@@ -341,6 +469,8 @@ void CXInput::Poll(UEngine* const pEngine, UViewport* const pViewport, const boo
     {
         ReleaseHeldButtons(pEngine, pViewport);
         FlushHeldAxes(pEngine, pViewport);
+        m_fLeftStickRawMag  = 0.0f;
+        m_fRightStickRawMag = 0.0f;
         m_bConnected = false;
         m_iActiveSlot = static_cast<DWORD>(-1);
         return;
@@ -360,6 +490,22 @@ void CXInput::Poll(UEngine* const pEngine, UViewport* const pViewport, const boo
         return;
     }
     m_iPrevPacket = State.dwPacketNumber;
+
+    //Cache raw normalized magnitudes for GetRawStickMags(). Diagonal max is
+    //~1.414; clamp to [0, 1] so UScript's preview dot stays inside the plot
+    //domain.
+    {
+        const float fLX = static_cast<float>(State.Gamepad.sThumbLX);
+        const float fLY = static_cast<float>(State.Gamepad.sThumbLY);
+        const float fRX = static_cast<float>(State.Gamepad.sThumbRX);
+        const float fRY = static_cast<float>(State.Gamepad.sThumbRY);
+        float fLMag = std::sqrt(fLX * fLX + fLY * fLY) / 32767.0f;
+        float fRMag = std::sqrt(fRX * fRX + fRY * fRY) / 32767.0f;
+        if (fLMag > 1.0f) fLMag = 1.0f;
+        if (fRMag > 1.0f) fRMag = 1.0f;
+        m_fLeftStickRawMag  = fLMag;
+        m_fRightStickRawMag = fRMag;
+    }
 
     const WORD iButtonsChanged = static_cast<WORD>(State.Gamepad.wButtons ^ m_iPrevButtons);
 
