@@ -11,3 +11,5 @@
 *.gz binary
 *.woff binary
 *.woff2 binary
+*.bmp binary
+*.u binary

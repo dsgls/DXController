@@ -9,3 +9,12 @@ gamedir
 # mktemp instead). Kept out of version control because they're regenerated.
 /assets/menu-bg-gen
 /assets/wheel-gen
+
+# Launcher build outputs (MSBuild from launcher/)
+/launcher/Release/
+/launcher/Debug/
+/launcher/_work/
+/launcher/detours/
+/launcher/.vs/
+*.vcxproj.user
+*.suo
