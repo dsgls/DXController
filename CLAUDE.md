@@ -229,6 +229,24 @@ Prefix all such logs with `DXC-<area>`: `DXC-WHEEL`, `DXC-NAV`,
   `Error, 'Var' is not allowed here`. Move vars to the top of the class body
   (just below the `class ... extends ...;` line); the order of *functions*
   themselves is unconstrained.
+- **`const` initializers must be literals, not expressions referencing
+  other consts.** `const A = 28; const B = A + 4;` fails to compile with
+  `Error, const B: Value is not constant` — UCC evaluates const initializers
+  before const-symbol resolution, so even a same-class reference is unseen.
+  Precompute the dependent value as a literal and document the formula in a
+  comment so the relationship stays visible. Same applies to compound
+  expressions on plain literals: `const X = 150 + 16;` is rejected for the
+  same reason. Example: `ControllerCurvePreview.uc` consts `PLOT_TOP_Y`,
+  `WIN_HEIGHT`, `WIN_WIDTH` are literals with the arithmetic shown in the
+  block comment above them.
+- **UE1 has no cross-class `const` access syntax.** `Class'X'.const.NAME`,
+  `Class'X'.NAME`, and `X.NAME` (from another class) all fail. Consts are
+  class-scoped only — visible within the declaring class without prefix
+  and unreachable elsewhere. `Class'X'.Default.varName` works for `var`s
+  but not for `const`s. Workaround: re-declare or hardcode the value at
+  the call site with a back-reference comment naming the source const.
+  Example: `MenuScreenController` hardcodes `188` for
+  `ControllerCurvePreview.WIN_HEIGHT` in `vizRight.SetPos`.
 - **`var travel class<X>` is not supported — compiles fine, crashes on
   next level transition.** UE1's travel serializer cannot round-trip
   a `UClass` reference: on the destination side it tries to construct

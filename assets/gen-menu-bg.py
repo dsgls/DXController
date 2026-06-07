@@ -1,25 +1,43 @@
 #!/usr/bin/env python3
 """Generate the DXController menu-background tile set.
 
-Outputs 6 PNGs into OUT_DIR (default: 'menu-bg-gen' next to this script),
-sized and positioned to match the vanilla MenuGameOptionsBackground tiles
-so MenuUIClientWindow's hardcoded 256x256 grid (texturePosX/Y[i] =
-col*256, row*256) renders them in the right place:
+Outputs 6 PNGs into OUT_DIR (default: 'menu-bg-gen' next to this script).
+The composite is a 768x512 image cut into a 2x3 grid of 256x256 tiles so
+MenuUIClientWindow's hardcoded 256-grid placement (texturePosX/Y[i] =
+col*256, row*256) drops each tile in the right place:
 
   MenuBg_1.png  256x256  at (  0,   0)
   MenuBg_2.png  256x256  at (256,   0)
-  MenuBg_3.png   32x256  at (512,   0)
+  MenuBg_3.png  256x256  at (512,   0)  [right 48 px clipped]
   MenuBg_4.png  256x256  at (  0, 256)
   MenuBg_5.png  256x256  at (256, 256)
-  MenuBg_6.png   32x256  at (512, 256)
+  MenuBg_6.png  256x256  at (512, 256)  [right 48 px and bottom 32 px clipped]
+
+MenuScreenController has ClientWidth=720, ClientHeight=480, so the
+composite right-edge 48 px and bottom 32 px fall outside the visible
+client area and need no special content. The visible border lives at
+x=719 and y=479 in texture space.
+
+Layout drawn into the visible 720x480 area mirrors the worst-case
+(sigmoid+sigmoid) row count: 11 rows of [action-button | value-button]
+recesses plus the help-text bar. Dimensions taken from:
+
+  MenuScreenController.uc       (ClientWidth/Height, helpPosY)
+  MenuUIScreenWindow.uc         (choiceStartX/Y, choiceVerticalGap)
+  MenuUIChoice.uc               (choiceControlPosX=270)
+  MenuUIChoiceEnum.uc           (defaultInfoWidth=77, defaultInfoPosX=270)
+  MenuUIChoiceButton.uc         (SetWidth(243))
+  MenuUIActionButtonWindow.uc   (buttonHeight=19)
+  MenuUIWindow.uc               (defaultHelpHeight=27,
+                                 defaultHelpLeftOffset=7,
+                                 defaultHelpClientDiffY=21)
 
 Style sampled from MenuGameOptionsBackground_{1..6}.pcx:
   - Lighter neutral-grey panel base with a 2-px faux scanline.
-  - Every element (button, recess) wrapped in a 1-px black rim, with a
-    bright "halo" glow on the panel side that peaks at L~85 right outside
-    the rim and fades over ~8 px.
+  - Every recess wrapped in a 1-px black rim, with a bright "halo" glow
+    on the panel side that peaks at L~85 right outside the rim and fades
+    over ~8 px.
   - Asymmetric shapes — small top-left notch, larger bottom-right notch.
-  - 1-px schematic traces between elements; 2x2 junction dots at corners.
 
 Deterministic: identical PARAMETERS produce byte-identical output. All
 tuning knobs live in the PARAMETERS block below — edit them to change
@@ -35,11 +53,40 @@ from pathlib import Path
 from PIL import Image
 
 # ===== PARAMETERS ============================================================
+# Visible client area (MenuScreenController.ClientWidth/Height). Pixels
+# outside this rectangle are clipped by the client window — content
+# placed there is harmless but invisible.
+CLIENT_W = 720
+CLIENT_H = 480
+
+# Composite dimensions — 2 rows x 3 cols of 256x256 tiles. The engine's
+# hardcoded 256-grid forces this shape; we just pay the right-edge and
+# bottom-edge waste in exchange for the visible area we need.
+W, H = 768, 512
+
+# Row layout — mirrors MenuUIScreenWindow + MenuUIChoice. NUM_ROWS is the
+# sigmoid+sigmoid maximum: 1 Apply + 5 left-stick (deadzone, curve type,
+# 3 sigmoid params) + 5 right-stick (same). Other curve combinations
+# show fewer rows but the recesses we render still line up with rows
+# 0..N-1.
+ROW_X     = 7
+ROW_Y0    = 27
+ROW_GAP   = 36
+NUM_ROWS  = 11
+BTN_W     = 243
+BTN_H     = 19
+VAL_X     = ROW_X + 270   # row pos + MenuUIChoiceEnum.defaultInfoPosX
+VAL_W     = 77
+VAL_H     = 19
+
+# Help/info bar (MenuUIWindow.ConfigurationChanged geometry).
+HELP_X = 7
+HELP_Y = 438              # MenuScreenController.helpPosY
+HELP_W = CLIENT_W - 21    # CLIENT_W - defaultHelpClientDiffY
+HELP_H = 27               # defaultHelpHeight
+
 PANEL_HI = (37, 37, 37)
 PANEL_LO = (33, 33, 33)
-
-BTN_HI = (60, 60, 60)
-BTN_LO = (55, 55, 55)
 
 INSET_HI = (22, 22, 22)
 INSET_LO = (18, 18, 18)
@@ -50,19 +97,13 @@ HALO_BOOST = [0, 48, 38, 30, 22, 16, 11, 7, 4, 2]
 
 BLACK = (0, 0, 0)
 
-# Composite covers the same 544x512 area as the vanilla tile set.
-W, H = 544, 512
-
-# Tile slice rects (x0, y0, x1, y1) — match vanilla's tile dimensions and
-# positions exactly so MenuUIClientWindow's hardcoded 256-grid puts each
-# tile where we want it.
 TILES = [
-    ("MenuBg_1", (0, 0, 256, 256)),
-    ("MenuBg_2", (256, 0, 512, 256)),
-    ("MenuBg_3", (512, 0, 544, 256)),
-    ("MenuBg_4", (0, 256, 256, 512)),
+    ("MenuBg_1", (0,   0,   256, 256)),
+    ("MenuBg_2", (256, 0,   512, 256)),
+    ("MenuBg_3", (512, 0,   768, 256)),
+    ("MenuBg_4", (0,   256, 256, 512)),
     ("MenuBg_5", (256, 256, 512, 512)),
-    ("MenuBg_6", (512, 256, 544, 512)),
+    ("MenuBg_6", (512, 256, 768, 512)),
 ]
 # ============================================================================
 
@@ -142,29 +183,6 @@ def stamp_element(img, interior, face_hi, face_lo, all_interiors, halo_seeds):
     all_interiors |= interior
 
 
-def draw_trace(img, points):
-    """Draw a 1-px black polyline; segments must be axis-aligned."""
-    px = img.load()
-    for i in range(len(points) - 1):
-        x0, y0 = points[i]
-        x1, y1 = points[i + 1]
-        if x0 == x1:
-            for y in range(min(y0, y1), max(y0, y1) + 1):
-                px[x0, y] = BLACK
-        elif y0 == y1:
-            for x in range(min(x0, x1), max(x0, x1) + 1):
-                px[x, y0] = BLACK
-        else:
-            raise ValueError("traces must be axis-aligned")
-
-
-def junction_dot(img, x, y):
-    """2x2 black square at a trace intersection."""
-    for dy in range(2):
-        for dx in range(2):
-            img.putpixel((x + dx, y + dy), BLACK)
-
-
 def paint_halo(img, halo_seeds, all_interiors):
     """BFS outward from halo_seeds and brighten panel pixels per HALO_BOOST."""
     px = img.load()
@@ -193,50 +211,56 @@ def paint_halo(img, halo_seeds, all_interiors):
             q.append((nx, ny))
 
 
-def compose():
-    """Build the full 544x512 dialog image.
+def stamp_row_recess(img, x, y, w, h, all_interiors, halo_seeds,
+                     notch_tl=3, notch_br=6):
+    """Recess sized exactly to a row button (the button border textures
+    sit on top of this dark fill). Notch depths mirror the vanilla
+    button border art (MenuActionButtonNormal_Left has a ~3-px top-left
+    chamfer; MenuActionButtonNormal_Right has a ~6x6 bottom-right
+    chamfer) so the recess corners line up with the button corners."""
+    interior = element_interior(x, y, x + w, y + h, notch_tl, notch_br)
+    stamp_element(img, interior, INSET_HI, INSET_LO, all_interiors, halo_seeds)
 
-    Layout is row-count-agnostic: no per-setting-row structure is baked
-    in (the actual buttons/recesses come from the screen's child windows
-    drawn on top). What's baked in is the surrounding chrome — title
-    block at top, message bar at bottom, scanlined panel everywhere
-    else, plus a few decorative traces.
+
+def compose():
+    """Build the full 768x512 composite.
+
+    Content sits inside the visible 720x480 client area. The 48-px right
+    and 32-px bottom strips outside that rectangle hold only scanlined
+    panel — they're clipped before reaching the screen.
     """
     img = Image.new("RGB", (W, H), PANEL_HI)
     fill_scanlines(img, 0, 0, W, H, PANEL_HI, PANEL_LO)
 
-    # Outer 1-px black border around the whole panel
-    hline(img, 0, W, 0, BLACK)
-    hline(img, 0, W, H - 1, BLACK)
-    vline(img, 0, 0, H, BLACK)
-    vline(img, W - 1, 0, H, BLACK)
+    # Outer 1-px black border around the visible client area. The texture
+    # extends past the client; pixels past the border would be clipped.
+    hline(img, 0, CLIENT_W, 0, BLACK)
+    hline(img, 0, CLIENT_W, CLIENT_H - 1, BLACK)
+    vline(img, 0, 0, CLIENT_H, BLACK)
+    vline(img, CLIENT_W - 1, 0, CLIENT_H, BLACK)
 
     all_interiors = set()
     halo_seeds = set()
 
-    # Title block — recess at the top-left of the header strip
-    title = element_interior(22, 16, 240, 40, notch_tl=3, notch_br=6)
-    stamp_element(img, title, INSET_HI, INSET_LO, all_interiors, halo_seeds)
+    # Row recesses: [action button | value button] for the max-case
+    # 11-row layout. Rows beyond what the active curve combination
+    # displays are still drawn — the texture is static, but the empty
+    # recesses read as part of the panel layout rather than noise.
+    # Row 0 (Apply Recommended) has no value-cycling control, so its
+    # value-column slot stays empty.
+    for n in range(NUM_ROWS):
+        y = ROW_Y0 + n * ROW_GAP
+        stamp_row_recess(img, ROW_X, y, BTN_W, BTN_H, all_interiors, halo_seeds)
+        if n != 0:
+            stamp_row_recess(img, VAL_X, y, VAL_W, VAL_H, all_interiors, halo_seeds)
 
-    # 3-px black band under the header
-    for y in range(48, 51):
-        hline(img, 4, W - 4, y, BLACK)
-
-    # 3-px black band above the footer
-    for y in range(H - 50, H - 47):
-        hline(img, 4, W - 4, y, BLACK)
-
-    # Message/info bar — wide recess in the footer strip
-    msg = element_interior(22, H - 36, W - 22, H - 14, notch_tl=3, notch_br=6)
-    stamp_element(img, msg, INSET_HI, INSET_LO, all_interiors, halo_seeds)
-
-    # Decorative traces wiring corners together (1-px black + junction dots)
-    draw_trace(img, [(170, 95), (200, 95), (200, 110)])
-    junction_dot(img, 199, 94)
-    draw_trace(img, [(W - 80, 200), (W - 30, 200), (W - 30, 240)])
-    junction_dot(img, W - 31, 239)
-    draw_trace(img, [(40, H - 90), (40, H - 60), (90, H - 60)])
-    junction_dot(img, 39, H - 91)
+    # Help/info bar — wider, taller, larger corner notches than the row
+    # recesses to give it visual weight as a separate region.
+    help_interior = element_interior(
+        HELP_X, HELP_Y, HELP_X + HELP_W, HELP_Y + HELP_H,
+        notch_tl=3, notch_br=6,
+    )
+    stamp_element(img, help_interior, INSET_HI, INSET_LO, all_interiors, halo_seeds)
 
     paint_halo(img, halo_seeds, all_interiors)
     return img

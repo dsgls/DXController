@@ -22,18 +22,34 @@ const PLOT_SIZE   = 150;
 const DOT_SIZE    = 2;
 const LIVE_DOT_SIZE = 4;
 const DEADZONE_BAR_WIDTH = 1;
+// Label box above the plot. Tall enough for two wrapped lines (the
+// sigmoid suffix "Sigmoid (k=6.0, c=0.60, w=0.60)" overflows PLOT_SIZE
+// width and GC.DrawText wraps it). Height tuned to FontMenuSmall's
+// 14-px line height. UE1 forbids const-expression initializers (each
+// const must be a literal), so the dependent values are precomputed:
+//   PLOT_TOP_Y = LABEL_PAD_TOP + LABEL_HEIGHT + LABEL_PAD_BOTTOM
+//              = 2 + 28 + 2 = 32
+//   WIN_HEIGHT = PLOT_TOP_Y + PLOT_SIZE + 6
+//              = 32 + 150 + 6 = 188
+//   WIN_WIDTH  = PLOT_SIZE + 16 = 166
+const LABEL_PAD_TOP    = 2;
+const LABEL_HEIGHT     = 28;
+const LABEL_PAD_BOTTOM = 2;
+const PLOT_TOP_Y       = 32;
+const WIN_HEIGHT       = 188;
+const WIN_WIDTH        = 166;
 
 var byte  stickIdx;             // 0 = Left, 1 = Right
 var float samples[128];         // y values, 0..1
 var float liveU;                // raw stick magnitude, 0..1, polled per Tick
 
 var Color colBorder, colBackground, colDeadzoneBar, colCurveDot, colLiveDotIdle, colLiveDotActive, colLabel;
-var string lblPrefix;           // "Left stick — " or "Right stick — ", set per-instance by parent
+var string lblPrefix;           // "Left stick: " or "Right stick: ", set per-instance by parent
 
 event InitWindow()
 {
     Super.InitWindow();
-    SetSize(PLOT_SIZE + 16, PLOT_SIZE + 24);  // padding for label + border
+    SetSize(WIN_WIDTH, WIN_HEIGHT);
     bTickEnabled = True;
     Refresh();
 }
@@ -125,9 +141,10 @@ event DrawWindow(GC gc)
     local Color dotColor;
     local string label;
 
-    // Plot origin (top-left of the 150x150 area, leaving room for label above).
+    // Plot origin (top-left of the 150x150 area, leaving room for the
+    // two-line label band above).
     plotX = 4;
-    plotY = 18;
+    plotY = PLOT_TOP_Y;
 
     // Opaque background. DSTY_Masked over Texture'Solid' renders fully
     // opaque (masked tile draws ignore tile-colour alpha); DSTY_Translucent
@@ -174,11 +191,13 @@ event DrawWindow(GC gc)
     gc.SetTileColor(dotColor);
     gc.DrawPattern(liveX, liveY, LIVE_DOT_SIZE, LIVE_DOT_SIZE, 0, 0, Texture'Solid');
 
-    // Label above the plot.
+    // Label above the plot. DrawText wraps at the rect width, so the
+    // sigmoid suffix can spill onto a second line without overlapping
+    // the plot.
     label = lblPrefix $ BuildLabelSuffix();
     gc.SetFont(Font'DeusExUI.FontMenuSmall');
     gc.SetTextColor(colLabel);
-    gc.DrawText(plotX, 2, PLOT_SIZE, 14, label);
+    gc.DrawText(plotX, LABEL_PAD_TOP, PLOT_SIZE, LABEL_HEIGHT, label);
 }
 
 // Build "Power (k=2.0)" / "Sigmoid (k=6.0, c=0.60, w=0.60)" etc.
@@ -261,7 +280,7 @@ defaultproperties
     colLiveDotIdle=(R=255,G=255,B=255,A=255)
     colLiveDotActive=(R=255,G=48,B=48,A=255)
     colLabel=(R=205,G=211,B=220,A=255)
-    lblPrefix="Left stick — "
+    lblPrefix="Left stick: "
     stickIdx=0
     bTickEnabled=True
 }

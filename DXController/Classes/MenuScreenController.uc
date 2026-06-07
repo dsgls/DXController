@@ -57,19 +57,20 @@ function CreateChoices()
     rowSigMidR     = MenuChoice_StickFloatParam(winClient.NewChild(Class'MenuChoice_StickCurveSigmoidMidpointRight' ));
     rowSigStrR     = MenuChoice_StickFloatParam(winClient.NewChild(Class'MenuChoice_StickCurveSigmoidStrengthRight' ));
 
-    // Right-side curve previews. Stack vertically with a 14-px gap. Y for
-    // vizRight is computed from the viz's known size (PLOT_SIZE+24 = 174)
-    // rather than vizLeft.height; reading the var back after SetSize is
-    // unreliable across UE1 windowing paths and gave us overlapping vizs.
+    // Right-side curve previews. Stack vertically with a 14-px gap. Y
+    // for vizRight is hardcoded against ControllerCurvePreview.WIN_HEIGHT
+    // (188); UE1 has no cross-class const access, and reading vizLeft.height
+    // back after SetSize is unreliable across UE1 windowing paths and gave
+    // us overlapping vizs. Keep this in sync with WIN_HEIGHT if it changes.
     vizLeft  = ControllerCurvePreview(winClient.NewChild(Class'ControllerCurvePreview'));
     vizLeft.stickIdx  = 0;
-    vizLeft.lblPrefix = "Left stick — ";
+    vizLeft.lblPrefix = "Left stick: ";
     vizLeft.SetPos(540, 8);
 
     vizRight = ControllerCurvePreview(winClient.NewChild(Class'ControllerCurvePreview'));
     vizRight.stickIdx  = 1;
-    vizRight.lblPrefix = "Right stick — ";
-    vizRight.SetPos(540, 8 + 174 + 14);
+    vizRight.lblPrefix = "Right stick: ";
+    vizRight.SetPos(540, 8 + 188 + 14);
 
     // Re-Refresh after both previews exist and parent linkage is final, so
     // GetPlayerPawn() definitely resolves and the launcher command runs.

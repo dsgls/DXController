@@ -14,8 +14,8 @@ Usage: png-to-pcx.py [SRC_DIR] [DST_DIR] [--size SIZE|native] [--mode masked|gre
 SRC_DIR and DST_DIR are optional and default to the XboxSeries/ and
 XboxSeries-pcx/ directories next to this script. SIZE is the output edge
 length in pixels — square (default: 64), or pass 'native' to preserve
-each PNG's natural dimensions (used by the menu-bg tile set, which has
-mixed 256x256 and 32x256 tiles)."""
+each PNG's natural dimensions (used by the menu-bg tile set, whose
+tiles are already authored at the engine's expected 256x256)."""
 
 import argparse
 from pathlib import Path

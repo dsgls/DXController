@@ -114,7 +114,8 @@ else
     python3 "$REPO_DIR/assets/png-to-pcx.py" "$REPO_DIR/assets/XboxSeries" "$TEXDIR" --size 64     --mode masked
     python3 "$REPO_DIR/assets/png-to-pcx.py" "$WHEELSRC"         "$TEXDIR" --size 1024   --mode masked
     python3 "$REPO_DIR/assets/png-to-pcx.py" "$WHEELSRC/wedges"  "$TEXDIR" --size 1024   --mode grey
-    # Menu-bg tiles have mixed sizes (256x256 + 32x256), so preserve native dims.
+    # Menu-bg tiles are six 256x256 PNGs; preserve native dims so png-to-pcx
+    # doesn't square-resize them against the default --size 64.
     python3 "$REPO_DIR/assets/png-to-pcx.py" "$MENUBGSRC"        "$TEXDIR" --size native --mode grey
     echo "sync-and-build: generated textures into $TEXDIR"
 fi
