@@ -106,6 +106,31 @@ else
     echo "sync-and-build: generated textures into $TEXDIR"
 fi
 
+# Register DXController in DeusEx.ini's EditPackages list. UCC walks
+# this list to decide what to build; without this entry, `UCC make`
+# doesn't pick up DXController.uc. Insert directly after
+# `EditPackages=DeusEx` so DXController compiles after the overlay
+# rebuild. The ini ships CRLF; the sed pattern anchors on `\r$` so
+# `EditPackages=DeusExUI` etc. don't match, and the replacement
+# preserves CRLF on both lines.
+DEUSEX_INI="$BUILD_DIR/System/DeusEx.ini"
+if (( DRY_RUN )); then
+    echo "sync-and-build: (dry-run) would ensure EditPackages=DXController is registered in $DEUSEX_INI"
+else
+    if [[ ! -f "$DEUSEX_INI" ]]; then
+        echo "sync-and-build: DeusEx.ini not found at $DEUSEX_INI" >&2
+        exit 1
+    fi
+    if ! grep -q '^EditPackages=DXController' "$DEUSEX_INI"; then
+        sed -i 's/^EditPackages=DeusEx\r$/EditPackages=DeusEx\r\nEditPackages=DXController\r/' "$DEUSEX_INI"
+        if ! grep -q '^EditPackages=DXController' "$DEUSEX_INI"; then
+            echo "sync-and-build: failed to insert EditPackages=DXController into $DEUSEX_INI" >&2
+            exit 1
+        fi
+        echo "sync-and-build: registered EditPackages=DXController in DeusEx.ini"
+    fi
+fi
+
 # Build the native launcher (msbuild via WSL → Windows-side VS).
 # find-msbuild.sh hard-fails if no MSBuild reachable; that's the right
 # behaviour — sync-and-build is the canonical install path and partial
