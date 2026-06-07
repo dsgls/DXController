@@ -9,7 +9,7 @@ function byte  GetStickIdx()            { return 0; }
 
 defaultproperties
 {
-    actionText="Left e&xpo"
+    actionText="Left expo"
     helpText="Expo blend e: 0.0 = linear, 1.0 = full cubic. Higher = more sensitive near full deflection.  *  LB/RB to adjust faster"
     minVal=0.0
     maxVal=1.0

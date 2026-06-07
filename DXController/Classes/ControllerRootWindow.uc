@@ -123,6 +123,7 @@ function RegisterNavControllers()
     RegisterNav(Class'DeusEx.MenuScreenControls',     Class'OptionsNavController');
     RegisterNav(Class'DeusEx.MenuScreenAdjustColors', Class'OptionsNavController');
     RegisterNav(Class'DeusEx.MenuScreenBrightness',   Class'OptionsNavController');
+    RegisterNav(Class'MenuScreenController',          Class'OptionsNavController');
     // Omitted: MenuScreenCustomizeKeys — list-based key binding UI.
 
     // New Game screen — portrait + skills list + action bar.

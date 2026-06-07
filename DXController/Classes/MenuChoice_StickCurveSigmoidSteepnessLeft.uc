@@ -10,7 +10,7 @@ function byte  GetStickIdx()            { return 0; }
 
 defaultproperties
 {
-    actionText="Left sigmoid &steepness"
+    actionText="Left sigmoid steepness"
     helpText="Sharpness of the S-curve. Higher = sharper transition between dead zone and full speed.  *  LB/RB to adjust faster"
     minVal=1.0
     maxVal=12.0

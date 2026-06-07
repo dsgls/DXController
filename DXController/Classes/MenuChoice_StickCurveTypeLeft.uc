@@ -9,6 +9,6 @@ function byte   GetStickIdx()               { return 0; }
 
 defaultproperties
 {
-    actionText="Left stick &curve"
+    actionText="Left stick curve"
     helpText="Response shape applied after the deadzone. Power = u^k; Expo = blend of linear and cubic; Sigmoid = S-shape with adjustable midpoint."
 }

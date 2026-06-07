@@ -10,7 +10,7 @@ function byte  GetStickIdx()            { return 0; }
 
 defaultproperties
 {
-    actionText="Left sigmoid &midpoint"
+    actionText="Left sigmoid midpoint"
     helpText="X position of the steep region. Lower = sensitive earlier (more aggressive overall).  *  LB/RB to adjust faster"
     minVal=0.15
     maxVal=0.85

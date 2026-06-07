@@ -10,7 +10,7 @@ function byte  GetStickIdx()            { return 0; }
 
 defaultproperties
 {
-    actionText="Left sigmoid stren&gth"
+    actionText="Left sigmoid strength"
     helpText="Dry/wet blend with linear. 0.0 = linear, 1.0 = pure S.  *  LB/RB to adjust faster"
     minVal=0.0
     maxVal=1.0

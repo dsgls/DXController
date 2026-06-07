@@ -35,6 +35,6 @@ function ProcessMenuAction(EMenuActions menuAction, Class menuActionClass)
 defaultproperties
 {
     Action=MA_Custom
-    actionText="Apply &recommended controller config..."
+    actionText="Apply base controller config"
     helpText="Writes the .ini blocks the README used to require by hand: bToggleCrouch, UseDirectInput/UseJoystick disables, and the recommended Joy* bindings."
 }

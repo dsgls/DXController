@@ -9,7 +9,7 @@ function byte  GetStickIdx()            { return 0; }
 
 defaultproperties
 {
-    actionText="Left &power"
+    actionText="Left power"
     helpText="Exponent k in u^k. 1.0 = linear; >1 = finer control near center; <1 = snappier near center.  *  LB/RB to adjust faster"
     minVal=0.1
     maxVal=10.0
