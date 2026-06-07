@@ -76,6 +76,16 @@ function CreateChoices()
     vizLeft.Refresh();
     vizRight.Refresh();
 
+    // RepackLayout (which hides curve-param rows that don't apply to the
+    // active curve type) runs from InitWindow *after* LoadSettings. Window's
+    // GetTopChild defaults to bVisibleOnly=True, so MenuUIScreenWindow's
+    // LoadSettings would skip already-hidden rows and they'd display empty
+    // when later toggled visible.
+}
+
+event InitWindow()
+{
+    Super.InitWindow();
     RepackLayout();
 }
 
