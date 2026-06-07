@@ -19,7 +19,7 @@ const ROW_ACTIONBAR  = 1;
 const NUM_ROWS       = 2;
 
 // R-stick smooth scroll of the bulletin body (matches ComputerScreenEmailNav).
-const ScrollDeadzone  = 200.0;
+const ScrollDeadzone  = 10.0;
 const ScrollThreshold = 500.0;
 
 var int rowIndex;

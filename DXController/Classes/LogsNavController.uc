@@ -13,7 +13,7 @@
 class LogsNavController extends MenuNavController;
 
 // Accumulator for R-stick smooth scroll.
-const ScrollDeadzone  = 200.0;   // raw axis units; ignore small stick deflections
+const ScrollDeadzone  = 10.0;    // raw axis units; ignore small stick deflections
 const ScrollThreshold = 500.0;   // accumulated units before one MoveThumb step
 
 var float scrollAccum;

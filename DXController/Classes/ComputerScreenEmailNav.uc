@@ -23,7 +23,7 @@ const HEADER_FROM    = 0;
 const HEADER_SUBJECT = 1;
 
 // R-stick smooth scroll of the email body (matches LogsNavController).
-const ScrollDeadzone  = 200.0;
+const ScrollDeadzone  = 10.0;
 const ScrollThreshold = 500.0;
 
 var int rowIndex;

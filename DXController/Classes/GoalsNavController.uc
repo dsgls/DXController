@@ -30,7 +30,7 @@ class GoalsNavController extends MenuNavController;
 
 // Accumulator for R-stick smooth scroll. One step fires per
 // ScrollThreshold units of accumulated axis input.
-const ScrollDeadzone  = 200.0;   // raw axis units; ignore small deflections
+const ScrollDeadzone  = 10.0;    // raw axis units; ignore small deflections
 const ScrollThreshold = 500.0;   // accumulated units before one MoveThumb step
 
 var float scrollAccum;
