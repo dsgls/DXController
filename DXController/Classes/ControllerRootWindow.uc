@@ -873,8 +873,12 @@ event bool VirtualKeyPressed(EInputKey key, bool bRepeat)
     // existing controllers consume them as no-ops (HandleActivate
     // returns true for unrecognised bytes).
 
+    // IK_Joy9 (L-stick click) is also dispatched: the inventory screen
+    // binds it to "change ammo". In gameplay it is crouch (consumed in
+    // ControllerConsole, where activeNav is None), so this is inert there;
+    // other nav controllers consume it as a no-op.
     if (key == IK_Joy1 || key == IK_Joy3 || key == IK_Joy4 || key == IK_Joy10
-        || key == IK_Joy5 || key == IK_Joy6)
+        || key == IK_Joy5 || key == IK_Joy6 || key == IK_Joy9)
     {
         if (!bRepeat && activeNav != None && activeNav.HandleActivate(bkey))
             return true;

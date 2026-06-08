@@ -533,7 +533,7 @@ function bool HandleActivate(byte button)
         return true;
     }
 
-    if (button == 203)        // IK_Joy4 (Y): change ammo.
+    if (button == 208)        // IK_Joy9 (L-stick click): change ammo.
     {
         if (s.btnChangeAmmo != None && s.btnChangeAmmo.bIsSensitive)
             s.btnChangeAmmo.PressButton();
