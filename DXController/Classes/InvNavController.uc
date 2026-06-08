@@ -20,10 +20,20 @@
 //
 // Activations:
 //   A (Joy1/200)          — on a weapon mod: enter apply-to-weapon mode;
+//                           on ChargedPickup armour: Use (toggle);
 //                           otherwise Equip if enabled, else Use
 //   X (Joy3/202)          — open belt-assign wheel sub-dialog
-//   Y (Joy4/203)          — change ammo on selected weapon
+//   Y (Joy4/203)          — enter move-item mode
+//   L-stick click (Joy9/208) — change ammo on selected weapon
 //   R-stick click (Joy10/209) — drop selected item
+//
+// Move sub-dialog: while moving, the D-pad nudges the selected item one
+// grid cell at a time (clamped on-grid, no wrap), tinting it green if the
+// cells are free or red if it would overlap another item. A places it
+// (only when green), B cancels back to the original cell. The screen's
+// bDragging flag is held for the duration to suppress the periodic
+// item-button rebuild; Detach restores the item if the menu closes
+// mid-move.
 //
 // ModApply sub-dialog: while applying a weapon mod, the D-pad moves the
 // focus frame over any inventory tile (mod stays selected), A applies
@@ -53,6 +63,13 @@ var localized String NoCompatibleWeaponLabel;
 // tile it was entered on. Seeded by SeedCursor; advanced by
 // UpdateCursorAfterMove.
 var int cursorX, cursorY;
+
+// --- Move item (Move sub-dialog) ---
+// The item's grid anchor captured on Move enter, for B-cancel / Detach
+// restore. invPos itself is left unchanged during the move (only the
+// button's dragPos slides for preview), so PlaceItemInSlot(moveOrigX,
+// moveOrigY) refills the original cells on cancel.
+var int moveOrigX, moveOrigY;
 
 function InitFocus()
 {
@@ -309,6 +326,12 @@ function bool HandleDPad(int dx, int dy)
     if (subDialogActive == 'WheelAssign')
         return true;
 
+    if (subDialogActive == 'Move')
+    {
+        MoveNudge(dx, dy);
+        return true;
+    }
+
     if (subDialogActive == 'ModApply')
     {
         s = PersonaScreenInventory(screen);
@@ -483,6 +506,12 @@ function bool HandleActivate(byte button)
         return true;
     }
 
+    if (subDialogActive == 'Move')
+    {
+        ResolveMove(button);
+        return true;
+    }
+
     s = PersonaScreenInventory(screen);
     if (s == None)
         return true;
@@ -530,6 +559,12 @@ function bool HandleActivate(byte button)
     if (button == 202)        // IK_Joy3 (X): belt-assign wheel.
     {
         OpenAssignWheel(s);
+        return true;
+    }
+
+    if (button == 203)        // IK_Joy4 (Y): enter move-item mode.
+    {
+        EnterMove(s);
         return true;
     }
 
@@ -771,6 +806,174 @@ function ResolveModApply(byte button)
     // other buttons: no-op while ModApply is active.
 }
 
+// ----------------------------------------------------------------------
+// EnterMove — Y pressed in normal mode. Begins a modal reposition of the
+// selected item: clears its own footprint so it can't collide with
+// itself, holds the screen's bDragging flag to suppress the 0.25s rebuild
+// (keeping `focused` and the cleared invSlots valid), and starts the
+// item green. Mirrors the mouse StartButtonDrag setup.
+// ----------------------------------------------------------------------
+function EnterMove(PersonaScreenInventory s)
+{
+    local Inventory inv;
+
+    if (s == None || s.selectedItem == None || focused == None)
+        return;
+
+    inv = Inventory(s.selectedItem.GetClientObject());
+    if (inv == None)
+        return;
+
+    moveOrigX = inv.invPosX;
+    moveOrigY = inv.invPosY;
+
+    s.bDragging = True;                 // suppress rebuild for the duration
+    s.ClearSpecialHighlights();         // drop mod/ammo green overlays
+    s.SelectInventory(None);            // deselect (like stock StartButtonDrag)
+                                        // so the green/red tint owns the button
+                                        // during the move and the selected cue
+                                        // restores cleanly via SelectInventory
+                                        // on exit
+    s.player.SetInvSlots(inv, 0);       // free the item's own cells
+
+    focused.Raise();                                          // draw on top
+    PersonaInventoryItemButton(focused).SetDropFill(True);    // start green
+
+    subDialogActive = 'Move';
+    class'DXControllerDebug'.static.DebugLog("DXC-NAV MOVE ENTER item=" $ inv.ItemName);
+}
+
+// ----------------------------------------------------------------------
+// MoveNudge — D-pad in Move mode. Shifts the item's anchor one cell,
+// clamped so its footprint stays on the 5x6 grid (no wrap), slides the
+// button there, and recolours green (free) / red (would overlap).
+// ----------------------------------------------------------------------
+function MoveNudge(int dx, int dy)
+{
+    local PersonaScreenInventory s;
+    local PersonaInventoryItemButton btn;
+    local Inventory inv;
+    local int nx, ny, maxX, maxY;
+
+    s = PersonaScreenInventory(screen);
+    btn = PersonaInventoryItemButton(focused);
+    if (s == None || btn == None)
+        return;
+    inv = Inventory(btn.GetClientObject());
+    if (inv == None)
+        return;
+
+    nx = btn.dragPosX + dx;
+    ny = btn.dragPosY + dy;
+
+    maxX = s.player.maxInvCols - inv.invSlotsX;
+    maxY = s.player.maxInvRows - inv.invSlotsY;
+    if (nx < 0)
+        nx = 0;
+    else if (nx > maxX)
+        nx = maxX;
+    if (ny < 0)
+        ny = 0;
+    else if (ny > maxY)
+        ny = maxY;
+
+    s.SetItemButtonPos(btn, nx, ny);
+    btn.SetDropFill(s.player.IsEmptyItemSlot(inv, nx, ny));
+}
+
+// ----------------------------------------------------------------------
+// ResolveMove — button dispatch while Move is active.
+//   A (200) — place if the candidate cell is valid (green), else no-op.
+//   B (201) — cancel: restore the item to its original cell.
+//   other   — no-op (consumed).
+// Both A-commit and B-cancel restore the normal selected cue via
+// SelectInventory and clear move flags via EndMove.
+// ----------------------------------------------------------------------
+function ResolveMove(byte button)
+{
+    local PersonaScreenInventory s;
+    local PersonaInventoryItemButton btn;
+    local Inventory inv;
+
+    s = PersonaScreenInventory(screen);
+    btn = PersonaInventoryItemButton(focused);
+    if (s == None || btn == None)
+    {
+        EndMove();
+        return;
+    }
+    inv = Inventory(btn.GetClientObject());
+    if (inv == None)          // item gone out from under us — bail cleanly so
+    {                         // bDragging/subDialogActive never stick.
+        EndMove();
+        return;
+    }
+
+    if (button == 200)        // A: place if valid.
+    {
+        if (s.player.IsEmptyItemSlot(inv, btn.dragPosX, btn.dragPosY))
+        {
+            s.MoveItemButton(btn, btn.dragPosX, btn.dragPosY);
+            EndMove();
+            s.SelectInventory(btn);
+            class'DXControllerDebug'.static.DebugLog(
+                "DXC-NAV MOVE PLACE x=" $ string(btn.dragPosX) $ " y=" $ string(btn.dragPosY));
+        }
+        // else: invalid (red) — no-op; B exits, so no soft-lock.
+    }
+    else if (button == 201)   // B: cancel, restore original position.
+    {
+        s.player.PlaceItemInSlot(inv, moveOrigX, moveOrigY);
+        s.SetItemButtonPos(btn, moveOrigX, moveOrigY);
+        EndMove();
+        s.SelectInventory(btn);
+        class'DXControllerDebug'.static.DebugLog("DXC-NAV MOVE CANCEL");
+    }
+    // other buttons: no-op while moving.
+}
+
+// ----------------------------------------------------------------------
+// EndMove — clear move-mode flags. Slot state is the caller's job (commit
+// places via MoveItemButton; cancel restores via PlaceItemInSlot).
+// ----------------------------------------------------------------------
+function EndMove()
+{
+    local PersonaScreenInventory s;
+
+    s = PersonaScreenInventory(screen);
+    if (s != None)
+        s.bDragging = False;
+    subDialogActive = '';
+}
+
+// ----------------------------------------------------------------------
+// Detach — if a move is in progress when the screen leaves (Back/Start
+// close the menu without routing through B-cancel), restore the item's
+// cleared footprint before the screen ref is lost. The player's invSlots
+// grid persists across the menu closing, so leaving it cleared would
+// corrupt the next pickup's slot search. invPos was never changed during
+// the move, so PlaceItemInSlot(moveOrig…) refills exactly the right cells.
+// ----------------------------------------------------------------------
+function Detach()
+{
+    local PersonaScreenInventory s;
+    local Inventory inv;
+
+    if (subDialogActive == 'Move')
+    {
+        s = PersonaScreenInventory(screen);
+        if (s != None && focused != None)
+        {
+            inv = Inventory(focused.GetClientObject());
+            if (inv != None)
+                s.player.PlaceItemInSlot(inv, moveOrigX, moveOrigY);
+            s.bDragging = False;
+        }
+        subDialogActive = '';
+    }
+    Super.Detach();
+}
+
 // Context-dependent legend: the inventory screen rebinds A/B while a
 // sub-dialog is active, and BuildHints runs every frame, so it just
 // branches on subDialogActive.
@@ -784,6 +987,12 @@ function BuildHints()
     if (subDialogActive == 'ModApply')
     {
         AddHint("a", "Apply mod");
+        AddHint("b", "Cancel");
+        return;
+    }
+    if (subDialogActive == 'Move')
+    {
+        AddHint("a", "Place");
         AddHint("b", "Cancel");
         return;
     }
@@ -826,7 +1035,9 @@ function BuildHints()
         AddHint("a", aLabel);
 
     AddHint("x", "Assign slot");
-    AddHint("y", "Change ammo");
+    AddHint("y", "Move");
+    if (s != None && s.btnChangeAmmo != None && s.btnChangeAmmo.bIsSensitive)
+        AddHint("ls", "Change ammo");
     AddHint("rs", "Drop");
     AddHint("lb", "Prev tab");
     AddHint("rb", "Next tab");
