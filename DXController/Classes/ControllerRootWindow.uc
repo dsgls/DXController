@@ -61,6 +61,13 @@ var MenuNavController activeNav;
 // emit a log line only on transitions (avoid per-frame spam).
 var string lastDiagTopName;
 
+// Diagnostic: millisecond-of-day sampled at the previous Tick, for the
+// wall-clock frame-spike detector in Tick. LevelInfo's wall-clock fields
+// are used rather than Level.TimeSeconds because the UI pause freezes
+// game time during the very menu-open stall we want to measure, and they
+// aren't subject to the engine's DeltaTime clamp. 0 = no sample yet.
+var int lastTickClockMs;
+
 event InitWindow()
 {
     Super.InitWindow();
@@ -514,8 +521,33 @@ function Tick(float deltaSeconds)
     local float curX, curY;
     local Window topScreen;
     local MenuNavController topNav;
+    local int frameMs, nowClockMs;
+    local string topName;
 
     Super.Tick(deltaSeconds);
+
+    // === Diagnostic: wall-clock frame-time spike detector ===
+    // The menu pauses the game (DeusExRootWindow.UIPauseGame), so
+    // Level.TimeSeconds freezes during a menu-open stall and can't time
+    // it. LevelInfo's wall-clock fields keep advancing and dodge the
+    // engine's DeltaTime clamp, so a multi-second native package-load
+    // stall surfaces here as one oversized frameMs on the wake-up Tick
+    // (no script runs while the engine is blocked loading). frameMs is
+    // reported below, once topScreen is known.
+    frameMs = 0;
+    if (parentPawn != None)
+    {
+        nowClockMs = ((parentPawn.Level.Hour * 60 + parentPawn.Level.Minute) * 60
+                      + parentPawn.Level.Second) * 1000 + parentPawn.Level.Millisecond;
+        if (lastTickClockMs != 0)
+        {
+            frameMs = nowClockMs - lastTickClockMs;
+            if (frameMs < 0)        // sampled across midnight
+                frameMs += 86400000;
+        }
+        lastTickClockMs = nowClockMs;
+    }
+    // === End diagnostic ===
 
     // 1. activeNav reconciliation. Runs first so the cursor-poll and
     //    focus-retry blocks below see the up-to-date activeNav.
@@ -536,6 +568,21 @@ function Tick(float deltaSeconds)
         lastDiagTopName = "None";
     }
     // === End diagnostic ===
+
+    // === Diagnostic: report a frame-time spike flagged above, tagged with
+    // the screen now on top (e.g. MenuMain for the slow main-menu open).
+    // Also catches gameplay-side load hitches, where topScreen is None. ===
+    if (frameMs >= 500)
+    {
+        if (topScreen != None)
+            topName = string(topScreen.Class);
+        else
+            topName = "None";
+        class'DXControllerDebug'.static.DebugLog(
+            "DXC-PERF slow-frame ms=" $ string(frameMs)
+            $ " top=" $ topName
+            $ " hasNav=" $ string(topNav != None));
+    }
 
     SwitchActiveNav(topNav, topScreen);
 
