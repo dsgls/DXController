@@ -74,6 +74,20 @@ In menus, conversations, and devices the D-pad moves the selection, A
 confirms, and B cancels. LB/RB cycle between tabs in the
 inventory and persona screens.
 
+On-screen button hints show what each button does for the selected item.
+In the inventory screen the controller-specific actions are:
+
+| Button         | Action                                                       |
+|----------------|--------------------------------------------------------------|
+| A              | Equip — or Use, for medkits, biocells, and armour/camo (Ballistic Armor, Thermoptic Camo, HazMat Suit, Rebreather, Tech Goggles) |
+| Y              | Move item — then D-pad to position, A to place, B to cancel  |
+| L-stick click  | Change ammo (weapons that can load more than one ammo type)  |
+| X              | Assign item to a belt slot                                   |
+| R-stick click  | Drop item                                                    |
+
+When moving an item, it glows green where it fits and red where it would
+overlap another item; A only places it on a green spot.
+
 ## Development
 
 See [`development.md`](development.md) for the repo layout, build
