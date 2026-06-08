@@ -511,7 +511,12 @@ function bool HandleActivate(byte button)
         if (s.selectedItem != None)
             inv = Inventory(s.selectedItem.GetClientObject());
         pk = DeusExPickup(inv);
-        bUseItem = (pk != None && pk.bActivatable && pk.bCanHaveMultipleCopies);
+        // ChargedPickup armour/camo (Ballistic, Thermoptic, HazMat,
+        // Rebreather, TechGoggles) is bActivatable but single-copy, so it
+        // would fall through to Equip (PutInHand — useless). Classify it
+        // with the used-in-place items so A toggles it via btnUse.
+        bUseItem = (pk != None && pk.bActivatable && pk.bCanHaveMultipleCopies)
+                   || (ChargedPickup(inv) != None);
 
         if (bUseItem && s.btnUse != None && s.btnUse.bIsSensitive)
             s.btnUse.PressButton();
@@ -803,7 +808,8 @@ function BuildHints()
 
         if (WeaponMod(inv) != None)                 // matches the ModApply short-circuit
             aLabel = "Apply mod";
-        else if (pk != None && pk.bActivatable && pk.bCanHaveMultipleCopies
+        else if (((pk != None && pk.bActivatable && pk.bCanHaveMultipleCopies)
+                  || ChargedPickup(inv) != None)
                  && s.btnUse != None && s.btnUse.bIsSensitive)
             aLabel = "Use";
         else if (s.btnEquip != None && s.btnEquip.bIsSensitive)
