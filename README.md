@@ -1,16 +1,15 @@
-# DXController
+# xInput controller support for Deus Ex (1999)
 
-Full Xbox-controller support for the original *Deus Ex* (2000, GOTY
-edition). DXController adds gamepad-driven movement and aiming, a weapon
-and augmentation wheel, an on-screen keyboard, and complete controller
+DXController is a mod that implements Xbox controller support for the
+original *Deus Ex* (2000, GOTY edition). The game should feel as if
+it was designed to be played with a controller, with context-dependent
+controls and new UI elements. Gameplay is fully vanilla.
+
+DXController adds much better controller feel, a weapon and augmentation
+equipping wheel, an on-screen keyboard for terminals, and complete controller
 navigation for every menu, conversation, and in-world device (keypads,
 ATMs, computers, security terminals) — so the game is playable end to
 end without a mouse or keyboard.
-
-The mod is intended to feel like the game was made to be played on
-a controller. This means context-dependent controls and new UI elements
-like weapon/aug wheels for equipping, and an onscreen keyboard for
-entering usernames and passwords.
 
 ## Download
 
@@ -21,7 +20,7 @@ The release `.zip` contains everything you need:
 
 | File                | What it is                                             |
 |---------------------|--------------------------------------------------------|
-| `DeusEx.exe`       | Launcher with the built-in XInput controller driver    |
+| `DeusEx.exe`        | Launcher with the built-in XInput controller driver    |
 | `DeusEx.u`          | Stock package with small controller hooks added        |
 | `DXController.u`    | The mod                                                |
 
@@ -32,7 +31,7 @@ The release `.zip` contains everything you need:
 ## Screenshots
 
 ![weapon wheel](/screenshots/weaponwheel.webp)
-![inventory screen](/screenshots/inventory.webp)
+![controller settings screen](/screenshots/controllersettings.webp)
 ![security terminal](/screenshots/securityterminal.webp)
 
 ## Install
@@ -43,6 +42,10 @@ Copy `DeusEx.exe`, `DeusEx.u`, and `DXController.u` from the release
    `DeusEx.exe` and `DeusEx.u`.
 
 I highly recommend enabling "Toggle Crouch" in the control settings.
+
+If you have any other mods installed, start with a fresh game install
+and install only DXController. Compatibility with other mods has not
+been tested.
 
 ## Controls
 
@@ -68,14 +71,8 @@ I highly recommend enabling "Toggle Crouch" in the control settings.
 | D-pad down     | Belt slot 4                     |
 
 In menus, conversations, and devices the D-pad moves the selection, A
-confirms, and B cancels. **LB / RB** cycle between tabs in the
+confirms, and B cancels. LB/RB cycle between tabs in the
 inventory and persona screens.
-
-## Troubleshooting
-
-- If you have any other mods installed, start with a fresh game install
-  and install only DXController. Compatibility with other mods has not
-  been tested.
 
 ## Development
 
