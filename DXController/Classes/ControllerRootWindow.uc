@@ -42,6 +42,11 @@ var MenuFocusOverlay focusOverlay;
 // Button-legend overlay (drawn above all menu content when in CM_Gamepad).
 var ControllerHintOverlay hintOverlay;
 
+// Periodic autosave: a non-window manager (polled from Tick) plus a
+// read-only bottom-left notice overlay. See AutoSaveManager.
+var AutoSaveManager autoSave;
+var AutoSaveToastWindow autoSaveToast;
+
 // Nav controller registry. Keyed by screen class via parallel arrays.
 // Entries populated in InitWindow. Concrete classes are instantiated
 // lazily on first attach.
@@ -83,6 +88,12 @@ event InitWindow()
 
     keyboard = OnScreenKeyboardWindow(NewChild(Class'OnScreenKeyboardWindow'));
     keyboard.SetWindowAlignments(HALIGN_Full, VALIGN_Full, 0, 0);
+
+    autoSave = New(None) Class'AutoSaveManager';
+    autoSave.Init(Self);
+
+    autoSaveToast = AutoSaveToastWindow(NewChild(Class'AutoSaveToastWindow'));
+    autoSaveToast.SetWindowAlignments(HALIGN_Full, VALIGN_Full, 0, 0);
 
     RegisterNavControllers();
     cursorMode = CM_Gamepad;
@@ -548,6 +559,10 @@ function Tick(float deltaSeconds)
         lastTickClockMs = nowClockMs;
     }
     // === End diagnostic ===
+
+    // Drive the periodic autosave (timer, guards, rotation, toast countdown).
+    if (autoSave != None)
+        autoSave.Poll(deltaSeconds);
 
     // 1. activeNav reconciliation. Runs first so the cursor-poll and
     //    focus-retry blocks below see the up-to-date activeNav.
