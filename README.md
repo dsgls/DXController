@@ -88,6 +88,24 @@ In the inventory screen the controller-specific actions are:
 When moving an item, it glows green where it fits and red where it would
 overlap another item; A only places it on a green spot.
 
+## Auto-save
+
+The mod autosaves during play. It works out of the box with the defaults
+below; to change them, add a `[DXController.AutoSaveManager]` section to
+`DeusEx.ini` (the keys are not written there automatically):
+
+| Key | Default | Meaning |
+|-----|---------|---------|
+| `bEnabled` | `True` | Turn autosave on/off |
+| `IntervalSeconds` | `60` | Seconds of play between autosaves (floored at 10) |
+| `MaxSaves` | `40` | How many autosaves to keep (1–100); oldest is discarded |
+
+Autosaves appear in the normal Load Game list, named `Auto Save - <map>`,
+and load like any other save. The interval counts play time only — it does
+not advance while paused or in a menu — and a due autosave waits until you
+leave any conversation, menu, or cutscene before it fires. Each save shows a
+brief "Auto Saving..." note in the bottom-left corner.
+
 ## Development
 
 See [`development.md`](development.md) for the repo layout, build
