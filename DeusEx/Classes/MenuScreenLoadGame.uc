@@ -307,7 +307,7 @@ function CreateGamesList()
 	lstGames.SetColumnType(1, COLTYPE_String);
 	lstGames.SetColumnFont(1, Font'FontFixedWidthSmall');
 
-	lstGames.SetColumnType(2, COLTYPE_Float);
+	lstGames.SetColumnType(2, COLTYPE_String);   // DXController fix: was COLTYPE_Float; see BuildTimeSortKey
 	lstGames.SetSortColumn(2, bDateSortOrder);
 	lstGames.EnableAutoSort(True);
 	
@@ -453,7 +453,7 @@ function AddSaveRow(DeusExSaveInfo saveInfo, int saveIndex)
 	{
 		lstGames.AddRow( saveInfo.Description              $ ";" $ 
 						 BuildTimeStringFromInfo(saveInfo) $ ";" $ 
-						 BuildTimeJulian(saveInfo)         $ ";" $ 
+						 BuildTimeSortKey(saveInfo)        $ ";" $
 						 BuildTimeStringFromInfo(saveInfo) $ ";" $
 						 String(saveInfo.DirectoryIndex));
 	}
@@ -711,30 +711,26 @@ function String TwoDigits(int number)
 }
 
 // ----------------------------------------------------------------------
-// BuildTimeJulian()
+// BuildTimeSortKey()
+//
+// DXController fix: replaces stock BuildTimeJulian. That returned the
+// timestamp as a 32-bit Float (~1.36e9 in 2026, where adjacent floats
+// are 128 apart), so saves made within ~2 minutes of each other got
+// identical sort keys and the native list's tie-break (row insertion
+// order = save slot order) could list the OLDER save as newest. A
+// fixed-width YYYYMMDDHHMMSS string sorts chronologically and exactly;
+// column 2 is COLTYPE_String to match. The save screen's new-save row
+// key "9999999999" still sorts above any date string ('9' > '2').
 // ----------------------------------------------------------------------
 
-function Float BuildTimeJulian(DeusExSaveInfo saveInfo)
+function String BuildTimeSortKey(DeusExSaveInfo saveInfo)
 {
-	local Float retValue;
-	local Float seconds;
-
 	if ( saveInfo == None )
-	{
-		retValue = 0;
-	}
-	else
-	{
-		retValue  = (saveInfo.Year - 1990) * 372;
-		retValue += (saveInfo.Month * 31) + saveInfo.Day;
-		retValue *= 100000;
+		return "0";
 
-		seconds = (saveInfo.Hour * 3600) + (saveInfo.Minute * 60) + saveInfo.Second;
-
-		retValue += seconds;
-	}
-
-	return retValue;
+	return String(saveInfo.Year)   $ TwoDigits(saveInfo.Month)  $
+	       TwoDigits(saveInfo.Day) $ TwoDigits(saveInfo.Hour)   $
+	       TwoDigits(saveInfo.Minute) $ TwoDigits(saveInfo.Second);
 }
 
 // ----------------------------------------------------------------------
