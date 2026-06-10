@@ -38,11 +38,16 @@ public:
     // grace window AND no qualifying mouse activity has since occurred.
     bool IsPadActive() const;
 
-    // Called by MainLoop from its WM_MOUSEMOVE branch with the client-relative
-    // cursor position. Internally tracks previous position; if the delta
-    // exceeds the configured pixel threshold, flips the active-source signal
-    // back to mouse.
-    void NotifyMouseActivity(int iX, int iY);
+    // Called by MainLoop from its WM_INPUT branch with the raw hardware
+    // mouse deltas. Raw input is the physical-motion ground truth: synthetic
+    // cursor moves (WinDrv's capture-release position restore on menu open,
+    // ClipCursor clamps, our own fullscreen SetCursorPos sync) generate
+    // WM_MOUSEMOVE but never WM_INPUT, so they must not flip the
+    // active-source signal back to mouse. Deltas are accumulated over a
+    // short window (raw packets are far finer-grained than coalesced
+    // WM_MOUSEMOVE); once the accumulated Manhattan distance exceeds the
+    // configured pixel threshold, the signal flips to mouse.
+    void NotifyMouseActivity(int iDeltaX, int iDeltaY);
 
     // Re-reads the [DXController.ControllerSettings] section into the in-memory
     // settings. Safe to call between Poll() invocations; the next Poll uses
@@ -94,9 +99,8 @@ private:
     ULONGLONG m_iLastHotplugScanMs;
     ULONGLONG m_iLastPadActivityMs;
     ULONGLONG m_iLastMouseActivityMs;
-    int       m_iPrevMouseX;
-    int       m_iPrevMouseY;
-    bool      m_bHasPrevMousePos;
+    int       m_iRawMouseAccum;        //Manhattan sum of raw deltas in the current window
+    ULONGLONG m_iRawMouseAccumStartMs; //window start; 0 = no window open
 
     //Helpers
 

@@ -124,9 +124,8 @@ CXInput::CXInput()
  m_iLastHotplugScanMs(0),
  m_iLastPadActivityMs(0),
  m_iLastMouseActivityMs(0),
- m_iPrevMouseX(0),
- m_iPrevMouseY(0),
- m_bHasPrevMousePos(false)
+ m_iRawMouseAccum(0),
+ m_iRawMouseAccumStartMs(0)
 {
     LoadSettings();
 }
@@ -545,22 +544,27 @@ bool CXInput::IsPadActive() const
     return bPadRecent && !bMouseRecent;
 }
 
-void CXInput::NotifyMouseActivity(const int iX, const int iY)
+void CXInput::NotifyMouseActivity(const int iDeltaX, const int iDeltaY)
 {
-    if (!m_bHasPrevMousePos)
+    const int iManhattan = (iDeltaX < 0 ? -iDeltaX : iDeltaX) + (iDeltaY < 0 ? -iDeltaY : iDeltaY);
+    if (iManhattan == 0)
     {
-        m_iPrevMouseX     = iX;
-        m_iPrevMouseY     = iY;
-        m_bHasPrevMousePos = true;
-        return;
+        return; //button-only WM_INPUT packet
     }
-    const int iDx = iX - m_iPrevMouseX;
-    const int iDy = iY - m_iPrevMouseY;
-    const int iManhattan = (iDx < 0 ? -iDx : iDx) + (iDy < 0 ? -iDy : iDy);
-    m_iPrevMouseX = iX;
-    m_iPrevMouseY = iY;
-    if (iManhattan > m_iMouseActivityPx)
+
+    //Accumulate over a short window: a single raw packet from a slow hand
+    //movement carries only 1-2 counts, well under the threshold that one
+    //coalesced WM_MOUSEMOVE used to clear in a frame.
+    constexpr ULONGLONG kAccumWindowMs = 250;
+    const ULONGLONG iNowMs = GetTickCount64();
+    if (m_iRawMouseAccumStartMs == 0 || iNowMs - m_iRawMouseAccumStartMs > kAccumWindowMs)
     {
-        m_iLastMouseActivityMs = GetTickCount64();
+        m_iRawMouseAccum        = 0;
+        m_iRawMouseAccumStartMs = iNowMs;
+    }
+    m_iRawMouseAccum += iManhattan;
+    if (m_iRawMouseAccum > m_iMouseActivityPx)
+    {
+        m_iLastMouseActivityMs = iNowMs;
     }
 }

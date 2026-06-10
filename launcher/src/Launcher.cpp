@@ -436,9 +436,15 @@ void CLauncher::MainLoop(UEngine* const pEngine)
             case WM_MOUSEMOVE:
                 if (m_pViewPort && m_bRawInput)
                 {
+                    //Mouse-activity detection deliberately does NOT live here: WM_MOUSEMOVE
+                    //also fires for synthetic cursor moves (WinDrv's capture-release position
+                    //restore on menu open, ClipCursor clamps, our fullscreen SetCursorPos
+                    //sync). Treating those as user activity flipped IsPadActive() false and
+                    //fed the move below, briefly unhiding the cursor and stealing menu focus
+                    //on gameplay->menu transitions. Physical motion is detected from raw
+                    //WM_INPUT deltas instead (NotifyMouseActivity in the WM_INPUT branch).
                     const int iXPos = GET_X_LPARAM(Msg.lParam);
                     const int iYPos = GET_Y_LPARAM(Msg.lParam);
-                    m_XInput.NotifyMouseActivity(iXPos, iYPos);
                     if (bMouseOverWindow && !m_XInput.IsPadActive()) //Because preferences window defers mousemove calls to us, somehow
                     {
                         //Use WM_MOUSEMOVE to control menu cursor
@@ -466,6 +472,11 @@ void CLauncher::MainLoop(UEngine* const pEngine)
                     RAWINPUT raw;
                     UINT rawSize = sizeof(raw);
                     GetRawInputData(reinterpret_cast<HRAWINPUT>(Msg.lParam), RID_INPUT, &raw, &rawSize, sizeof(RAWINPUTHEADER));
+
+                    //Raw deltas are physical-motion ground truth (synthetic SetCursorPos
+                    //moves never generate WM_INPUT), so this is where mouse activity is
+                    //detected for the pad-vs-mouse active-source signal.
+                    m_XInput.NotifyMouseActivity(raw.data.mouse.lLastX, raw.data.mouse.lLastY);
 
                     const float fDeltaX = static_cast<float>(raw.data.mouse.lLastX);
                     const float fDeltaY = static_cast<float>(raw.data.mouse.lLastY);
