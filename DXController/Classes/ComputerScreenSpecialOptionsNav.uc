@@ -6,7 +6,12 @@
 // else btnLogout (Public/ATM).
 //
 // Each populated choice button is its own row. Triggered options stay
-// visible but vanilla-disabled; focus stays put, A becomes no-op.
+// visible but vanilla-disabled. Pressing a choice disables it
+// (ActivateSpecialOption -> SetSensitivity(False)) and the engine moves
+// the stock focus cue off it, so HandleActivate re-syncs nav focus to
+// the next sensitive choice (or the action bar) after each press —
+// otherwise `focused` is left on the dead button and A goes inert
+// until the user D-pads away and back.
 //=============================================================================
 class ComputerScreenSpecialOptionsNav extends ComputerScreenNavSub;
 
@@ -38,6 +43,24 @@ function int FirstSensitiveChoice()
 {
     local int i;
     for (i = 0; i < numChoices; i++)
+    {
+        if (choices[i] != None && choices[i].bIsSensitive)
+            return i;
+    }
+    return -1;
+}
+
+// Next sensitive choice after `from`, wrapping to earlier choices if
+// nothing below is sensitive. -1 when no other choice is sensitive.
+function int NextSensitiveChoice(int from)
+{
+    local int i;
+    for (i = from + 1; i < numChoices; i++)
+    {
+        if (choices[i] != None && choices[i].bIsSensitive)
+            return i;
+    }
+    for (i = 0; i < from; i++)
     {
         if (choices[i] != None && choices[i].bIsSensitive)
             return i;
@@ -155,6 +178,8 @@ function bool HandleDPad(int dx, int dy)
 
 function bool HandleActivate(byte button)
 {
+    local int next;
+
     if (button != 200)
         return true;
 
@@ -165,6 +190,17 @@ function bool HandleActivate(byte button)
     // (ActionBarRow) inherit MenuUIBorderButtonWindow → PressButton.
     if (MenuUIBorderButtonWindow(focused) != None)
         MenuUIBorderButtonWindow(focused).PressButton();
+
+    // A pressed choice is now vanilla-disabled; move nav focus with the
+    // stock cue so A keeps acting on whatever is highlighted.
+    if (rowIndex < numChoices && focused != None && !focused.bIsSensitive)
+    {
+        next = NextSensitiveChoice(rowIndex);
+        if (next >= 0)
+            MoveToChoice(next);
+        else
+            MoveToActionBar();
+    }
     return true;
 }
 
