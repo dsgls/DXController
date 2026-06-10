@@ -649,6 +649,15 @@ function Tick(float deltaSeconds)
         activeNav.NavTick(deltaSeconds);
 }
 
+// Override of the DeusExRootWindow.IsGamepadCursorMode hook. Vanilla
+// code that force-shows the cursor (ConWindowActive's choice-list
+// ShowCursor(True) calls) consults this at call time so it never
+// overrides the gamepad cursor policy.
+function bool IsGamepadCursorMode()
+{
+    return cursorMode == CM_Gamepad;
+}
+
 // Called by ControllerConsole at the top of every gamepad event handler.
 function NoticeGamepadActivity()
 {

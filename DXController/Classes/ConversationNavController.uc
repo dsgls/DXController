@@ -22,8 +22,8 @@
 // Casts:
 //   ConWindow(screen)        for conPlay access and bForcePlay test
 //                            (both fields are declared on ConWindow base).
-//   ConWindowActive(screen)  for numChoices, conChoices[], AbortCinematicConvo,
-//                            and the bGamepadMode setter (overlay var).
+//   ConWindowActive(screen)  for numChoices, conChoices[], and
+//                            AbortCinematicConvo.
 //
 // See docs/superpowers/specs/2026-05-15-conversation-nav-design.md
 //=============================================================================
@@ -33,13 +33,7 @@ class ConversationNavController extends MenuNavController;
 
 function Attach(Window s)
 {
-    local ConWindowActive cwa;
-
     Super.Attach(s);
-
-    cwa = ConWindowActive(s);
-    if (cwa != None)
-        cwa.bGamepadMode = true;
 
     class'DXControllerDebug'.static.DebugLog(
         "DXC-CONV ATTACH screen=" $ string(s.Class)
@@ -48,13 +42,8 @@ function Attach(Window s)
 
 function Detach()
 {
-    local ConWindowActive cwa;
-
     if (screen != None)
     {
-        cwa = ConWindowActive(screen);
-        if (cwa != None)
-            cwa.bGamepadMode = false;
         class'DXControllerDebug'.static.DebugLog(
             "DXC-CONV DETACH screen=" $ string(screen.Class));
     }

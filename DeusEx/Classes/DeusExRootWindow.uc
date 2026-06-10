@@ -1090,6 +1090,17 @@ function bool CloseGamepadKeyboard()
 {
     return false;
 }
+
+// Hook for the DXController cursor-mode policy. Base impl says "not in
+// gamepad cursor mode" so vanilla cursor behaviour is unchanged;
+// ControllerRootWindow overrides it to report its live cursor mode.
+// ConWindowActive gates its ShowCursor() calls on this at call time —
+// a stateful flag set at nav attach/detach goes stale during the
+// conversation window's mid-dialog Hide/Show cycles.
+function bool IsGamepadCursorMode()
+{
+    return false;
+}
 // === DXController additions: END ===
 
 // ----------------------------------------------------------------------

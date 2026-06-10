@@ -30,16 +30,15 @@ enum EMoveModes {
 var EMoveModes moveMode;
 
 // === DXController additions: BEGIN ===
-// Gamepad-mode flag: when true, suppress the four root.ShowCursor()
-// calls in this class so the cursor doesn't pop into view mid-conversation
-// while the player is using gamepad input. Set by
-// DXController.ConversationNavController.Attach/Detach.
-//
-// State-only addition per CLAUDE.md "Source overlay model"; the
-// orchestration (when to set the flag, when to clear it) lives in
-// DXController/ since DeusEx is built in pass 1 before DXController
-// exists and can't reference DXController types directly.
-var bool bGamepadMode;
+// The four root.ShowCursor() calls in this class are gated on
+// root.IsGamepadCursorMode() — a DeusExRootWindow hook overridden by
+// ControllerRootWindow to report the live cursor mode — so the cursor
+// doesn't pop into view mid-conversation while the player is on the
+// gamepad. Queried at call time: an earlier stateful flag set from
+// ConversationNavController.Attach/Detach went stale because the
+// conversation window Hide/Show cycles mid-dialog, which transiently
+// detaches the nav controller; AddButton firing in that gap re-showed
+// the cursor.
 // === DXController additions: END ===
 
 // ----------------------------------------------------------------------
@@ -54,7 +53,7 @@ event InitWindow()
 
 	Log("DXC-CONV-DIAG ConWindowActive.InitWindow fired class=" $ string(Self.Class));  // DXController diagnostic
 
-	if (!bGamepadMode)               // DXController gate
+	if (!root.IsGamepadCursorMode())               // DXController gate
 		root.ShowCursor(False);
 
 	// Modify lower window
@@ -76,7 +75,7 @@ event InitWindow()
 event DestroyWindow()
 {
 	// Turn the cursor back on
-	if (!bGamepadMode)               // DXController gate
+	if (!root.IsGamepadCursorMode())               // DXController gate
 		root.ShowCursor(True);
 }
 
@@ -318,7 +317,7 @@ function AddButton( ConChoiceWindow newButton )
 {
 	// Turn the cursor on so the user can use the cursor to
 	// select a choice.
-	if (!bGamepadMode)               // DXController gate
+	if (!root.IsGamepadCursorMode())               // DXController gate
 		root.ShowCursor(True);
 
 	// Add to our button array
@@ -377,7 +376,7 @@ function bool ButtonActivated( Window buttonPressed )
 		if (conChoices[buttonIndex] == buttonPressed)
 		{
 			// Turn the cursor back off
-			if (!bGamepadMode)           // DXController gate
+			if (!root.IsGamepadCursorMode())           // DXController gate
 				root.ShowCursor(False);
 			conPlay.PlayChoice( ConChoice(conChoices[buttonIndex].GetUserObject()) );
 
