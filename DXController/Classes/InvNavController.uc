@@ -26,6 +26,7 @@
 //   Y (Joy4/203)          — enter move-item mode
 //   L-stick click (Joy9/208) — change ammo on selected weapon
 //   R-stick click (Joy10/209) — drop selected item
+//   R-stick Y (JoyV)      — scroll the item-description panel (winInfo)
 //
 // Move sub-dialog: while moving, the D-pad nudges the selected item one
 // grid cell at a time (clamped on-grid, no wrap), tinting it green if the
@@ -46,6 +47,13 @@
 // mod, not on the candidate the cursor is over.
 //=============================================================================
 class InvNavController extends MenuNavController;
+
+// Accumulator for R-stick smooth scroll of the item-description panel
+// (winInfo). Same pattern as GoalsNavController / LogsNavController.
+const ScrollDeadzone  = 10.0;    // raw axis units; ignore small stick deflections
+const ScrollThreshold = 500.0;   // accumulated units before one MoveThumb step
+
+var float scrollAccum;
 
 // --- Weapon-mod apply (ModApply sub-dialog) ---
 // mod's tile, captured on ModApply enter for B-cancel focus restore.
@@ -75,6 +83,7 @@ function InitFocus()
 {
     local PersonaScreenInventory s;
     local Window first;
+    scrollAccum = 0.0;
     s = PersonaScreenInventory(screen);
     if (s == None)
         return;
@@ -585,6 +594,51 @@ function bool HandleActivate(byte button)
     return true;
 }
 
+// ----------------------------------------------------------------------
+// HandleScroll — R-stick Y scrolls the item-description panel (winInfo).
+//
+// winInfo.winScroll is the PersonaScrollAreaWindow wrapping the
+// description text (declared on PersonaInfoWindow). Positive ry = stick
+// pushed up = scroll content up = StepUp. While the sticky belt-assign
+// wheel is open, ControllerConsole routes R-stick to the wheel before
+// this is reached; during Move/ModApply scrolling is harmless and stays
+// live.
+// ----------------------------------------------------------------------
+
+function bool HandleScroll(float ry)
+{
+    local PersonaScreenInventory s;
+
+    s = PersonaScreenInventory(screen);
+    if (s == None || s.winInfo == None || s.winInfo.winScroll == None)
+        return false;
+
+    if (Abs(ry) < ScrollDeadzone)
+    {
+        scrollAccum = 0.0;
+        return false;
+    }
+
+    scrollAccum += ry;
+
+    if (Abs(scrollAccum) < ScrollThreshold)
+        return true;
+
+    if (s.winInfo.winScroll.vScale == None)
+    {
+        scrollAccum = 0.0;
+        return false;
+    }
+
+    if (scrollAccum > 0.0)
+        s.winInfo.winScroll.vScale.MoveThumb(MOVETHUMB_StepUp);
+    else
+        s.winInfo.winScroll.vScale.MoveThumb(MOVETHUMB_StepDown);
+
+    scrollAccum = 0.0;
+    return true;
+}
+
 function OpenAssignWheel(PersonaScreenInventory s)
 {
     local ControllerRootWindow root;
@@ -1038,7 +1092,7 @@ function BuildHints()
     AddHint("y", "Move");
     if (s != None && s.btnChangeAmmo != None && s.btnChangeAmmo.bIsSensitive)
         AddHint("ls", "Change ammo");
-    AddHint("rs", "Drop");
+    AddHint("rs", "Drop/Scroll info");
     AddHint("lb", "Prev tab");
     AddHint("rb", "Next tab");
     AddHint("b", "Close");
