@@ -38,6 +38,13 @@ public:
     // grace window AND no qualifying mouse activity has since occurred.
     bool IsPadActive() const;
 
+    // True if qualifying physical mouse activity (raw-input deltas crossing
+    // the accumulator threshold) occurred within the last grace window.
+    // Positive evidence of the user's hand on the mouse — used to gate the
+    // WM_MOUSEMOVE -> MousePosition feed so synthetic cursor moves (which
+    // arrive without raw deltas) can never reach the game's window system.
+    bool IsMouseActive() const;
+
     // Called by MainLoop from its WM_INPUT branch with the raw hardware
     // mouse deltas. Raw input is the physical-motion ground truth: synthetic
     // cursor moves (WinDrv's capture-release position restore on menu open,

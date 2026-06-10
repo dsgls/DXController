@@ -544,6 +544,13 @@ bool CXInput::IsPadActive() const
     return bPadRecent && !bMouseRecent;
 }
 
+bool CXInput::IsMouseActive() const
+{
+    const ULONGLONG iNowMs   = GetTickCount64();
+    const ULONGLONG iGraceMs = static_cast<ULONGLONG>(m_iPadActiveGraceMs);
+    return m_iLastMouseActivityMs != 0 && (iNowMs - m_iLastMouseActivityMs) < iGraceMs;
+}
+
 void CXInput::NotifyMouseActivity(const int iDeltaX, const int iDeltaY)
 {
     const int iManhattan = (iDeltaX < 0 ? -iDeltaX : iDeltaX) + (iDeltaY < 0 ? -iDeltaY : iDeltaY);

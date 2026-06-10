@@ -443,9 +443,13 @@ void CLauncher::MainLoop(UEngine* const pEngine)
                     //fed the move below, briefly unhiding the cursor and stealing menu focus
                     //on gameplay->menu transitions. Physical motion is detected from raw
                     //WM_INPUT deltas instead (NotifyMouseActivity in the WM_INPUT branch).
+                    //Gate on positive physical-mouse evidence (IsMouseActive), not merely
+                    //pad inactivity: with the pad idle past the grace window, !IsPadActive()
+                    //let synthetic moves through, warping the game cursor onto whatever the
+                    //OS cursor was over (menu focus steal, conversation cursor flash).
                     const int iXPos = GET_X_LPARAM(Msg.lParam);
                     const int iYPos = GET_Y_LPARAM(Msg.lParam);
-                    if (bMouseOverWindow && !m_XInput.IsPadActive()) //Because preferences window defers mousemove calls to us, somehow
+                    if (bMouseOverWindow && m_XInput.IsMouseActive()) //Because preferences window defers mousemove calls to us, somehow
                     {
                         //Use WM_MOUSEMOVE to control menu cursor
                         pEngine->MousePosition(m_pViewPort, 0, static_cast<float>(iXPos), static_cast<float>(iYPos));
