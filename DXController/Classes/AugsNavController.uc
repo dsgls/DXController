@@ -3,7 +3,8 @@
 //
 // Spatial nearest-neighbor for D-pad on the body silhouette, no wrap.
 // A toggles the focused aug (via btnActivate). X upgrades (via btnUpgrade).
-// R-stick Y scrolls the aug-description panel (winInfo).
+// Y consumes a biocell (via btnUseCell). R-stick Y scrolls the
+// aug-description panel (winInfo).
 //
 // Slot buttons: PersonaScreenAugmentations.augItems[12] (fixed-size array,
 // populated from index 0 upward, trailing entries are None).
@@ -137,6 +138,13 @@ function bool HandleActivate(byte button)
         return true;
     }
 
+    if (button == 203)   // Y: consume a biocell via btnUseCell.
+    {
+        if (s.btnUseCell != None && s.btnUseCell.bIsSensitive)
+            s.btnUseCell.PressButton();
+        return true;
+    }
+
     return true;
 }
 
@@ -187,6 +195,7 @@ function BuildHints()
 {
     AddHint("a", "Toggle");
     AddHint("x", "Upgrade");
+    AddHint("y", "Use Cell");
     AddHint("rs", "Scroll info");
     AddHint("lb", "Prev tab");
     AddHint("rb", "Next tab");
