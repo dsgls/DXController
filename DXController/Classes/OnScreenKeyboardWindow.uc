@@ -39,6 +39,17 @@ var int focusCol;
 // 10 columns with the symbol set so the grid is a clean rectangle.
 var string kbRows[4];
 
+// ---- per-frame palette (derived in DrawWindow from the HUD theme) ----
+// bTranslucentUI mirrors backgroundDrawStyle (the player's HUD
+// translucency setting via HUDBaseWindow.StyleChanged). The colours
+// come from DXCUITheme's belt-derived scheme; the opaque variants bake
+// the additive stacking into absolute colours.
+var bool  bTranslucentUI;
+var Color colPanelFill;
+var Color colCellFill;
+var Color colFrame;
+var Color colFocusFill;
+
 const ROW_SPECIAL   = 4;
 const NUM_ROWS      = 5;    // 4 character rows + 1 special row
 const CHAR_COLS     = 10;
@@ -212,12 +223,33 @@ event DrawWindow(GC gc)
 {
     local float panelW, panelH, panelX, panelY;
     local float gridW, gridX, y;
-    local Color panelDark, accent, lightText;
+    local Color accent, lightText;
 
     Super.DrawWindow(gc);
 
     if (!bOpen)
         return;
+
+    bTranslucentUI = (backgroundDrawStyle == DSTY_Translucent);
+    if (bTranslucentUI)
+    {
+        colPanelFill = class'DXCUITheme'.static.FillAdd(colBackground);
+        colCellFill  = class'DXCUITheme'.static.FillAdd(colBackground);
+        colFrame     = class'DXCUITheme'.static.FrameAdd(colBackground);
+    }
+    else
+    {
+        colPanelFill = class'DXCUITheme'.static.PanelOpaque(colBackground);
+        colCellFill  = class'DXCUITheme'.static.CellOpaque(colBackground);
+        colFrame     = class'DXCUITheme'.static.FrameOpaque(colBackground);
+    }
+    // Focused key: accent glow at the same intensity as the wheel's
+    // highlight wedge.
+    colFocusFill = class'DXCUITheme'.static.ScaleColor(colBorder, 0.5);
+
+    accent    = colBorder;
+    accent.A  = 255;
+    lightText = MakeColor(200, 198, 170, 255);
 
     gridW  = CHAR_COLS * KEY_W + (CHAR_COLS - 1) * KEY_GAP;
     panelW = gridW + 2.0 * PANEL_PAD;
@@ -228,20 +260,22 @@ event DrawWindow(GC gc)
     panelX = (width  - panelW) * 0.5;
     panelY = (height - panelH) * 0.5;
 
-    panelDark = MakeColor(19, 21, 27, 255);
-    accent    = colBorder;
-    accent.A  = 255;
-    lightText = MakeColor(200, 198, 170, 255);
+    // Veil: darken the scene under the panel. DSTY_Modulated is the one
+    // draw style that can darken (the stock conversation-letterbox
+    // technique). Only needed while the panel itself is additive — the
+    // opaque path covers the scene outright.
+    if (bTranslucentUI)
+    {
+        gc.SetStyle(DSTY_Modulated);
+        gc.SetTileColor(class'DXCUITheme'.static.VeilColor());
+        gc.DrawPattern(panelX, panelY, panelW, panelH, 0, 0, Texture'Solid');
+    }
 
-    // Panel: one opaque masked fill. The keyboard is modal — nothing
-    // usable is behind it — so there is no reason to keep the old
-    // two-pass translucent veil. A masked tile draw on Texture'Solid'
-    // is fully opaque (masked tile draws ignore tile-colour alpha).
-    gc.SetStyle(DSTY_Masked);
-    gc.SetTileColor(panelDark);
+    // Panel: belt-style fill + frame, themed and translucency-aware.
+    gc.SetStyle(backgroundDrawStyle);
+    gc.SetTileColor(colPanelFill);
     gc.DrawPattern(panelX, panelY, panelW, panelH, 0, 0, Texture'Solid');
-    gc.SetStyle(DSTY_Masked);
-    gc.SetTileColor(accent);
+    gc.SetTileColor(colFrame);
     gc.DrawBox(panelX, panelY, panelW, panelH, 0, 0, 2, Texture'Solid');
 
     gridX = panelX + PANEL_PAD;
@@ -260,15 +294,28 @@ event DrawWindow(GC gc)
     y += ECHO_H + 10.0;
 
     // Character grid.
-    DrawCharGrid(gc, gridX, y, accent, lightText);
+    DrawCharGrid(gc, gridX, y, lightText);
     y += 4.0 * KEY_H + 3.0 * KEY_GAP + KEY_GAP;
 
     // Special row.
-    DrawSpecialRow(gc, gridX, y, gridW, accent, lightText);
+    DrawSpecialRow(gc, gridX, y, gridW, lightText);
     y += KEY_H + 12.0;
 
     // Footer hints.
     DrawFooter(gc, gridX, y);
+}
+
+// One belt-style cell: fill + 1px frame, in the current draw style.
+// Translucent cells stack additively over the panel fill, so they read
+// brighter than the panel — that contrast is the design (it is what
+// gives keycaps definition), not a bug.
+function DrawCell(GC gc, float x, float y, float w, float h, Color fill)
+{
+    gc.SetStyle(backgroundDrawStyle);
+    gc.SetTileColor(fill);
+    gc.DrawPattern(x, y, w, h, 0, 0, Texture'Solid');
+    gc.SetTileColor(colFrame);
+    gc.DrawBox(x, y, w, h, 0, 0, 1, Texture'Solid');
 }
 
 function DrawEcho(GC gc, float x, float y, float w, float h, Color textCol)
@@ -280,14 +327,8 @@ function DrawEcho(GC gc, float x, float y, float w, float h, Color textCol)
     if (target != None)
         shown = target.GetText();
 
-    // Echo field: an opaque near-black inset with a thin border. The
-    // panel is now opaque, so this no longer needs the modulate trick.
-    gc.SetStyle(DSTY_Masked);
-    gc.SetTileColor(MakeColor(5, 6, 10, 255));
-    gc.DrawPattern(x, y, w, h, 0, 0, Texture'Solid');
-    gc.SetStyle(DSTY_Masked);
-    gc.SetTileColor(MakeColor(44, 55, 68, 255));
-    gc.DrawBox(x, y, w, h, 0, 0, 1, Texture'Solid');
+    // Echo field: a belt-style cell, like a wide keycap.
+    DrawCell(gc, x, y, w, h, colCellFill);
 
     gc.SetStyle(DSTY_Masked);
     gc.SetFont(Font'DeusExUI.FontMenuSmall');
@@ -306,7 +347,7 @@ function DrawEcho(GC gc, float x, float y, float w, float h, Color textCol)
     }
 }
 
-function DrawCharGrid(GC gc, float x, float y, Color accent, Color textCol)
+function DrawCharGrid(GC gc, float x, float y, Color textCol)
 {
     local int r, c;
     local float cellX, cellY;
@@ -318,42 +359,38 @@ function DrawCharGrid(GC gc, float x, float y, Color accent, Color textCol)
         {
             cellX = x + c * (KEY_W + KEY_GAP);
             DrawKey(gc, cellX, cellY, KEY_W, KEY_H,
-                    Mid(kbRows[r], c, 1), accent, textCol,
+                    Mid(kbRows[r], c, 1), textCol,
                     (focusRow == r && focusCol == c));
         }
     }
 }
 
-function DrawSpecialRow(GC gc, float x, float y, float gridW,
-                        Color accent, Color textCol)
+function DrawSpecialRow(GC gc, float x, float y, float gridW, Color textCol)
 {
     local float gap;
 
     gap = gridW - 2.0 * SPECIAL_W;   // space between the two keys
-    DrawKey(gc, x, y, SPECIAL_W, KEY_H, "SPACE", accent, textCol,
+    DrawKey(gc, x, y, SPECIAL_W, KEY_H, "SPACE", textCol,
             (focusRow == ROW_SPECIAL && focusCol == SPECIAL_SPACE));
     DrawKey(gc, x + SPECIAL_W + gap, y, SPECIAL_W, KEY_H, "BACKSPACE",
-            accent, textCol,
+            textCol,
             (focusRow == ROW_SPECIAL && focusCol == SPECIAL_BKSP));
 }
 
 function DrawKey(GC gc, float x, float y, float w, float h, string label,
-                 Color accent, Color textCol, bool bFocused)
+                 Color textCol, bool bFocused)
 {
     if (bFocused)
     {
-        gc.SetStyle(DSTY_Masked);
-        gc.SetTileColor(accent);
-        gc.DrawPattern(x, y, w, h, 0, 0, Texture'Solid');
-        gc.SetTextColor(MakeColor(8, 8, 8, 255));
+        // Accent glow fill — same treatment as the wheel's highlight
+        // wedge. White label: an additive fill cannot darken, so the
+        // old dark-on-accent text is impossible while translucent.
+        DrawCell(gc, x, y, w, h, colFocusFill);
+        gc.SetTextColor(MakeColor(255, 255, 255, 255));
     }
     else
     {
-        // Filled keycap a few shades lighter than the panel — the old
-        // 1 px outline was near-invisible against the dark panel.
-        gc.SetStyle(DSTY_Masked);
-        gc.SetTileColor(MakeColor(46, 51, 61, 255));
-        gc.DrawPattern(x, y, w, h, 0, 0, Texture'Solid');
+        DrawCell(gc, x, y, w, h, colCellFill);
         gc.SetTextColor(textCol);
     }
 
