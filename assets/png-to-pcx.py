@@ -2,33 +2,42 @@
 """Convert a directory of PNGs to 8-bit PCX for UE1 #exec Texture Import.
 
 Two modes:
-  masked (default) — square PCX, palette index 0 = magenta key (255,0,255)
-    for masked/transparent import. Used for the button glyphs and the
-    wheel plate.
+  masked (default) — square PCX, palette index 0 = transparency key
+    for masked/transparent import. The key colour is controlled by
+    --key (see below). Used for the button glyphs and the wheel plate.
   grey            — PCX with an explicit linear grey palette (index i ->
     (i,i,i)), no key, for non-masked additive textures (the wheel's
     slice-highlight wedges).
 
-Usage: png-to-pcx.py [SRC_DIR] [DST_DIR] [--size SIZE|native] [--mode masked|grey]
+Usage: png-to-pcx.py [SRC_DIR] [DST_DIR] [--size SIZE|native] [--mode masked|grey] [--key magenta|black]
 
 SRC_DIR and DST_DIR are optional and default to the XboxSeries/ and
 XboxSeries-pcx/ directories next to this script. SIZE is the output edge
 length in pixels — square (default: 64), or pass 'native' to preserve
 each PNG's natural dimensions (used by the menu-bg tile set, whose
-tiles are already authored at the engine's expected 256x256)."""
+tiles are already authored at the engine's expected 256x256).
+
+--key selects the palette index 0 colour used for masked-mode transparency:
+  magenta (default) — (255,0,255), the classic UE1 authoring convention.
+  black             — (0,0,0). Use this for textures drawn DSTY_Translucent:
+                      additive blending adds the key colour into the scene,
+                      so magenta would produce a hot-pink wash over keyed
+                      texels. Black adds nothing, making the key invisible
+                      under both translucent and masked draw styles."""
 
 import argparse
 from pathlib import Path
 from PIL import Image
 
-KEY = (255, 0, 255)  # UE1 magenta transparency key at palette index 0
+KEY_MAGENTA = (255, 0, 255)  # classic UE1 authoring convention
+KEY_BLACK   = (0,   0,   0)  # safe for DSTY_Translucent — adds nothing additively
 ALPHA_THRESHOLD = 128
 DEFAULT_SRC_DIR = Path(__file__).parent / "XboxSeries"
 DEFAULT_DST_DIR = Path(__file__).parent / "XboxSeries-pcx"
 DEFAULT_SIZE = 64
 
 
-def convert_masked(src: Path, dst: Path, size: tuple) -> None:
+def convert_masked(src: Path, dst: Path, size: tuple, key: tuple = KEY_MAGENTA) -> None:
     img = Image.open(src).convert("RGBA").resize(size, Image.LANCZOS)
 
     # Binarize alpha: anything below threshold becomes the key; everything
@@ -48,14 +57,14 @@ def convert_masked(src: Path, dst: Path, size: tuple) -> None:
     rgb.putdata(rgb_pixels)
 
     # Quantize the opaque RGB image to 255 colors (indices 0..254). We will
-    # shift these to 1..255 to reserve index 0 for the magenta key.
+    # shift these to 1..255 to reserve index 0 for the key colour.
     quant = rgb.quantize(colors=255, method=Image.Quantize.MEDIANCUT, dither=Image.Dither.NONE)
     src_palette = quant.getpalette()[: 255 * 3]
     src_indices = quant.tobytes()
 
-    # Build final palette: magenta at 0, original 0..254 shifted to 1..255.
+    # Build final palette: key at 0, original 0..254 shifted to 1..255.
     new_palette = bytearray(768)
-    new_palette[0:3] = bytes(KEY)
+    new_palette[0:3] = bytes(key)
     new_palette[3 : 3 + 255 * 3] = bytes(src_palette)
 
     # Build final index buffer: masked pixels -> 0, opaque -> old_index + 1.
@@ -109,8 +118,15 @@ def main() -> None:
     )
     parser.add_argument(
         "--mode", choices=["masked", "grey"], default="masked",
-        help="masked = magenta-key transparency (default); grey = linear "
+        help="masked = key-colour transparency (default); grey = linear "
              "greyscale, no key, for additive textures",
+    )
+    parser.add_argument(
+        "--key", choices=["magenta", "black"], default="magenta",
+        help="palette index 0 colour for masked mode: magenta (default, "
+             "255,0,255) or black (0,0,0). Use black for textures drawn "
+             "DSTY_Translucent — additive blending adds the key into the "
+             "scene, so a black key adds nothing (ignored in grey mode)",
     )
     args = parser.parse_args()
 
@@ -125,9 +141,14 @@ def main() -> None:
         except ValueError:
             parser.error(f"--size must be an integer or 'native', got {args.size!r}")
 
+    key_colour = KEY_BLACK if args.key == "black" else KEY_MAGENTA
+
     args.dst_dir.mkdir(parents=True, exist_ok=True)
     pngs = sorted(args.src_dir.glob("*.png"))
-    convert = convert_masked if args.mode == "masked" else convert_grey
+    if args.mode == "masked":
+        convert = lambda s, d, sz: convert_masked(s, d, sz, key=key_colour)
+    else:
+        convert = convert_grey
     for src in pngs:
         dst = args.dst_dir / (src.stem + ".pcx")
         size = Image.open(src).size if native else (sq, sq)
