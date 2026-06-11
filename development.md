@@ -862,6 +862,8 @@ texture package.
   key, for the additive wedges).
 - Button glyphs are hand-authored PNGs under `assets/XboxSeries/`.
 
-`sync-and-build.sh` (and CI) call both generators and place PCX into
-`<gamedir>/DXController/Textures/`. python3 + Pillow + numpy are
+`sync-and-build.sh` and CI (`.github/workflows/build.yml`) each carry
+their **own copy** of the generate-and-convert recipe — when adding a
+generator or changing a conversion flag, update both, or CI fails on
+the missing texture (this has happened). python3 + Pillow + numpy are
 provided by the `sync-and-build` flake app and `nix develop`.

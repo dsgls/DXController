@@ -63,12 +63,17 @@ jobs:
           New-Item -ItemType Directory -Force -Path $texDir | Out-Null
           $wheelSrc = New-Item -ItemType Directory -Path (Join-Path $env:RUNNER_TEMP "wheel-src") -Force
           $menuBgSrc = New-Item -ItemType Directory -Path (Join-Path $env:RUNNER_TEMP "menu-bg-src") -Force
+          $veilSrc = New-Item -ItemType Directory -Path (Join-Path $env:RUNNER_TEMP "veil-src") -Force
           python assets/gen-wheel.py "$($wheelSrc.FullName)"
           python assets/gen-menu-bg.py "$($menuBgSrc.FullName)"
+          python assets/gen-veil.py "$($veilSrc.FullName)"
           python assets/png-to-pcx.py assets/XboxSeries "$texDir" --size 64 --mode masked
-          python assets/png-to-pcx.py "$($wheelSrc.FullName)" "$texDir" --size 1024 --mode masked
+          # --key black: the wheel plate is drawn DSTY_Translucent, which adds the
+          # palette-index-0 key colour to the scene — must match sync-and-build.sh.
+          python assets/png-to-pcx.py "$($wheelSrc.FullName)" "$texDir" --size 1024 --mode masked --key black
           python assets/png-to-pcx.py "$(Join-Path $wheelSrc.FullName 'wedges')" "$texDir" --size 1024 --mode grey
           python assets/png-to-pcx.py "$($menuBgSrc.FullName)" "$texDir" --size native --mode grey
+          python assets/png-to-pcx.py "$($veilSrc.FullName)" "$texDir" --size native --mode grey
 
       - name: Register DXController in DeusEx.ini EditPackages
         shell: pwsh
