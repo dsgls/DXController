@@ -25,7 +25,7 @@ const WM_BeltAssign = 3;
 const StickDeadzone     = 300.0;    // ~30% of the -1000..1000 axis range
 const DegreesPerRadian  = 57.2957795;
 const ViewLockGrace     = 0.3;     // seconds after close where RS still swallowed
-const FocusGrace        = 0.3;      // seconds after stick recentres where Close still dispatches last-focused slot
+const FocusGrace        = 0.4;      // seconds after stick recentres where Close still dispatches last-focused slot
 
 const WheelRadius      = 130.0;   // pixels from screen-centre to each icon's centre
 const IconSize         = 48.0;    // base icon edge length, pixels
