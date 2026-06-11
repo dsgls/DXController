@@ -93,16 +93,19 @@ if (( DRY_RUN )); then
 else
     WHEELSRC="$(mktemp -d)"
     MENUBGSRC="$(mktemp -d)"
-    trap 'rm -rf "$WHEELSRC" "$MENUBGSRC"' EXIT
+    VEILSRC="$(mktemp -d)"
+    trap 'rm -rf "$WHEELSRC" "$MENUBGSRC" "$VEILSRC"' EXIT
     mkdir -p "$TEXDIR"
     python3 "$REPO_DIR/assets/gen-wheel.py" "$WHEELSRC"
     python3 "$REPO_DIR/assets/gen-menu-bg.py" "$MENUBGSRC"
+    python3 "$REPO_DIR/assets/gen-veil.py" "$VEILSRC"
     python3 "$REPO_DIR/assets/png-to-pcx.py" "$REPO_DIR/assets/XboxSeries" "$TEXDIR" --size 64     --mode masked
     python3 "$REPO_DIR/assets/png-to-pcx.py" "$WHEELSRC"         "$TEXDIR" --size 1024   --mode masked --key black
     python3 "$REPO_DIR/assets/png-to-pcx.py" "$WHEELSRC/wedges"  "$TEXDIR" --size 1024   --mode grey
     # Menu-bg tiles are six 256x256 PNGs; preserve native dims so png-to-pcx
     # doesn't square-resize them against the default --size 64.
     python3 "$REPO_DIR/assets/png-to-pcx.py" "$MENUBGSRC"        "$TEXDIR" --size native --mode grey
+    python3 "$REPO_DIR/assets/png-to-pcx.py" "$VEILSRC"          "$TEXDIR" --size native --mode grey
     echo "sync-and-build: generated textures into $TEXDIR"
 fi
 

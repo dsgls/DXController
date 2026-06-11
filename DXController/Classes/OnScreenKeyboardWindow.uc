@@ -260,15 +260,18 @@ event DrawWindow(GC gc)
     panelX = (width  - panelW) * 0.5;
     panelY = (height - panelH) * 0.5;
 
-    // Veil: darken the scene under the panel. DSTY_Modulated is the one
-    // draw style that can darken (the stock conversation-letterbox
-    // technique). Only needed while the panel itself is additive — the
-    // opaque path covers the scene outright.
+    // Veil: darken the scene under the panel to x0.25. DSTY_Modulated
+    // is the one draw style that can darken (the stock conversation-
+    // letterbox technique), and it multiplies by texel/128 while
+    // IGNORING the GC tile colour — so the strength lives in the Veil
+    // texture's texel value (flat 32), not in a tint. Only needed while
+    // the panel itself is additive — the opaque path covers the scene
+    // outright.
     if (bTranslucentUI)
     {
         gc.SetStyle(DSTY_Modulated);
-        gc.SetTileColor(class'DXCUITheme'.static.VeilColor());
-        gc.DrawPattern(panelX, panelY, panelW, panelH, 0, 0, Texture'Solid');
+        gc.DrawPattern(panelX, panelY, panelW, panelH, 0, 0,
+                       Texture'DXController.Veil');
     }
 
     // Panel: belt-style fill + frame, themed and translucency-aware.

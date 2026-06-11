@@ -94,9 +94,10 @@ event DrawWindow(GC gc)
     sy = y - STRIP_PADY;
     sw = totalW + 2.0 * STRIP_PADX;
     sh = STRIP_H + 2.0 * STRIP_PADY;
+    // (Modulated draws ignore the GC tile colour — the texel value of
+    // the Veil texture, flat 32 = x0.25, carries the strength.)
     gc.SetStyle(DSTY_Modulated);
-    gc.SetTileColor(MakeColor(24, 24, 24, 255));
-    gc.DrawPattern(sx, sy, sw, sh, 0, 0, Texture'Solid');
+    gc.DrawPattern(sx, sy, sw, sh, 0, 0, Texture'DXController.Veil');
     gc.SetStyle(DSTY_Translucent);
     gc.SetTileColor(MakeColor(26, 26, 26, 255));
     gc.DrawPattern(sx, sy, sw, sh, 0, 0, Texture'Solid');
