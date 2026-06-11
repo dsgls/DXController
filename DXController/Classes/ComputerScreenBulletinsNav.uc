@@ -1,14 +1,15 @@
 //=============================================================================
 // ComputerScreenBulletinsNav — sub-controller for ComputerScreenBulletins.
 //
-// Rows: [lstBulletins, ActionBarRow(btnSpecial?, btnLogout)],
-//       primary btnLogout.
+// Focus lives on lstBulletins; the action bar is reached by d-pad only
+// via the empty-list fallback. Logout = B (escapeAction "EXIT"),
+// Special Options = X shortcut (when present).
 //
 // winBulletin (side panel) is read-only and auto-updated by vanilla
 // ListSelectionChanged — no script-side display call needed.
 //
 // D-pad inside list: edge-detect via GetFocusRow() before/after MoveRow.
-// At edge, wrap to ActionBarRow @ primary.
+// At edge, selection wraps to the opposite end of the list.
 // A on list row: consumed no-op (selection drives auto-display).
 // R-stick Y scrolls winBulletin's MenuUIScrollAreaWindow.
 //=============================================================================
@@ -16,7 +17,6 @@ class ComputerScreenBulletinsNav extends ComputerScreenNavSub;
 
 const ROW_LIST       = 0;
 const ROW_ACTIONBAR  = 1;
-const NUM_ROWS       = 2;
 
 // R-stick smooth scroll of the bulletin body (matches ComputerScreenEmailNav).
 const ScrollDeadzone  = 10.0;
@@ -68,44 +68,6 @@ function OnEnter(ComputerUIWindow s)
     }
 }
 
-function MoveToActionBar()
-{
-    local ComputerScreenBulletins bScr;
-
-    bScr = ComputerScreenBulletins(screen);
-    if (bScr == None)
-        return;
-
-    class'ComputerButtonBarNav'.static.CollectButtons(
-        bScr.winButtonBar, barBtns, barCount);
-    actionBarIndex = class'ComputerButtonBarNav'.static.FindPrimaryIndex(
-        bScr.winButtonBar, barBtns, barCount, bScr.ButtonLabelLogout);
-    if (actionBarIndex < 0)
-        actionBarIndex = 0;
-
-    rowIndex = ROW_ACTIONBAR;
-    focusIndex = ROW_ACTIONBAR;
-    if (actionBarIndex < barCount)
-    {
-        SetFocus(barBtns[actionBarIndex]);
-    }
-}
-
-function MoveToList()
-{
-    local ComputerScreenBulletins bScr;
-    local int firstRowId;
-
-    bScr = ComputerScreenBulletins(screen);
-    if (bScr == None || bScr.lstBulletins == None || bScr.lstBulletins.GetNumRows() <= 0)
-        return;
-    rowIndex = ROW_LIST;
-    focusIndex = 0;
-    focused = bScr.lstBulletins;
-    firstRowId = bScr.lstBulletins.IndexToRowId(0);
-    bScr.lstBulletins.SetRow(firstRowId, True, True);
-}
-
 function bool HandleDPad(int dx, int dy)
 {
     local ComputerScreenBulletins bScr;
@@ -143,23 +105,36 @@ function bool HandleDPad(int dx, int dy)
         newRowId = bScr.lstBulletins.GetFocusRow();
         if (newRowId == prevRowId)
         {
-            // At edge — wrap to action bar (primary).
-            MoveToActionBar();
+            // At edge — wrap selection to the opposite end of the list.
+            if (dy > 0)
+                newRowId = bScr.lstBulletins.IndexToRowId(0);
+            else
+                newRowId = bScr.lstBulletins.IndexToRowId(
+                    bScr.lstBulletins.GetNumRows() - 1);
+            bScr.lstBulletins.SetRow(newRowId, True, True);
         }
         return true;
     }
 
-    // From ActionBarRow: dy down wraps to list row 0; dy up wraps to list (also row 0).
-    if (rowIndex == ROW_ACTIONBAR)
-    {
-        MoveToList();
-        return true;
-    }
+    // Action bar is focused only via the empty-list fallback; with no
+    // list rows to move to, vertical d-pad is a consumed no-op.
     return true;
 }
 
 function bool HandleActivate(byte button)
 {
+    local ComputerScreenBulletins bScr;
+
+    // X — Special Options shortcut (the button exists only when the
+    // terminal has special options).
+    if (button == 202)
+    {
+        bScr = ComputerScreenBulletins(screen);
+        if (bScr != None && bScr.btnSpecial != None && bScr.btnSpecial.bIsSensitive)
+            bScr.btnSpecial.PressButton();
+        return true;
+    }
+
     if (button != 200)
         return true;
 
@@ -233,6 +208,11 @@ function ClearAxisCache()
 
 function bool BuildHints(MenuNavController nav)
 {
+    local ComputerScreenBulletins bScr;
+
+    bScr = ComputerScreenBulletins(screen);
+    if (bScr != None && bScr.btnSpecial != None)
+        nav.AddHint("x", "Special");
     nav.AddHint("rs", "Scroll text");
     return false;   // fall through to dispatcher's default strip
 }
