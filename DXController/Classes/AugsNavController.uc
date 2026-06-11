@@ -3,6 +3,7 @@
 //
 // Spatial nearest-neighbor for D-pad on the body silhouette, no wrap.
 // A toggles the focused aug (via btnActivate). X upgrades (via btnUpgrade).
+// R-stick Y scrolls the aug-description panel (winInfo).
 //
 // Slot buttons: PersonaScreenAugmentations.augItems[12] (fixed-size array,
 // populated from index 0 upward, trailing entries are None).
@@ -17,6 +18,13 @@
 //=============================================================================
 class AugsNavController extends MenuNavController;
 
+// Accumulator for R-stick smooth scroll of the aug-description panel
+// (winInfo). Same pattern as InvNavController / GoalsNavController.
+const ScrollDeadzone  = 10.0;    // raw axis units; ignore small stick deflections
+const ScrollThreshold = 500.0;   // accumulated units before one MoveThumb step
+
+var float scrollAccum;
+
 // ---- InitFocus -------------------------------------------------------------
 
 function InitFocus()
@@ -25,6 +33,7 @@ function InitFocus()
     local PersonaAugmentationItemButton btn;
     local int i;
 
+    scrollAccum = 0.0;
     s = PersonaScreenAugmentations(screen);
     if (s == None)
         return;
@@ -131,10 +140,54 @@ function bool HandleActivate(byte button)
     return true;
 }
 
+// ----------------------------------------------------------------------
+// HandleScroll — R-stick Y scrolls the aug-description panel (winInfo).
+//
+// winInfo.winScroll is the PersonaScrollAreaWindow wrapping the
+// description text (declared on PersonaInfoWindow). Positive ry = stick
+// pushed up = scroll content up = StepUp. Scrolls regardless of which
+// aug slot is focused — R-stick has no other role on this screen.
+// ----------------------------------------------------------------------
+
+function bool HandleScroll(float ry)
+{
+    local PersonaScreenAugmentations s;
+
+    s = PersonaScreenAugmentations(screen);
+    if (s == None || s.winInfo == None || s.winInfo.winScroll == None)
+        return false;
+
+    if (Abs(ry) < ScrollDeadzone)
+    {
+        scrollAccum = 0.0;
+        return false;
+    }
+
+    scrollAccum += ry;
+
+    if (Abs(scrollAccum) < ScrollThreshold)
+        return true;
+
+    if (s.winInfo.winScroll.vScale == None)
+    {
+        scrollAccum = 0.0;
+        return false;
+    }
+
+    if (scrollAccum > 0.0)
+        s.winInfo.winScroll.vScale.MoveThumb(MOVETHUMB_StepUp);
+    else
+        s.winInfo.winScroll.vScale.MoveThumb(MOVETHUMB_StepDown);
+
+    scrollAccum = 0.0;
+    return true;
+}
+
 function BuildHints()
 {
     AddHint("a", "Toggle");
     AddHint("x", "Upgrade");
+    AddHint("rs", "Scroll info");
     AddHint("lb", "Prev tab");
     AddHint("rb", "Next tab");
     AddHint("b", "Close");
