@@ -9,8 +9,18 @@
 // focusIndex 0..5 = body region (= partButtons / regionWindows index),
 // focusIndex 6    = Heal All.
 //
-// D-pad up/down walks head -> torso -> arms -> legs -> Heal All (cyclic).
-// D-pad left/right toggles between paired regions (R/L arm, R/L leg).
+// D-pad navigation follows the silhouette's row layout (screen order,
+// mirrored — the right arm/leg draw on the left):
+//
+//                Head
+//     R-Arm      Torso      L-Arm
+//          R-Leg      L-Leg
+//               Heal All
+//
+// Left/right moves within a row, wrapping. Up/down moves between rows,
+// keeping the horizontal side (R-Arm <-> R-Leg, L-Arm <-> L-Leg; Torso
+// goes down to R-Leg), and cycles vertically through Heal All back to
+// Head. Encoded as static per-direction target tables below.
 // On each focus change the matching body-part icon is selected so the
 // region highlight and description panel track gamepad focus.
 //
@@ -22,6 +32,14 @@
 // GetFocusedRect via HasStockFocusCue.
 //=============================================================================
 class HealthNavController extends MenuNavController;
+
+// Static per-direction nav tables, indexed by focusIndex (0=Head,
+// 1=Torso, 2=R-Arm, 3=L-Arm, 4=R-Leg, 5=L-Leg, 6=Heal All). A node
+// mapping to itself means "no move in that direction".
+var byte upTarget[7];
+var byte downTarget[7];
+var byte leftTarget[7];
+var byte rightTarget[7];
 
 // Sets `focused` from the current focusIndex and drives the region
 // selection so the highlight + description panel follow gamepad focus.
@@ -56,37 +74,29 @@ function InitFocus()
 
 function bool HandleDPad(int dx, int dy)
 {
+    local int target;
+
     if (PersonaScreenHealth(screen) == None)
         return true;
-
-    if (dy != 0)
-    {
-        if (dy > 0)
-            focusIndex = (focusIndex + 1) % 7;   // down the body, toward legs
-        else
-            focusIndex = (focusIndex + 6) % 7;
-        ApplyFocus();
-        class'DXControllerDebug'.static.DebugLog("DXC-NAV FOCUS heal=" $ string(focusIndex));
+    if (focusIndex < 0 || focusIndex > 6)
         return true;
-    }
 
-    if (dx != 0)
-    {
-        // Pair toggle between paired sides; head/torso/Heal All have no pair.
-        if (focusIndex == 2)
-            focusIndex = 3;
-        else if (focusIndex == 3)
-            focusIndex = 2;
-        else if (focusIndex == 4)
-            focusIndex = 5;
-        else if (focusIndex == 5)
-            focusIndex = 4;
-        else
-            return true;
-        ApplyFocus();
-        class'DXControllerDebug'.static.DebugLog("DXC-NAV FOCUS heal=" $ string(focusIndex));
+    target = focusIndex;
+    if (dy > 0)
+        target = downTarget[focusIndex];
+    else if (dy < 0)
+        target = upTarget[focusIndex];
+    else if (dx > 0)
+        target = rightTarget[focusIndex];
+    else if (dx < 0)
+        target = leftTarget[focusIndex];
+
+    if (target == focusIndex)
         return true;
-    }
+
+    focusIndex = target;
+    ApplyFocus();
+    class'DXControllerDebug'.static.DebugLog("DXC-NAV FOCUS heal=" $ string(focusIndex));
     return true;
 }
 
@@ -105,4 +115,37 @@ function BuildHints()
     AddHint("lb", "Prev tab");
     AddHint("rb", "Next tab");
     AddHint("b", "Close");
+}
+
+defaultproperties
+{
+    // Index: 0=Head, 1=Torso, 2=R-Arm, 3=L-Arm, 4=R-Leg, 5=L-Leg, 6=Heal All
+    upTarget(0)=6
+    upTarget(1)=0
+    upTarget(2)=0
+    upTarget(3)=0
+    upTarget(4)=2
+    upTarget(5)=3
+    upTarget(6)=4
+    downTarget(0)=1
+    downTarget(1)=4
+    downTarget(2)=4
+    downTarget(3)=5
+    downTarget(4)=6
+    downTarget(5)=6
+    downTarget(6)=0
+    leftTarget(0)=0
+    leftTarget(1)=2
+    leftTarget(2)=3
+    leftTarget(3)=1
+    leftTarget(4)=5
+    leftTarget(5)=4
+    leftTarget(6)=6
+    rightTarget(0)=0
+    rightTarget(1)=3
+    rightTarget(2)=1
+    rightTarget(3)=2
+    rightTarget(4)=5
+    rightTarget(5)=4
+    rightTarget(6)=6
 }
