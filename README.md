@@ -42,6 +42,10 @@ Copy `DeusEx.exe`, `DeusEx.u`, and `DXController.u` from the release
    `C:\GOG Games\Deus Ex GOTY\System\`), overwriting the existing
    `DeusEx.exe` and `DeusEx.u`.
 
+Install a modern renderer. I recommend [Kentie's D3D10 renderer](https://www.kentie.net/article/d3d10drv/).
+For some reason the main menu won't come up with the default one, don't
+know why. But the modern one is way better anyway.
+
 I highly recommend enabling "Toggle Crouch" in the control settings.
 
 If you have any other mods installed, start with a fresh game install
