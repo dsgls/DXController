@@ -1,15 +1,22 @@
 #!/usr/bin/env python3
-"""Generate the DXController weapon-wheel textures.
+"""Generate the DXController weapon-wheel textures (belt-style open ring).
 
 Outputs into OUT_DIR (default: a 'wheel-gen' dir next to this script), all
 TEX_SIZE square:
-  WheelPlate.png        RGBA, transparent outside the disc -> masked import
+  WheelPlate.png        RGBA greyscale-on-alpha -> masked import
   wedges/wedge0..9.png  mode-L greyscale on black -> non-masked additive import
 
-Deterministic: identical PARAMETERS produce byte-identical output. All
-tuning knobs live in the PARAMETERS block below — edit them to change the
-look, then rebuild. Geometry is expressed as a fraction of the disc radius
-R = TEX_SIZE/2, so it is resolution-independent.
+The plate uses the stock item bar's "luminance = opacity" vocabulary:
+ten framed wedge cells in an outer band plus a centre readout plate,
+cell interiors at LUM_FILL and frames at LUM_FRAME, alpha everywhere
+else. At draw time the engine tints it with the HUD theme's background
+colour and renders it DSTY_Translucent (additive) — exactly how the
+stock object belt gets its translucent themed look. Each wedge texture
+is the matching per-slot highlight glow.
+
+Deterministic: identical PARAMETERS produce byte-identical output.
+Geometry is expressed as a fraction of the disc radius R = TEX_SIZE/2,
+so it is resolution-independent.
 
 Run via the build (sync-and-build.sh / CI), or standalone:
   python3 gen-wheel.py [OUT_DIR]
@@ -24,25 +31,23 @@ from PIL import Image
 TEX_SIZE             = 1024
 SLOT_COUNT           = 10
 
-# Colours (RGB 0-255)
-DISC_COLOR           = (20, 22, 28)     # dark cool-grey disc
-HUB_COLOR            = (12, 12, 12)     # #0c0c0c — darker inset hub
-STEEL_COLOR          = (150, 165, 180)  # neutral steel: rim, spokes, hub ring
+# Belt-derived luminances ("luminance = opacity" under DSTY_Translucent)
+LUM_FILL             = 50    # cell interior (matches stock belt cells)
+LUM_FRAME            = 75    # cell frames (matches the belt bar)
 
-# Plate geometry (fraction of radius R)
-DISC_RADIUS_FRAC     = 0.985
-RIM_WIDTH_FRAC       = 0.016            # ~3px at the ~360px final draw size
-HUB_RADIUS_FRAC      = 0.35
-HUB_RING_WIDTH_FRAC  = 0.012
-SPOKE_WIDTH_FRAC     = 0.016            # ~3px final
+# Ring geometry (fraction of radius R)
+BAND_INNER_FRAC      = 0.44  # cells' inner edge
+BAND_OUTER_FRAC      = 0.90  # cells' outer edge
+CELL_GAP_FRAC        = 0.035 # tangential gap between cells (~6px at 360px draw)
+FRAME_WIDTH_FRAC     = 0.011 # cell frame thickness (~2px at 360px draw)
 
-# Wedge highlight geometry
-WEDGE_INNER_FRAC     = 0.37             # just outside the hub
-WEDGE_OUTER_FRAC     = 0.95             # just inside the rim
-WEDGE_HALF_DEG       = 16.0             # ±16° of the 18° half-wedge (spoke shows)
-WEDGE_EDGE_SOFT_DEG  = 3.0             # angular AA / glow softness
-WEDGE_EDGE_SOFT_FRAC = 0.02            # radial AA / glow softness
-WEDGE_FALLOFF        = 0.45            # 0 = flat white, 1 = strong inward dim
+# Centre readout plate (half-extents, fraction of R)
+READOUT_HALF_W_FRAC  = 0.28
+READOUT_HALF_H_FRAC  = 0.12
+
+# Wedge highlight glow
+WEDGE_EDGE_SOFT_FRAC = 0.02  # spatial glow softness (must be > 0)
+WEDGE_FALLOFF        = 0.45  # 0 = flat, 1 = strong inward dim
 # ============================================================================
 
 
@@ -64,86 +69,78 @@ def _smoothstep(e0, e1, x):
     return t * t * (3.0 - 2.0 * t)
 
 
-def _band(x, center, halfw, aa):
-    """Soft-edged coverage 1 within [center-halfw, center+halfw]."""
-    inner = _smoothstep(center - halfw - aa, center - halfw + aa, x)
-    outer = 1.0 - _smoothstep(center + halfw - aa, center + halfw + aa, x)
-    return np.clip(np.minimum(inner, outer), 0.0, 1.0)
+def _cell_inside(rad, ang):
+    """Signed inside-distance (frac-of-R units) to the nearest cell edge:
+    positive inside a cell, negative in the gaps and outside the band.
+    Gaps have constant tangential width (perpendicular distance to the
+    boundary rays at 18deg + k*36deg, minus half the gap)."""
+    half_seg = 180.0 / SLOT_COUNT                      # 18 deg
+    delta = (ang - half_seg) % (2.0 * half_seg)        # 0..36 past a boundary
+    bdist_deg = np.minimum(delta, 2.0 * half_seg - delta)
+    d_side = rad * np.sin(np.radians(bdist_deg)) - CELL_GAP_FRAC / 2.0
+    d_rad = np.minimum(rad - BAND_INNER_FRAC, BAND_OUTER_FRAC - rad)
+    return np.minimum(d_side, d_rad)
 
 
-def _between(x, lo, hi, aa):
-    """Soft-edged coverage 1 for lo <= x <= hi."""
-    return np.clip(np.minimum(_smoothstep(lo - aa, lo + aa, x),
-                              1.0 - _smoothstep(hi - aa, hi + aa, x)), 0.0, 1.0)
+def _readout_inside(n):
+    """Signed inside-distance to the centre readout plate's edge."""
+    r = n / 2.0
+    ys, xs = np.mgrid[0:n, 0:n].astype(np.float64)
+    c = (n - 1) / 2.0
+    dx = np.abs(xs - c) / r
+    dy = np.abs(ys - c) / r
+    return np.minimum(READOUT_HALF_W_FRAC - dx, READOUT_HALF_H_FRAC - dy)
 
 
-def _over(base, color, cov):
-    """Alpha-composite a flat colour over an RGB float field by coverage."""
-    c = np.array(color, np.float64).reshape((1, 1, 3))
-    a = cov[..., None]
-    return base * (1.0 - a) + c * a
+def _lum_cov(inside, aa):
+    """Map a signed inside-distance field to (luminance, coverage):
+    frame luminance within FRAME_WIDTH_FRAC of the edge, fill further in."""
+    cov = _smoothstep(-aa, aa, inside)
+    t = _smoothstep(FRAME_WIDTH_FRAC - aa, FRAME_WIDTH_FRAC + aa, inside)
+    val = LUM_FRAME * (1.0 - t) + LUM_FILL * t
+    return val, cov
 
 
 def render_plate():
     n = TEX_SIZE
     rad, ang = _coords(n)
-    aa = 1.0 / (n / 2.0)                         # ~1px in frac-of-R units
+    aa = 1.0 / (n / 2.0)                              # ~1px in frac-of-R units
 
-    rgb = np.empty((n, n, 3), np.float64)
-    rgb[:] = DISC_COLOR
+    cell_val, cell_cov = _lum_cov(_cell_inside(rad, ang), aa)
+    ro_val, ro_cov = _lum_cov(_readout_inside(n), aa)
 
-    # Hub fill
-    hub = 1.0 - _smoothstep(HUB_RADIUS_FRAC - aa, HUB_RADIUS_FRAC + aa, rad)
-    rgb = _over(rgb, HUB_COLOR, hub)
-
-    # Hub ring (steel) on the hub boundary
-    ring = _band(rad, HUB_RADIUS_FRAC, HUB_RING_WIDTH_FRAC / 2.0, aa)
-    rgb = _over(rgb, STEEL_COLOR, ring)
-
-    # Disc coverage (alpha) with an AA edge
-    disc = 1.0 - _smoothstep(DISC_RADIUS_FRAC - aa, DISC_RADIUS_FRAC + aa, rad)
-
-    # Rim (steel) just inside the disc edge
-    rim_c = DISC_RADIUS_FRAC - RIM_WIDTH_FRAC
-    rim = _band(rad, rim_c, RIM_WIDTH_FRAC / 2.0, aa)
-    rgb = _over(rgb, STEEL_COLOR, rim * disc)
-
-    # Spokes: SLOT_COUNT constant-width dividers at the wedge boundaries
-    # (18°, 54°, ...), spanning from the hub ring out to the rim.
-    gate = _between(rad, HUB_RADIUS_FRAC, rim_c, aa)
-    spoke = np.zeros((n, n), np.float64)
-    halfw = SPOKE_WIDTH_FRAC / 2.0
-    for i in range(SLOT_COUNT):
-        tb = (i * 360.0 / SLOT_COUNT) + (180.0 / SLOT_COUNT)
-        d = np.radians(((ang - tb + 180.0) % 360.0) - 180.0)
-        dist = rad * np.abs(np.sin(d))           # perpendicular dist to the ray
-        line = 1.0 - _smoothstep(halfw - aa, halfw + aa, dist)
-        spoke = np.maximum(spoke, line * gate)
-    rgb = _over(rgb, STEEL_COLOR, spoke)
+    # Cells (outer band) and the readout plate (centre) are disjoint, so
+    # pick whichever field covers this pixel. Luminance is stored
+    # straight (NOT premultiplied by coverage) — the masked PCX import
+    # binarizes alpha and keeps surviving pixels' RGB as-is.
+    val = np.where(cell_cov >= ro_cov, cell_val, ro_val)
+    cov = np.maximum(cell_cov, ro_cov)
 
     arr = np.empty((n, n, 4), np.uint8)
-    arr[..., :3] = np.clip(rgb, 0, 255).round().astype(np.uint8)
-    arr[..., 3] = np.clip(disc * 255.0, 0, 255).round().astype(np.uint8)
+    g = np.clip(val, 0, 255).round().astype(np.uint8)
+    arr[..., 0] = g
+    arr[..., 1] = g
+    arr[..., 2] = g
+    arr[..., 3] = np.clip(cov * 255.0, 0, 255).round().astype(np.uint8)
     return Image.fromarray(arr, "RGBA")
 
 
 def render_wedge(i):
+    """Soft additive glow shaped like cell i (band-limited, gap-inset),
+    brighter toward the outer edge."""
     n = TEX_SIZE
     rad, ang = _coords(n)
-    aa = 1.0 / (n / 2.0)
 
-    tb = i * 360.0 / SLOT_COUNT                   # slot centre, i*36° from top
-    ad = np.abs(((ang - tb + 180.0) % 360.0) - 180.0)
+    tb = i * 360.0 / SLOT_COUNT                       # slot centre angle
+    ad = np.abs(((ang - tb + 180.0) % 360.0) - 180.0) # deg from slot centre
+    half_seg = 180.0 / SLOT_COUNT
 
-    ang_cov = 1.0 - _smoothstep(WEDGE_HALF_DEG - WEDGE_EDGE_SOFT_DEG,
-                                WEDGE_HALF_DEG + WEDGE_EDGE_SOFT_DEG, ad)
-    rad_cov = _between(rad, WEDGE_INNER_FRAC, WEDGE_OUTER_FRAC,
-                       WEDGE_EDGE_SOFT_FRAC)
-    cov = ang_cov * rad_cov
+    inside = _cell_inside(rad, ang)
+    gated = np.where(ad <= half_seg, inside, -1.0)    # this slot's cell only
+    cov = _smoothstep(0.0, WEDGE_EDGE_SOFT_FRAC, gated)
 
-    # Gentle inward falloff: brighter toward the outer edge for a soft glow.
-    t = np.clip((rad - WEDGE_INNER_FRAC)
-                / (WEDGE_OUTER_FRAC - WEDGE_INNER_FRAC), 0.0, 1.0)
+    t = np.clip((rad - BAND_INNER_FRAC)
+                / (BAND_OUTER_FRAC - BAND_INNER_FRAC), 0.0, 1.0)
     glow = (1.0 - WEDGE_FALLOFF) + WEDGE_FALLOFF * t
 
     val = np.clip(cov * glow * 255.0, 0, 255).round().astype(np.uint8)
