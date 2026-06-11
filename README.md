@@ -33,6 +33,7 @@ The release `.zip` contains everything you need:
 ![weapon wheel](/screenshots/weaponwheel.webp)
 ![controller settings screen](/screenshots/controllersettings.webp)
 ![security terminal](/screenshots/securityterminal.webp)
+![on-screen keyboard](/screenshots/keyboard.webp)
 
 ## Install
 
