@@ -102,6 +102,16 @@ function bool HandleDPad(int dx, int dy)
 
 function bool HandleActivate(byte button)
 {
+    local PersonaScreenHealth s;
+
+    if (button == 202)   // X: Heal All from anywhere on the screen.
+    {
+        s = PersonaScreenHealth(screen);
+        if (s != None && s.btnHealAll != None && s.btnHealAll.bIsSensitive)
+            s.btnHealAll.PressButton();
+        return true;
+    }
+
     if (button != 200)   // IK_Joy1 (A) = 0xC8 = 200 — enum not reachable from Object scope
         return true;
     if (focused != None && ButtonWindow(focused) != None && focused.bIsSensitive)
@@ -112,6 +122,7 @@ function bool HandleActivate(byte button)
 function BuildHints()
 {
     AddHint("a", "Heal");
+    AddHint("x", "Heal All");
     AddHint("lb", "Prev tab");
     AddHint("rb", "Next tab");
     AddHint("b", "Close");
