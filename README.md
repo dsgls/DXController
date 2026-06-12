@@ -48,6 +48,11 @@ know why. But the modern one is way better anyway.
 
 I highly recommend enabling "Toggle Crouch" in the control settings.
 
+In the game, go to Settings -> Controller and configure at least your
+controller's deadzone. The mod does not apply the comically large deadzone
+used by most games, so if your controller sticks are not in good condition
+you will need to increase them.
+
 If you have any other mods installed, start with a fresh game install
 and install only DXController. Compatibility with other mods has not
 been tested.
