@@ -373,6 +373,11 @@ var float GamepadStickMag;                  // derived 0..1 magnitude
 // Throttle for the in-game debug ClientMessage stream.
 var float GamepadDebugLastMsgTime;
 
+// Sub-unit view-rotation remainders carried across frames by the
+// UpdateRotation override (see "Downstream of the shim" in
+// development.md). Always < 1 rotation unit in magnitude.
+var float ViewPitchCarry, ViewYawCarry;
+
 // Stock-computed WaterSpeed cached in PlayerSwimming.BeginState so we
 // can re-scale it each tick from current deflection instead of locking
 // to the value at water entry.
@@ -12335,6 +12340,70 @@ function OnGamepadAugWheel(bool bPressed)
         bGamepadRBHeld = true;
     else
         bGamepadRBHeld = false;
+}
+
+// ----------------------------------------------------------------------
+// View rotation fractional carry
+// ----------------------------------------------------------------------
+
+// Override of PlayerPawn.UpdateRotation (Engine/PlayerPawn.uc:3336;
+// nothing else in the chain overrides it). Stock accumulates
+// `ViewRotation.Yaw += 32.0 * DeltaTime * aTurn` straight into the int
+// Yaw/Pitch fields, so the sub-unit fraction of each frame's delta is
+// truncated away and never adds up. PlayerPawn.PlayerInput multiplies
+// aTurn/aLookUp by DesiredFOV*0.01111, which while scoped pushes small
+// stick deflections below 1 rotation unit per frame — they produce
+// zero motion, felt as extra deadzone ("Downstream of the shim" in
+// development.md). Body is stock except: each frame's float delta is
+// computed in full, the integer part applied, and the remainder kept
+// in ViewPitchCarry/ViewYawCarry for the next frame.
+function UpdateRotation(float DeltaTime, float maxPitch)
+{
+	local rotator newRotation;
+	local float fDelta;
+	local int iDelta;
+
+	DesiredRotation = ViewRotation; //save old rotation
+
+	fDelta = 32.0 * DeltaTime * aLookUp + ViewPitchCarry;
+	iDelta = int(fDelta);
+	ViewPitchCarry = fDelta - iDelta;
+	ViewRotation.Pitch += iDelta;
+	ViewRotation.Pitch = ViewRotation.Pitch & 65535;
+	If ((ViewRotation.Pitch > 18000) && (ViewRotation.Pitch < 49152))
+	{
+		// Pinned at the pitch stop — drop the remainder so input
+		// doesn't bank against the clamp.
+		ViewPitchCarry = 0;
+		If (aLookUp > 0)
+			ViewRotation.Pitch = 18000;
+		else
+			ViewRotation.Pitch = 49152;
+	}
+
+	fDelta = 32.0 * DeltaTime * aTurn + ViewYawCarry;
+	iDelta = int(fDelta);
+	ViewYawCarry = fDelta - iDelta;
+	ViewRotation.Yaw += iDelta;
+
+	ViewShake(deltaTime);
+	ViewFlash(deltaTime);
+
+	newRotation = Rotation;
+	newRotation.Yaw = ViewRotation.Yaw;
+	newRotation.Pitch = ViewRotation.Pitch;
+	If ( (newRotation.Pitch > maxPitch * RotationRate.Pitch) && (newRotation.Pitch < 65536 - maxPitch * RotationRate.Pitch) )
+	{
+		If (ViewRotation.Pitch < 32768)
+			newRotation.Pitch = maxPitch * RotationRate.Pitch;
+		else
+			newRotation.Pitch = 65536 - maxPitch * RotationRate.Pitch;
+	}
+	// added to keep the player's model from pitching or rolling - DEUS_EX CNN
+	newRotation.Pitch = 0;
+	newRotation.Roll = 0;
+
+	setRotation(newRotation);
 }
 // === DXController additions: END ===
 
