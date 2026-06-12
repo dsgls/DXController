@@ -238,13 +238,13 @@ function bool HandleActivate(byte button)
             {
                 committedIndex = focusIndex;
                 ConChoiceWindow(focused).PressButton();
-                // Clear focus state immediately. PressButton -> ButtonActivated
-                // -> PlayChoice -> Clear -> DestroyChildren zeros numChoices
-                // and destroys the ConChoiceWindow on the same frame; without
-                // this clear, focused points at a freed window for one frame
-                // before Tick's deferred-init reconciles. InitFocus on the
-                // next frame correctly sees numChoices == 0 and leaves
-                // focused = None until the next list appears.
+                // Belt-and-braces focus clear. The real invalidation is
+                // OnScreenDescendantRemoved below — it already fired
+                // during PressButton (PlayChoice -> Clear ->
+                // DestroyChildren destroys every ConChoiceWindow before
+                // PressButton returns) — but clear here too in case a
+                // conversation path ever commits without destroying the
+                // list.
                 focused = None;
                 focusIndex = -1;
                 class'DXControllerDebug'.static.DebugLog(
@@ -265,6 +265,34 @@ function bool HandleActivate(byte button)
             "DXC-CONV ADVANCE btn=" $ string(button));
     }
     return true;
+}
+
+// ---- Choice-list rebuild invalidation ---------------------------------------
+
+// Every choice commit — gamepad A *or* mouse click — runs ConPlay.
+// PlayChoice -> conWin.Clear() -> ConWindow.DestroyChildren, destroying
+// every ConChoiceWindow while this ConWindowActive stays attached; a
+// later choice event NewChilds same-class replacements (ConWindowActive.
+// AddChoice). The gamepad path clears focus itself above, but a MOUSE
+// commit while gamepad focus is held would leave `focused` dangling —
+// and slot reuse can alias it to one of the NEW choice windows, so the
+// root Tick liveness walk passes and the next A press would commit an
+// arbitrary choice. Event-driven invalidation is the only reliable
+// detector (see the AugInstallNavController header for the full quirk).
+//
+// Clearing bFocusInitDone also re-arms the Tick deferred-init retry, so
+// the NEXT choice list is auto-focused at index 0 again. Without this,
+// the retry stayed disarmed after the first successful seed and A was
+// dead on every subsequent choice list until a D-pad press re-homed
+// focus.
+function OnScreenDescendantRemoved(Window descendant)
+{
+    if (ConChoiceWindow(descendant) == None)
+        return;
+    focused = None;
+    focusIndex = -1;
+    bFocusInitDone = false;
+    class'DXControllerDebug'.static.DebugLog("DXC-CONV CHOICE-LIST-INVALIDATE");
 }
 
 // ---- Menu toggle policy ----------------------------------------------------
