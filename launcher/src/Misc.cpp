@@ -51,7 +51,7 @@ const wchar_t* Misc::GetVersion()
         void* pVersion = nullptr;
 
         UINT iLen;
-        VerQueryValue(DataPtr.get(), L"\\StringFileInfo\\041304b0\\ProductVersion", &pVersion, &iLen);
+        VerQueryValue(DataPtr.get(), L"\\StringFileInfo\\040904b0\\ProductVersion", &pVersion, &iLen);
         assert(pVersion);
         pszVersion.reset(new wchar_t[iLen]);
         wcscpy_s(pszVersion.get(), iLen, static_cast<wchar_t*>(pVersion));
