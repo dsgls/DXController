@@ -204,6 +204,29 @@ function OnFocusedDestroyed()
     bFocusInitDone = false;
 }
 
+// Tree-mutation notifications, pumped from ControllerRootWindow's
+// DescendantAdded / DescendantRemoved while this controller is active.
+// `descendant` is ANY window entering/leaving the tree under root — not
+// filtered to this controller's screen — so overrides filter by class
+// (unambiguous when the class only occurs under the controller's own
+// screen). Both fire while the descendant pointer is still valid, so
+// class casts are safe; do not store the pointer from the Removed hook.
+//
+// Override these when vanilla rebuilds part of the screen's subtree in
+// place (e.g. HUDMedBotAddAugsScreen.PopulateAugCanList after an
+// install): cached child-window pointers all dangle after the rebuild,
+// and UE1's freed-slot reuse can make a stale pointer alias a NEWLY
+// created window — which defeats every pointer-probing staleness check
+// (including IsDescendantOf liveness walks). Event-driven invalidation
+// is the only reliable detector. Default: ignore.
+function OnScreenDescendantAdded(Window descendant)
+{
+}
+
+function OnScreenDescendantRemoved(Window descendant)
+{
+}
+
 // Returns true if Start/Back may toggle the persona menu while this
 // controller is active. Override to false in in-world modal
 // controllers (conversation, keypad, computer, etc.) so accidental

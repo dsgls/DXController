@@ -430,6 +430,15 @@ event DescendantAdded(Window descendant)
         radial.OnTopWindowPushed(descendant);
     }
 
+    // Tree-mutation notification for the active controller: lets it
+    // invalidate cached child-window pointers when vanilla rebuilds part
+    // of its screen's subtree in place (e.g. medbot PopulateAugCanList
+    // after an install — no top-window change, so no re-attach). Not
+    // filtered to the active screen's subtree; controllers filter by
+    // class. See MenuNavController.OnScreenDescendantAdded.
+    if (activeNav != None)
+        activeNav.OnScreenDescendantAdded(descendant);
+
     // Computer-pane screen swap inside a network terminal. The inner
     // ComputerScreenX windows are children of the NetworkTerminal, not
     // of root, so they don't match the nav registry and aren't modal —
@@ -488,6 +497,15 @@ event DescendantRemoved(Window descendant)
     // below is defence in depth.
     if (keyboard != None && keyboard.bOpen && keyboard.targetScreen == descendant)
         keyboard.ForceClose();
+
+    // Tree-mutation notification, mirror of the DescendantAdded pump.
+    // Removal is the load-bearing edge for in-place rebuilds that only
+    // shrink (installing the LAST medbot canister destroys rows and adds
+    // none). Skipped when the active screen itself is going away — the
+    // SwitchActiveNav(None, None) below detaches the controller, which
+    // resets all of its cached state anyway.
+    if (activeNav != None && descendant != activeNav.screen)
+        activeNav.OnScreenDescendantRemoved(descendant);
 
     // The active screen is being torn down — drop activeNav now so
     // VirtualKeyPressed / MenuFocusOverlay don't dereference the

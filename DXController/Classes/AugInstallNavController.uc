@@ -17,16 +17,26 @@
 //                   commits the screen's single action.
 //   B / Back      : close the screen (handled upstream by ControllerRootWindow).
 //
-// Button collection happens once at Attach time.  If the cannister list
-// changes mid-session (edge case) the controller keeps the stale list;
-// a re-attach at the next top-window change will re-collect.
+// Button collection happens at Attach time and again after every
+// in-place rebuild of the canister tree: stock InstallAugmentation
+// destroys the installed row, then PopulateAugCanList destroys and
+// recreates every remaining row — with NO top-window change, so no
+// re-attach. All cached button pointers dangle after that, and UE1's
+// freed-slot reuse can make a stale pointer alias one of the NEW
+// buttons, so probing cached pointers (GetClientObject etc.) can
+// neither detect the rebuild nor be done safely at all (it is itself
+// a dangling dereference — the medbot crash class). The rebuild is
+// instead detected by event: OnScreenDescendantAdded/Removed mark the
+// list dirty when a HUDMedBotAugCanWindow enters or leaves the tree,
+// and RefreshIfDirty re-collects from the live tree and re-homes
+// focus at the next use (NavTick / HandleDPad / HandleActivate).
 //
 // Selection-cue migration: HUDMedBotAugItemButton extends PersonaItemButton,
 // which paints a bright colSelectionBorder when bSelected is true (and the
 // subclass adds a dim unselected outline of its own). HUDMedBotAddAugsScreen
 // .SelectAugmentation drives that bSelected state via SelectButton(True/False)
 // on the focused/previous button, so the per-button vanilla cue is reliable.
-// Every focused = … site in this controller (InitFocus, RefreshIfStale,
+// Every focused = … site in this controller (InitFocus, RefreshIfDirty,
 // HandleDPad) is paired with a SelectAugmentation call, so the cue tracks
 // focus without drift. HUDMedBotAugItemButton is therefore registered in
 // MenuNavController.HasStockFocusCue and the overlay frame stays off here.
@@ -53,6 +63,12 @@ var int                    rowCount;
 // col 1 = right (btnAug2). focused mirrors ColButton(focusRow, focusCol).
 var int focusRow;
 var int focusCol;
+
+// Set by the OnScreenDescendant hooks when a HUDMedBotAugCanWindow
+// enters or leaves the tree (= PopulateAugCanList rebuilt the list).
+// While set, augRow1/augRow2 and focused must not be dereferenced;
+// RefreshIfDirty re-collects and clears it.
+var bool bListDirty;
 
 // ---- Attach / InitFocus ----------------------------------------------------
 
@@ -105,55 +121,98 @@ function CollectAugButtons()
         rowWin = rowWin.GetHigherSibling();
     }
 
+    bListDirty = false;
+
     class'DXControllerDebug'.static.DebugLog(
         "DXC-NAV AugInstall collected rows=" $ string(rowCount));
 }
 
-// Detect that PopulateAugCanList has rebuilt the cannister tree since the
-// last CollectAugButtons (e.g. after an aug has been installed) and
-// re-collect if so. UE1 nulls references to destroyed Window objects, so
-// a None entry or an empty client object on a cached button indicates
-// the underlying row is gone.
-function RefreshIfStale()
+// ---- In-place rebuild detection --------------------------------------------
+// PopulateAugCanList rebuilds the canister tree without any top-window
+// change. Cached pointers dangle (and may alias the NEW windows via
+// freed-slot reuse), so the rebuild can only be detected by event — see
+// the header comment. The hooks just mark dirty: they fire mid-
+// PopulateAugCanList, before SetCannister fills the new buttons' client
+// objects, so collecting synchronously here would find nothing.
+
+function MarkListDirty()
 {
-    local int i;
-    local bool bStale;
+    bListDirty = true;
+    // `focused` may already dangle — or alias a newly created window in
+    // a reused slot. Drop it now so nothing (GetFocusedRect, the root
+    // Tick liveness check) dereferences it before the deferred
+    // re-collect runs.
+    focused = None;
+}
+
+function OnScreenDescendantAdded(Window descendant)
+{
+    // HUDMedBotAugCanWindow only ever exists under our screen's
+    // canister tile, so the class check alone identifies a rebuild.
+    if (HUDMedBotAugCanWindow(descendant) != None)
+        MarkListDirty();
+}
+
+function OnScreenDescendantRemoved(Window descendant)
+{
+    // Removal is the load-bearing edge: installing the LAST canister
+    // destroys rows but adds none (PopulateAugCanList shows the
+    // "no cans" text instead), so the Added hook alone would miss it.
+    if (HUDMedBotAugCanWindow(descendant) != None)
+        MarkListDirty();
+}
+
+// Re-collect from the live tree after a marked rebuild, then re-home
+// focus to the same (row, col) clamped to the new list. Re-runs
+// SelectAugmentation so the vanilla selection cue, the info window and
+// the Install button's sensitivity all track the re-homed focus (stock
+// InstallAugmentation cleared selectedAugButton).
+function RefreshIfDirty()
+{
     local HUDMedBotAugItemButton btn;
 
-    bStale = false;
-    for (i = 0; i < rowCount; i++)
-    {
-        if (augRow1[i] == None || augRow1[i].GetClientObject() == None)
-        {
-            bStale = true;
-            break;
-        }
-        if (augRow2[i] != None && augRow2[i].GetClientObject() == None)
-        {
-            bStale = true;
-            break;
-        }
-    }
-    if (!bStale)
+    if (!bListDirty)
         return;
 
-    class'DXControllerDebug'.static.DebugLog("DXC-NAV AugInstall stale-refresh");
-    CollectAugButtons();
+    CollectAugButtons();    // clears bListDirty
 
-    focusRow = -1;
-    focusCol = 0;
-    focused  = None;
-    if (rowCount > 0)
+    focused = None;
+    if (rowCount == 0)
     {
-        focusRow = 0;
+        focusRow = -1;
         focusCol = 0;
-        btn      = ColButton(0, 0);
-        if (btn != None)
-        {
-            focused = btn;
-            HUDMedBotAddAugsScreen(screen).SelectAugmentation(btn);
-        }
+        return;
     }
+
+    if (focusRow < 0)
+        focusRow = 0;
+    else if (focusRow >= rowCount)
+        focusRow = rowCount - 1;
+
+    btn = ColButton(focusRow, focusCol);
+    if (btn == None)
+    {
+        focusCol = 0;
+        btn = ColButton(focusRow, 0);
+    }
+    if (btn != None)
+    {
+        focused = btn;
+        HUDMedBotAddAugsScreen(screen).SelectAugmentation(btn);
+        class'DXControllerDebug'.static.DebugLog(
+            "DXC-NAV AugInstall focus rehome row=" $ string(focusRow)
+                $ " col=" $ string(focusCol));
+    }
+}
+
+// Deferred re-collect runs here, every frame the controller is active.
+// Root Tick pumps NavTick before MenuFocusOverlay draws, so the frame
+// after a rebuild already renders against fresh pointers. HandleDPad /
+// HandleActivate also refresh on entry in case a press is processed
+// before the next Tick.
+function NavTick(float deltaSeconds)
+{
+    RefreshIfDirty();
 }
 
 // Override the base policy when the vanilla cue isn't painted. The
@@ -225,7 +284,7 @@ function bool HandleDPad(int dx, int dy)
     local int newRow, newCol;
     local HUDMedBotAugItemButton btn;
 
-    RefreshIfStale();
+    RefreshIfDirty();
     if (rowCount == 0)
         return true;
 
@@ -285,7 +344,7 @@ function bool HandleActivate(byte button)
 {
     local HUDMedBotAddAugsScreen s;
 
-    RefreshIfStale();
+    RefreshIfDirty();
     s = HUDMedBotAddAugsScreen(screen);
     if (s == None)
         return true;
