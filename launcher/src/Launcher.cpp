@@ -148,7 +148,7 @@ CLauncher::CLauncher()
         ConfigOverrides.emplace_back(L"Extension.InputExt", L"Joy1",        L"Jump",                   pszUserIni);
         ConfigOverrides.emplace_back(L"Extension.InputExt", L"Joy2",        L"ReloadWeapon",           pszUserIni);
         ConfigOverrides.emplace_back(L"Extension.InputExt", L"Joy3",        L"ParseRightClick",        pszUserIni);
-        ConfigOverrides.emplace_back(L"Extension.InputExt", L"Joy4",        L"",                       pszUserIni);
+        ConfigOverrides.emplace_back(L"Extension.InputExt", L"Joy4",        L"SwitchAmmo",             pszUserIni);
         ConfigOverrides.emplace_back(L"Extension.InputExt", L"Joy5",        L"",                       pszUserIni);
         ConfigOverrides.emplace_back(L"Extension.InputExt", L"Joy6",        L"",                       pszUserIni);
         ConfigOverrides.emplace_back(L"Extension.InputExt", L"Joy7",        L"TogglePlayerMenuWindow", pszUserIni);

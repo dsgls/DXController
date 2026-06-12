@@ -70,7 +70,7 @@ been tested.
 | A              | Jump                            |
 | B              | Reload                          |
 | X              | Use / interact                  |
-| Y              | unbound                         |
+| Y              | Change ammo                     |
 | LB             | Inventory / weapon wheel        |
 | RB             | Augmentation wheel              |
 | Back           | Toggle inventory / persona menu |
