@@ -1101,6 +1101,17 @@ function bool IsGamepadCursorMode()
 {
     return false;
 }
+
+// Hook fired by DeusExPlayer.PreTravel() when a ClientTravel has been
+// scheduled. Base impl is a no-op; ControllerRootWindow overrides it to
+// close the radial wheel and drop its cached Augmentation actor refs.
+// DeusEx's travel code hard-deletes the player's aug/skill actors and
+// then paints this window tree one final time for the loading screen,
+// and nothing nulls window-held refs to deleted actors — a window that
+// still draws from such a ref dereferences freed memory.
+function PreTravelNotify()
+{
+}
 // === DXController additions: END ===
 
 // ----------------------------------------------------------------------

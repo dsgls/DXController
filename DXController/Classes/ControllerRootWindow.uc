@@ -524,6 +524,23 @@ event DescendantRemoved(Window descendant)
     }
 }
 
+// A ClientTravel has been scheduled (hook chain: engine SetClientTravel
+// → DeusExPlayer.PreTravel → DeusExRootWindow.PreTravelNotify). On the
+// next engine Tick, DeusEx's Browse destroys and hard-deletes the
+// player's Augmentation actors, then LoadMap paints this window tree
+// one final time for the loading screen — with no ref-nulling for
+// window-held actor refs. Close the wheel (cancel, not apply — a held
+// trigger must not equip/toggle on travel) and drop its cached actor
+// refs so that final paint touches no old-level actor. See
+// development.md "Mission travel hard-deletes the player's aug/skill
+// actors".
+function PreTravelNotify()
+{
+    Super.PreTravelNotify();
+    if (radial != None)
+        radial.OnPreTravel();
+}
+
 // Per-frame work, run between frames after the engine has settled any
 // in-flight Hide/Show / PushWindow / PopWindow transitions. Three jobs:
 //

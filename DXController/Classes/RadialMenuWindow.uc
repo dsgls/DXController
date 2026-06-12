@@ -359,6 +359,27 @@ function OnTopWindowPushed(Window pushed)
     Close(false);
 }
 
+// Called by ControllerRootWindow.PreTravelNotify when a ClientTravel
+// has been scheduled. PreTravel fires synchronously inside the
+// ClientTravel call — a full tick before DeusEx's Browse destroys and
+// hard-deletes the player's Augmentation actors (PruneTravelActors →
+// CleanupDestroyed) and LoadMap paints this window tree one last time
+// for the loading screen. Nothing nulls window-held refs to deleted
+// actors, so a wheel still open at that paint would dereference freed
+// memory (GPF'd live: aug wheel held open through a map exit —
+// aug.IsActive() / aug.AugmentationName on freed augSlots entries).
+// Close without applying and drop every cached actor ref.
+function OnPreTravel()
+{
+    local int i;
+
+    Close(false);
+    for (i = 0; i < 10; i++)
+        augSlots[i] = None;
+    sourceItem = None;
+    stickySourceScreen = None;
+}
+
 event DrawWindow(GC gc)
 {
     local int i;

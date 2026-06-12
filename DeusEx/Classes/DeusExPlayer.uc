@@ -613,6 +613,19 @@ function PostPostBeginPlay()
 
 function PreTravel()
 {
+	// === DXController additions: BEGIN ===
+	// Travel is now scheduled: on the next engine Tick, DeusEx's Browse
+	// destroys and hard-deletes the player's Augmentation/Skill actors
+	// (PruneTravelActors → CleanupDestroyed) before the loading-screen
+	// paint draws this window tree one last time. The engine's
+	// destroyed-actor ref-nulling only covers refs held in level actors,
+	// never windows — give the root window a chance to drop window-held
+	// actor refs first. See development.md "Mission travel hard-deletes
+	// the player's aug/skill actors".
+	if (DeusExRootWindow(rootWindow) != None)
+		DeusExRootWindow(rootWindow).PreTravelNotify();
+	// === DXController additions: END ===
+
 	// Set a flag designating that we're traveling,
 	// so MissionScript can check and not call FirstFrame() for this map.
 	
