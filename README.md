@@ -1,4 +1,4 @@
-# XInput controller support for Deus Ex (1999)
+# XInput controller support for Deus Ex (2000)
 
 DXController is a mod that implements Xbox controller support for the
 original *Deus Ex* (2000, GOTY edition). The game should feel as if
@@ -8,7 +8,7 @@ controls and new UI elements. Gameplay is fully vanilla.
 DXController adds much better controller feel, a weapon and augmentation
 equipping wheel, an on-screen keyboard for terminals, and complete controller
 navigation for every menu, conversation, and in-world device (keypads,
-ATMs, computers, security terminals) — so the game is playable end to
+ATMs, computers, security terminals), so the game is playable end to
 end without a mouse or keyboard.
 
 ## Download
