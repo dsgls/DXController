@@ -37,6 +37,14 @@ var localized String CameraOptionsHeader;
 var localized String PanZoomSpeedHeader;
 var localized String ClickCameraWindowText;
 
+// === DXController additions: BEGIN ===
+// Sub-unit pan remainders carried across frames by GamepadPan — rotator
+// Yaw/Pitch are ints, so per-frame deltas below 1 unit would otherwise
+// truncate away entirely (same dead band as the scoped-aim fix in
+// DeusExPlayer.UpdateRotation). Always < 1 rotation unit in magnitude.
+var float GamepadYawCarry, GamepadPitchCarry;
+// === DXController additions: END ===
+
 // ----------------------------------------------------------------------
 // InitWindow()
 // ----------------------------------------------------------------------
@@ -746,21 +754,35 @@ function PanCamera(EInputKey key)
 // are rotator-unit deltas already integrated for the frame by
 // ComputerScreenSecurityNav. Bypasses PanCamera and panMod entirely.
 // Scaled by fov/90 so a magnified view pans slower. No rotation limit —
-// yaw and pitch wrap freely.
+// yaw and pitch wrap freely. Only the integer part of each frame's
+// delta is applied; the sub-unit remainder carries to the next frame so
+// small deflections still pan on a zoomed-in camera (fovScale shrinks
+// per-frame deltas below 1 rotation unit, which truncation would
+// otherwise discard forever).
 // ----------------------------------------------------------------------
 
 function GamepadPan(float dYaw, float dPitch)
 {
 	local Rotator rot;
-	local float fovScale;
+	local float fovScale, fDelta;
+	local int iYaw, iPitch;
 
 	if ((selectedCamera == None) || (selectedCamera.camera == None))
 		return;
 
 	fovScale = selectedCamera.winCamera.fov / 90.0;
+
+	fDelta = dYaw * fovScale + GamepadYawCarry;
+	iYaw = int(fDelta);
+	GamepadYawCarry = fDelta - iYaw;
+
+	fDelta = dPitch * fovScale + GamepadPitchCarry;
+	iPitch = int(fDelta);
+	GamepadPitchCarry = fDelta - iPitch;
+
 	rot = selectedCamera.camera.ReplicatedRotation;
-	rot.Yaw   += int(dYaw   * fovScale);
-	rot.Pitch += int(dPitch * fovScale);
+	rot.Yaw   += iYaw;
+	rot.Pitch += iPitch;
 	player.UpdateCameraRotation(selectedCamera.camera, rot);
 }
 
