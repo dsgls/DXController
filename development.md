@@ -303,6 +303,38 @@ disconnect.
   script can rely on "received `0.0` means the player let go" and clear
   accumulators on that edge.
 
+### Downstream of the shim: FOV scaling and integer rotation truncation
+
+Two stock-script behaviours shape what an axis delta becomes after it
+leaves the shim — relevant when reasoning about scoped-aim feel:
+
+- **Look axes are FOV-scaled in script, not native.** Stock
+  `Engine.PlayerPawn.PlayerInput` (PlayerPawn.uc:2661, :2731) multiplies
+  `aTurn`/`aLookUp` by `FOVScale = DesiredFOV * 0.01111` every tick —
+  the same factor the mouse gets via `MouseScale`. With a scope up
+  (`DeusExWeapon.ScopeFOV`, e.g. 10 on the sniper rifle vs default 75)
+  stick aim runs at `ScopeFOV/75` of its unzoomed rate. It reads
+  `DesiredFOV`, so the change snaps the instant the scope toggles. A
+  ghidra pass over Engine/Extension/WinDrv confirmed the native chain
+  (`UGameEngine::InputEvent` → `XInputExt::Process` → `UInput::Exec`
+  axis accumulation `aTurn += Delta * Speed * 0.01`) applies no FOV
+  factor anywhere.
+- **Sub-unit per-frame rotation is lost, not accumulated.** Stock
+  `Engine.PlayerPawn.UpdateRotation` (PlayerPawn.uc:3341) does
+  `ViewRotation.Yaw += 32.0 * DeltaTime * aTurn` into an int field —
+  the fractional part truncates away each frame. Any deflection whose
+  FOV-scaled contribution stays below 1 rotation unit (1/65536 turn)
+  per frame produces exactly zero motion. Combined with the FOV scale
+  above, this widens the effective deadzone while scoped: deflections
+  just past the shim deadzone that move the view unzoomed freeze
+  entirely when zoomed.
+
+Both live in `Engine.u` (stock, not rebuildable), but both are plain
+script functions that the modifiable `DeusEx.u` overlay's
+`DeusExPlayer` can override — a script-side fix is legitimate here;
+the [Flag, don't compensate](#flag-dont-compensate) rule covers native
+code only.
+
 ### Mid-game launcher state via `ConsoleCommand` exec hooks
 
 The launcher exposes exec commands consumed from script:
