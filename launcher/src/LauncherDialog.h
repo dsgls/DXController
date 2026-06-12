@@ -1,5 +1,7 @@
 #pragma once
 
+class CDialogPadNav;
+
 class CLauncherDialog
 {
 public:
@@ -17,6 +19,7 @@ private:
     HWND m_hWndIniFile2; //!< User.ini
     HWND m_hWndWebsite;
     HMONITOR m_hMonitor = NULL;
+    std::unique_ptr<CDialogPadNav> m_pPadNav;
 };
 
 

@@ -77,6 +77,7 @@ BEGIN
     CONTROL         "2",IDC_INIFILES2,"SysLink",LWS_USEVISUALSTYLE | LWS_RIGHT | WS_TABSTOP,264,282,60,9,WS_EX_TRANSPARENT | WS_EX_RIGHT
     CONTROL         IDC_BITMAP1,IDC_STATIC,"Static",SS_BITMAP | SS_CENTERIMAGE,0,0,331,40
     RTEXT           "Version",IDC_VERSION,246,294,80,8,0,WS_EX_TRANSPARENT | WS_EX_RIGHT
+    LTEXT           "",IDC_PADHINTS,72,295,168,8,NOT WS_VISIBLE
 END
 
 IDD_FIXAPP DIALOGEX 0, 0, 435, 314
@@ -126,6 +127,7 @@ BEGIN
     GROUPBOX        "Misc.",IDC_STATIC,216,54,216,42
     GROUPBOX        "Viewport",IDC_STATIC,12,156,204,54
     CONTROL         "Span all monitors",CHK_BORDERLESSALLMONITORS,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,132,192,78,11
+    LTEXT           "",IDC_PADHINTS,12,297,300,8,NOT WS_VISIBLE
 END
 
 IDD_DATADIRS DIALOGEX 0, 0, 340, 297
@@ -139,6 +141,7 @@ BEGIN
     DEFPUSHBUTTON   "OK",IDOK,228,276,50,14
     PUSHBUTTON      "Cancel",IDCANCEL,282,276,50,14
     LTEXT           "Items higher up in the list override lower ones, just like in the ini file.\nLocalization (.int) files are used from the highest-priority *.u directory.",IDC_STATIC,6,252,276,18
+    LTEXT           "",IDC_PADHINTS,7,279,210,8,NOT WS_VISIBLE
 END
 
 

@@ -1,10 +1,24 @@
 #include "stdafx.h"
 #include "LauncherDialog.h"
+#include "DialogPadNav.h"
 #include "DataDirDialog.h"
 #include "FixApp.h"
 #include "Misc.h"
 #include "FileManagerDeusExe.h"
 #include "resource.h"
+
+namespace
+{
+    //Single vertical button chain; the SysLinks are deliberately not
+    //pad-reachable. Order: control, up, down, left, right (0 = no move).
+    constexpr SPadNavEntry kLauncherNavTable[] =
+    {
+        { IDC_PLAY,     0,            IDC_CONFIG,   0, 0 },
+        { IDC_CONFIG,   IDC_PLAY,     IDC_DATADIRS, 0, 0 },
+        { IDC_DATADIRS, IDC_CONFIG,   IDC_EXIT,     0, 0 },
+        { IDC_EXIT,     IDC_DATADIRS, 0,            0, 0 },
+    };
+}
 
 CLauncherDialog::CLauncherDialog()
 {
@@ -59,6 +73,11 @@ INT_PTR CALLBACK CLauncherDialog::LauncherDialogProc(HWND hwndDlg,UINT uMsg,WPAR
 
             pThis->FillLinkControl(pThis->m_hWndIniFile1, *pCI->SystemIni);
             pThis->FillLinkControl(pThis->m_hWndIniFile2, *pCI->UserIni);
+
+            pThis->m_pPadNav = std::make_unique<CDialogPadNav>(
+                hwndDlg, kLauncherNavTable, _countof(kLauncherNavTable),
+                IDC_EXIT, IDC_PLAY, IDC_PLAY,
+                L"D-pad: navigate   A: select   B: exit   Start: play");
         }
 
         return TRUE;
@@ -114,6 +133,21 @@ INT_PTR CALLBACK CLauncherDialog::LauncherDialogProc(HWND hwndDlg,UINT uMsg,WPAR
         }
         break;
     }
+
+    case WM_TIMER:
+        if (wParam == CDialogPadNav::sm_iTimerId && pThis && pThis->m_pPadNav)
+        {
+            pThis->m_pPadNav->OnTimer();
+            return TRUE;
+        }
+        break;
+
+    case WM_DESTROY:
+        if (pThis)
+        {
+            pThis->m_pPadNav.reset();
+        }
+        break;
 
     case WM_CLOSE:
         EndDialog(hwndDlg,0);

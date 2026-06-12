@@ -1,5 +1,7 @@
 #pragma once
 
+class CDialogPadNav;
+
 class CFixApp
 {
 public:
@@ -39,4 +41,5 @@ private:
     HWND m_hWndTxtFOV;
     std::vector<std::wstring> m_Renderers;
     std::deque<Resolution> m_Resolutions; //Don't want push_back to change address
+    std::unique_ptr<CDialogPadNav> m_pPadNav;
 };

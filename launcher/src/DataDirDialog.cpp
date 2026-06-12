@@ -1,5 +1,6 @@
 #include "stdafx.h"
 #include "DataDirDialog.h"
+#include "DialogPadNav.h"
 #include "Misc.h"
 #include "FileManagerDeusExe.h"
 #include "resource.h"
@@ -283,8 +284,15 @@ INT_PTR CALLBACK CDataDirDialog::DataDirDialogProc(HWND hwndDlg,UINT uMsg,WPARAM
 
             pThis->FindDefaultItems();
             pThis->PopulateList();
-            
+
             pThis->m_TreeView.SelectFirstItem();
+
+            //No pad navigation here (tree view stays mouse/keyboard); B is a
+            //guaranteed exit so a pad-only user can never get stuck.
+            pThis->m_pPadNav = std::make_unique<CDialogPadNav>(
+                hwndDlg, nullptr, 0,
+                IDCANCEL, 0, 0,
+                L"B: close");
         }
         return TRUE;
 
@@ -333,6 +341,21 @@ INT_PTR CALLBACK CDataDirDialog::DataDirDialogProc(HWND hwndDlg,UINT uMsg,WPARAM
         }
         break;
     }
+
+    case WM_TIMER:
+        if (wParam == CDialogPadNav::sm_iTimerId && pThis && pThis->m_pPadNav)
+        {
+            pThis->m_pPadNav->OnTimer();
+            return TRUE;
+        }
+        break;
+
+    case WM_DESTROY:
+        if (pThis)
+        {
+            pThis->m_pPadNav.reset();
+        }
+        break;
 
     case WM_CLOSE:
         EndDialog(hwndDlg,0);
