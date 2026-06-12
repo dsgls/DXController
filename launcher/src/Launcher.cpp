@@ -321,6 +321,40 @@ void CLauncher::MainLoop(UEngine* const pEngine)
         GetCursorPos(&CursorPos);
         const bool bMouseOverWindow = WindowFromPoint(CursorPos) == m_hWnd;
         const bool bHasFocus = GetFocus() == m_hWnd;
+
+        //Release stuck modifier keys when focus returns. Alt-tabbing away eats the
+        //modifier's keyup (it's delivered to the newly focused window), so every
+        //engine-side key-state table — WinDrv's pressedBitmap, XInputExt's bitmap and
+        //XRootWindow's keyDownMap (what UnrealScript IsKeyDown() reads) — keeps the
+        //modifier held. Stock UI handlers gate on exactly that: MenuUIWindow and
+        //PersonaScreenBaseWindow VirtualKeyPressed reject EVERY key (incl. Escape, and
+        //the mod's B-button Escape synthesis) while IsKeyDown(Alt|Shift|Ctrl), so menus
+        //can't be closed after an alt-tab. WinDrv's own per-frame GetKeyState
+        //reconciliation can't heal this: GetKeyState is thread-message-queue state and
+        //is just as stale as the bitmaps until the missed keyup arrives (it never
+        //does). GetAsyncKeyState is live hardware state, so on the focus rising edge
+        //release any modifier the OS says is up. Injecting at UEngine::InputEvent is
+        //the same entry point the XInput shim uses for synthesized buttons; the
+        //release flows Console::Key -> XInputExt::Process -> XRootWindow::Process and
+        //heals all the tables consistently. A release for a key the engine never
+        //thought was down is harmless (same thing WinDrv's trailer emits routinely).
+        if(m_pViewPort && bHasFocus && !m_bPrevHasFocus)
+        {
+            static const struct { int iVirtualKey; EInputKey eKey; } kModifiers[] = {
+                { VK_MENU,    IK_Alt   },
+                { VK_SHIFT,   IK_Shift },
+                { VK_CONTROL, IK_Ctrl  },
+            };
+            for (const auto& Mod : kModifiers)
+            {
+                if ((GetAsyncKeyState(Mod.iVirtualKey) & 0x8000) == 0)
+                {
+                    pEngine->InputEvent(m_pViewPort, Mod.eKey, EInputAction::IST_Release);
+                }
+            }
+        }
+        m_bPrevHasFocus = bHasFocus;
+
         //Poll at tick rate, not main-loop rate: the engine accumulates IST_Axis events
         //between ticks (same as mouse WM_INPUT deltas below), so emitting the absolute
         //stick value many times per tick produced per-tick turn = value * polls_per_tick.

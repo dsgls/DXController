@@ -206,6 +206,18 @@ launcher log means the patcher refused to write into an unrecognised
 `WinDrv.dll` — confirm against the GOG / Steam build the patch was
 authored for.
 
+The launcher additionally synthesizes modifier-key releases when the
+game window regains focus (`Launcher.cpp`, the `bHasFocus` rising-edge
+block). Alt-tabbing away eats the modifier's keyup, leaving Alt held in
+every engine key table — including `XRootWindow`'s `keyDownMap`, which
+script `IsKeyDown()` reads. Stock `MenuUIWindow` /
+`PersonaScreenBaseWindow` `VirtualKeyPressed` reject *all* keys while
+`IsKeyDown(Alt|Shift|Ctrl)`, so a stuck Alt killed keyboard Escape and
+the gamepad B→Escape synthesis on every menu/persona screen until the
+next physical Alt press (a vanilla bug too). The engine cannot
+self-heal: WinDrv's `GetKeyState` reconciliation trailer reads
+thread-queue state that is just as stale as the bitmaps.
+
 ### Script-visible input handler: `Extension.InputExt`
 
 The active `UInput` is `Extension.InputExt` (native class `XInputExt`,

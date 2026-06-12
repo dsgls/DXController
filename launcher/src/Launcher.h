@@ -22,6 +22,7 @@ private:
     size_t m_iSizeY = 0;
     UViewport* m_pViewPort = nullptr; //If user closes window, viewport disappears before we get WM_QUIT
     bool m_bPrevInMenu = false;
+    bool m_bPrevHasFocus = false;
     bool m_bInBorderlessFullscreenWindow = false;
     CXInput m_XInput;
 
