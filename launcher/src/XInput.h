@@ -65,8 +65,9 @@ public:
     // Samples the current stick curve at iCount evenly spaced points across
     // the full normalized input range [0, 1] and writes a CSV of normalized
     // [0, 1] output magnitudes to Ar (single Logf call). iCount is clamped to
-    // [2, 256]. Includes the deadzone flat region as leading zeros so the
-    // preview reflects the player experience.
+    // [2, 256]. Includes the deadzone flat region as leading zeros and the
+    // right stick's output scale so the preview reflects the player
+    // experience.
     void SampleCurve(EStick eStick, int iCount, FOutputDevice& Ar) const;
 
     // Writes "L=%.4f R=%.4f" to Ar: the most recent raw (pre-deadzone,
@@ -84,6 +85,7 @@ private:
     int m_iHotplugScanMs;           //milliseconds
     SStickCurve m_LeftStickCurve;   //response curve applied to post-deadzone left-stick magnitude
     SStickCurve m_RightStickCurve;  //response curve applied to post-deadzone right-stick magnitude
+    float m_fRightStickScale;       //post-curve output scale for the right stick, 0.10..1.00; 1.0 = full axis range
 
     //Runtime state
     DWORD m_iActiveSlot;        //(DWORD)-1 when not connected
@@ -111,7 +113,7 @@ private:
 
     //Helpers
 
-    //Reads all 18 keys from [DXController.ControllerSettings] into the
+    //Reads all 19 keys from [DXController.ControllerSettings] into the
     //corresponding members and clamps the curve parameters into their
     //valid ranges. Called from the constructor and from Reload().
     void LoadSettings();
@@ -126,11 +128,13 @@ private:
 
     //Emits IST_Axis on (eKeyX, eKeyY) after applying radial deadzone with the
     //given iDeadzone parameter (SHORT magnitude), then applying the configured
-    //response curve to the post-deadzone magnitude (direction preserved).
+    //response curve to the post-deadzone magnitude (direction preserved), then
+    //scaling the output magnitude by fScale (1.0 = full axis range).
     //Stores resulting values in fOutX/fOutY (zero when inside the deadzone),
     //in -1000..1000 axis units.
     void EmitStickAxes(UEngine* pEngine, UViewport* pViewport,
                        SHORT iRawX, SHORT iRawY, int iDeadzone, const SStickCurve& Curve,
+                       float fScale,
                        EInputKey eKeyX, EInputKey eKeyY,
                        float& fOutX, float& fOutY);
 

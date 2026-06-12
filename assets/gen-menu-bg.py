@@ -4,10 +4,11 @@
 The controller settings page (MenuScreenController) shows a variable
 number of option rows depending on the selected stick response curves.
 Each stick contributes 2 rows (Linear), 3 (Power/Expo), or 5 (Sigmoid),
-and the page packs them contiguously from the top, so the panel only ever
-needs recesses for the *total* visible-row count. We render one tile set
-per possible total (ROW_COUNTS below) and the menu swaps to the matching
-set at runtime.
+plus one always-visible sensitivity row for the right stick, and the page
+packs them contiguously from the top, so the panel only ever needs
+recesses for the *total* visible-row count. We render one tile set per
+possible total (ROW_COUNTS below) and the menu swaps to the matching set
+at runtime.
 
 For each row count N, the composite is a 768x512 image cut into a 2x3
 grid of 256x256 tiles so MenuUIClientWindow's hardcoded 256-grid
@@ -72,10 +73,11 @@ CLIENT_H = 480
 W, H = 768, 512
 
 # Visible-row totals the controller settings page can show. Each stick
-# contributes 2 rows (Linear), 3 (Power/Expo), or 5 (Sigmoid); the page
-# shows the sum. 9 is unreachable (no two of {2,3,5} sum to 9). One tile
-# set is rendered per total -> [4, 5, 6, 7, 8, 10].
-ROW_COUNTS = sorted({l + r for l in (2, 3, 5) for r in (2, 3, 5)})
+# contributes 2 rows (Linear), 3 (Power/Expo), or 5 (Sigmoid); the right
+# stick adds one always-visible sensitivity row; the page shows the sum.
+# 10 is unreachable (no l in {2,3,5}, r in {3,4,6} sum to 10). One tile
+# set is rendered per total -> [5, 6, 7, 8, 9, 11].
+ROW_COUNTS = sorted({l + r for l in (2, 3, 5) for r in (3, 4, 6)})
 
 # Row layout — mirrors MenuUIScreenWindow + MenuUIChoice. Every visible
 # row is an [action-button | value-button] recess pair.

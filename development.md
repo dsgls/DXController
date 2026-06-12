@@ -856,7 +856,7 @@ texture package.
   background. The page shows a variable number of option rows depending
   on the selected stick curves, so it emits one 2×3 tile set per possible
   visible-row total (`MenuControllerBackground_<N>_<tile>`, N in
-  {4,5,6,7,8,10}); the menu swaps to the matching set at runtime.
+  {5,6,7,8,9,11}); the menu swaps to the matching set at runtime.
 - `assets/png-to-pcx.py` — PNG → 8-bit PCX, two modes: `masked`
   (magenta key at palette index 0) and `grey` (linear grey palette, no
   key, for the additive wedges).

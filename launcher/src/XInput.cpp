@@ -109,6 +109,7 @@ CXInput::CXInput()
  m_iHotplugScanMs(1000),
  m_LeftStickCurve{  EStickCurveType::Power,   2.0f, 0.60f, 6.0f, 0.60f, 0.60f },
  m_RightStickCurve{ EStickCurveType::Sigmoid, 2.0f, 0.60f, 8.0f, 0.70f, 0.90f },
+ m_fRightStickScale(1.0f),
  m_iActiveSlot(static_cast<DWORD>(-1)),
  m_bConnected(false),
  m_iPrevButtons(0),
@@ -171,6 +172,12 @@ void CXInput::LoadSettings()
     bool bMissSigStrengthLeft     = !GConfig->GetFloat(kSection, L"StickCurveSigmoidStrengthLeft",   m_LeftStickCurve.fSigStrength);
     bool bMissSigStrengthRight    = !GConfig->GetFloat(kSection, L"StickCurveSigmoidStrengthRight",  m_RightStickCurve.fSigStrength);
 
+    //Post-curve output scale for the right stick: full deflection tops out at
+    //scale * 1000 axis units. No left-stick counterpart -- capping movement
+    //speed was judged useless.
+    bool bMissScaleRight          = !GConfig->GetFloat(kSection, L"StickScaleRight",                 m_fRightStickScale);
+    m_fRightStickScale = std::min(1.0f, std::max(0.1f, m_fRightStickScale));
+
     auto ClampCurve = [](SStickCurve& Curve)
     {
         Curve.fPower        = std::min(10.0f,  std::max(0.1f,  Curve.fPower));
@@ -206,6 +213,7 @@ void CXInput::LoadSettings()
     if (bMissSigMidRight)      { GConfig->SetFloat(kSection, L"StickCurveSigmoidMidpointRight",           m_RightStickCurve.fSigMidpoint);    bAnyMissing = true; }
     if (bMissSigStrengthLeft)  { GConfig->SetFloat(kSection, L"StickCurveSigmoidStrengthLeft",            m_LeftStickCurve.fSigStrength);     bAnyMissing = true; }
     if (bMissSigStrengthRight) { GConfig->SetFloat(kSection, L"StickCurveSigmoidStrengthRight",           m_RightStickCurve.fSigStrength);    bAnyMissing = true; }
+    if (bMissScaleRight)       { GConfig->SetFloat(kSection, L"StickScaleRight",                          m_fRightStickScale);                bAnyMissing = true; }
 
     if (bAnyMissing)
     {
@@ -228,6 +236,7 @@ void CXInput::SampleCurve(const EStick eStick, int iCount, FOutputDevice& Ar) co
 
     const SStickCurve& Curve   = (eStick == EStick::Left) ? m_LeftStickCurve    : m_RightStickCurve;
     const int          iDz     = (eStick == EStick::Left) ? m_iLeftStickDeadzone : m_iRightStickDeadzone;
+    const float        fScale  = (eStick == EStick::Left) ? 1.0f                 : m_fRightStickScale;
     const float        fCDz    = static_cast<float>(iDz) / 32767.0f;
     const float        fDenom  = static_cast<float>(iCount - 1);
 
@@ -244,8 +253,10 @@ void CXInput::SampleCurve(const EStick eStick, int iCount, FOutputDevice& Ar) co
         }
         else
         {
+            //Same pipeline as EmitStickAxes: shape, then apply the output
+            //scale, so the preview shows the real ceiling.
             const float fR = (fU - fCDz) / (1.0f - fCDz);
-            fY = ShapeStickMagnitude(fR, Curve);
+            fY = ShapeStickMagnitude(fR, Curve) * fScale;
         }
 
         //ShapeStickMagnitude is pinned to 0 and 1 across all four curves on
@@ -315,7 +326,7 @@ static constexpr float kAxisRange = 1000.0f;
 
 void CXInput::EmitStickAxes(UEngine* const pEngine, UViewport* const pViewport,
                             const SHORT iRawX, const SHORT iRawY, const int iDeadzone,
-                            const SStickCurve& Curve,
+                            const SStickCurve& Curve, const float fScale,
                             const EInputKey eKeyX, const EInputKey eKeyY,
                             float& fOutX, float& fOutY)
 {
@@ -342,15 +353,15 @@ void CXInput::EmitStickAxes(UEngine* const pEngine, UViewport* const pViewport,
     else
     {
         //Radial deadzone: remap (cDz, 1] to (0, 1] linearly. Curve shapes that
-        //post-deadzone magnitude. Direction preserved: a single combined
-        //scale = out_axis_mag / raw_mag applied to raw X/Y yields
-        //direction * out_axis_mag with no intermediate sqrt.
-        const float fR      = (fU - fCDz) / (1.0f - fCDz);
-        const float fS      = ShapeStickMagnitude(fR, Curve);
-        const float fOutMag = fS * kAxisRange;
-        const float fScale  = fOutMag / fRawMag;
-        fOutX = std::min(kAxisRange, std::max(-kAxisRange, fXf * fScale));
-        fOutY = std::min(kAxisRange, std::max(-kAxisRange, fYf * fScale));
+        //post-deadzone magnitude; fScale then caps the output ceiling. Direction
+        //preserved: a single combined scale = out_axis_mag / raw_mag applied to
+        //raw X/Y yields direction * out_axis_mag with no intermediate sqrt.
+        const float fR         = (fU - fCDz) / (1.0f - fCDz);
+        const float fS         = ShapeStickMagnitude(fR, Curve);
+        const float fOutMag    = fS * fScale * kAxisRange;
+        const float fAxisScale = fOutMag / fRawMag;
+        fOutX = std::min(kAxisRange, std::max(-kAxisRange, fXf * fAxisScale));
+        fOutY = std::min(kAxisRange, std::max(-kAxisRange, fYf * fAxisScale));
     }
 
     if (fOutX != 0.0f)
@@ -513,12 +524,12 @@ void CXInput::Poll(UEngine* const pEngine, UViewport* const pViewport, const boo
     EmitButtonChanges(pEngine, pViewport, State.Gamepad.wButtons);
     EmitStickAxes(pEngine, pViewport,
                   State.Gamepad.sThumbLX, State.Gamepad.sThumbLY, m_iLeftStickDeadzone,
-                  m_LeftStickCurve,
+                  m_LeftStickCurve, 1.0f,
                   IK_JoyX, IK_JoyY,
                   m_fPrevLeftStickX, m_fPrevLeftStickY);
     EmitStickAxes(pEngine, pViewport,
                   State.Gamepad.sThumbRX, State.Gamepad.sThumbRY, m_iRightStickDeadzone,
-                  m_RightStickCurve,
+                  m_RightStickCurve, m_fRightStickScale,
                   IK_JoyU, IK_JoyV,
                   m_fPrevRightStickX, m_fPrevRightStickY);
     m_fPrevLeftTrigger  = EmitTriggerAxis(pEngine, pViewport, State.Gamepad.bLeftTrigger,  m_fPrevLeftTrigger,  IK_JoyZ);

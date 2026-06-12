@@ -8,7 +8,7 @@
 // .ini is always complete by the time we read.
 //
 // No defaultproperties — defaults are owned entirely by the launcher
-// constructor (launcher/src/XInput.cpp:89-146). Mirroring
+// constructor (CXInput::CXInput in launcher/src/XInput.cpp). Mirroring
 // them on the script side would be a divergence trap.
 //=============================================================================
 class ControllerSettings extends Object
@@ -22,3 +22,4 @@ var config float  StickCurveExpoLeft,  StickCurveExpoRight;
 var config float  StickCurveSigmoidSteepnessLeft, StickCurveSigmoidSteepnessRight;
 var config float  StickCurveSigmoidMidpointLeft,  StickCurveSigmoidMidpointRight;
 var config float  StickCurveSigmoidStrengthLeft,  StickCurveSigmoidStrengthRight;
+var config float  StickScaleRight;
