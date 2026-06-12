@@ -1,4 +1,4 @@
-# xInput controller support for Deus Ex (1999)
+# XInput controller support for Deus Ex (1999)
 
 DXController is a mod that implements Xbox controller support for the
 original *Deus Ex* (2000, GOTY edition). The game should feel as if
