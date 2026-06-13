@@ -59,6 +59,12 @@ If you have any other mods installed, start with a fresh game install
 and install only DXController. Compatibility with other mods has not
 been tested.
 
+## Steam Deck
+
+A user reported that the mod did not work on the Steam Deck with the
+D3D10 renderer, but was able to get it working with the
+[D3D11 renderer](https://www.kentie.net/article/d3d10drv/).
+
 ## Controls
 
 | Button         | Action                          |

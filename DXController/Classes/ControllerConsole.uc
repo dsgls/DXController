@@ -30,6 +30,44 @@ function bool IsGamepadKey(EInputKey Key)
     return false;
 }
 
+//=============================================================================
+// PostRender — draw the console in a larger font so it stays readable.
+//
+// The launcher's GUI scaling fix (launcher/src/GUIScalingFix.cpp) scales the
+// window-system tree by rewriting XRootWindow.hMultiplier/vMultiplier, so the
+// HUD, menus and conversations all grow with the chosen scale. The console is
+// a separate path: the engine draws Console.PostRender straight onto the raw
+// UCanvas, never through XRootWindow, so it stayed at native pixel size and
+// rendered microscopic at high resolution.
+//
+// Stock Console.DrawSingleView (the "press T" typing line) and
+// DrawConsoleView (the scrollback output) both draw with C.MedFont — a small
+// fixed-pixel bitmap font. Canvas.DrawText is `final native` with no scale
+// parameter, so font selection is the only lever (verified in Canvas.uc).
+// Rather than reimplement those large stock draw functions, repoint C.MedFont
+// to C.LargeFont (the engine's Height=32 TrueType font) for the duration of
+// the stock render and restore it after — every console draw that reads
+// MedFont (typing line, output lines, short messages) picks up the larger
+// font, while big-message draws (DrawLevelAction uses BigFont/LargeFont) are
+// untouched. Guard on LargeFont so a missing font falls back to stock.
+//=============================================================================
+event PostRender(Canvas C)
+{
+    local Font savedMed;
+
+    if (C != None && C.LargeFont != None)
+    {
+        savedMed = C.MedFont;
+        C.MedFont = C.LargeFont;
+        Super.PostRender(C);
+        C.MedFont = savedMed;
+    }
+    else
+    {
+        Super.PostRender(C);
+    }
+}
+
 event bool KeyEvent(EInputKey Key, EInputAction Action, FLOAT Delta)
 {
     local DeusExPlayer p;
