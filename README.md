@@ -63,7 +63,8 @@ been tested.
 
 A user reported that the mod did not work on the Steam Deck with the
 D3D10 renderer, but was able to get it working with the
-[D3D11 renderer](https://www.kentie.net/article/d3d10drv/).
+[D3D11 renderer](https://www.kentie.net/article/d3d10drv/). They also
+needed to set proton compatibility options to "Proton Experimental".
 
 ## Controls
 
