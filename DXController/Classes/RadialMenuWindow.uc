@@ -22,7 +22,7 @@ const WM_Weapon    = 1;
 const WM_Aug       = 2;
 const WM_BeltAssign = 3;
 
-const StickDeadzone     = 300.0;    // ~30% of the -1000..1000 axis range
+const StickDeadzone     = 10.0;     // near-zero: the launcher's XInput shim already applies the user's stick deadzone. Keeping a large gate here locked out low-sensitivity players whose full deflection never crossed it.
 const DegreesPerRadian  = 57.2957795;
 const ViewLockGrace     = 0.3;     // seconds after close where RS still swallowed
 const FocusGrace        = 0.4;      // seconds after stick recentres where Close still dispatches last-focused slot
