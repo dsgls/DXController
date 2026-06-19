@@ -109,7 +109,7 @@ CXInput::CXInput()
  m_iHotplugScanMs(1000),
  m_LeftStickCurve{  EStickCurveType::Power,   2.0f, 0.60f, 6.0f, 0.60f, 0.60f },
  m_RightStickCurve{ EStickCurveType::Sigmoid, 2.0f, 0.60f, 8.0f, 0.70f, 0.90f },
- m_fRightStickScale(1.0f),
+ m_fRightStickScale(0.6f),
  m_iActiveSlot(static_cast<DWORD>(-1)),
  m_bConnected(false),
  m_iPrevButtons(0),
