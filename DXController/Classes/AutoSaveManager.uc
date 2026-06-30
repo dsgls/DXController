@@ -30,8 +30,6 @@ var ControllerRootWindow root;
 var DeusExPlayer cachedPlayer;
 var float lastSaveAtPlayTime;
 var float toastRemaining;
-var int   intervalClamped;
-var int   maxSavesClamped;
 
 // --- Scratch arrays for the rotation scan. Date/time are packed into ints
 //     for exact ordering (a float key loses second-precision at year-scale
@@ -47,20 +45,30 @@ const SCAN_CONSUMED = 2000000000;   // sentinel: scan entry already deleted
 function Init(ControllerRootWindow inRoot)
 {
     root = inRoot;
-
-    intervalClamped = Default.IntervalSeconds;
-    if (intervalClamped < 10)            // floor to avoid save-thrash
-        intervalClamped = 10;
-
-    maxSavesClamped = Default.MaxSaves;
-    if (maxSavesClamped < 1)
-        maxSavesClamped = 1;
-    if (maxSavesClamped > 100)
-        maxSavesClamped = 100;
-
     cachedPlayer = None;
     lastSaveAtPlayTime = 0.0;
     toastRemaining = 0.0;
+}
+
+// Configured interval, read from Default each call so menu edits apply live.
+// Floor at 10s to avoid save-thrash (was the Init-time clamp).
+function int EffectiveIntervalSeconds()
+{
+    local int v;
+    v = Default.IntervalSeconds;
+    if (v < 10)
+        v = 10;
+    return v;
+}
+
+// Configured pool size, read from Default each call. Clamp to [1,100].
+function int EffectiveMaxSaves()
+{
+    local int v;
+    v = Default.MaxSaves;
+    if (v < 1)   v = 1;
+    if (v > 100) v = 100;
+    return v;
 }
 
 // Called once per frame from ControllerRootWindow.Tick.
@@ -91,7 +99,7 @@ function Poll(float deltaTime)
     }
 
     // Not due yet?
-    if (p.saveTime - lastSaveAtPlayTime < float(intervalClamped))
+    if (p.saveTime - lastSaveAtPlayTime < float(EffectiveIntervalSeconds()))
         return;
 
     // Due. Defer (WITHOUT resetting the baseline) if a guard blocks, so the
@@ -175,7 +183,7 @@ function DoAutoSave(DeusExPlayer p)
     // Delete oldest members until there is room for one more. toDelete is
     // negative (loop no-ops) when under capacity, and >1 when the user just
     // lowered MaxSaves (trims the surplus oldest-first).
-    toDelete = poolCount - maxSavesClamped + 1;
+    toDelete = poolCount - EffectiveMaxSaves() + 1;
     for (k = 0; k < toDelete; k++)
     {
         oldest = FindOldest(poolCount);
