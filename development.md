@@ -374,6 +374,9 @@ added to the root via `DescendantAdded`, detaches when it leaves via
 one `RegisterNav(Class'DeusEx.X', Class'XNavController')` line in
 `ControllerRootWindow.RegisterNavControllers()`.
 
+`MenuScreenAutoSave` is a standard options page registered to
+`OptionsNavController`, like the other `MenuScreen*` options screens.
+
 ### Window-stack observation: use engine events, never polling
 
 Attach/detach is driven by `ControllerRootWindow.DescendantAdded(Window)`
@@ -961,11 +964,17 @@ texture package.
   plus a centre readout plate; the wedges are matching per-slot glow
   shapes for additive highlight draws. Parametric; same inputs give
   byte-identical output.
-- `assets/gen-menu-bg.py` — renders the controller-settings menu
-  background. The page shows a variable number of option rows depending
-  on the selected stick curves, so it emits one 2×3 tile set per possible
-  visible-row total (`MenuControllerBackground_<N>_<tile>`, N in
-  {5,6,7,8,9,11}); the menu swaps to the matching set at runtime.
+- `assets/gen-menu-bg.py` — renders the recessed-panel menu backgrounds from
+  a list of page specs. The **controller-settings** page (`MenuScreenController`)
+  shows a variable number of option rows depending on the selected stick
+  curves, so it emits one 2×3 tile set per possible visible-row total
+  (`MenuControllerBackground_<N>_<tile>`, N in {5,6,7,8,9,11}); the menu swaps
+  to the matching set at runtime. The **autosave** page (`MenuScreenAutoSave`)
+  has a fixed 3-row layout, so it emits a single narrower 2×1 tile set
+  (`MenuAutoSaveBackground_<tile>`). The tile grid is derived from each page's
+  client width/height; a page spec's `client_w`/`client_h`/`help_y` must match
+  the screen class's `defaultproperties`. Parametric; same inputs give
+  byte-identical output.
 - `assets/png-to-pcx.py` — PNG → 8-bit PCX, two modes: `masked`
   (magenta key at palette index 0) and `grey` (linear grey palette, no
   key, for the additive wedges).

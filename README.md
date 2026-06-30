@@ -55,6 +55,10 @@ you will need to increase them. The same screen has a right-stick
 sensitivity setting (default 1.00) — lower it if turning at full stick
 deflection is too fast.
 
+The mod also autosaves periodically during play. Writing each save can cause
+a brief stutter — if it bothers you, make autosaves less frequent or turn
+them off entirely in Settings → Autosave.
+
 If you have any other mods installed, start with a fresh game install
 and install only DXController. Compatibility with other mods has not
 been tested.
@@ -109,9 +113,10 @@ overlap another item; A only places it on a green spot.
 
 ## Auto-save
 
-The mod autosaves during play. It works out of the box with the defaults
-below; to change them, add a `[DXController.AutoSaveManager]` section to
-`DeusEx.ini` (the keys are not written there automatically):
+The mod autosaves during play. Change the settings in-game via
+Settings → Autosave (enable/disable, interval, and how many autosaves to
+keep). They are also stored in the `[DXController.AutoSaveManager]` section of
+`DeusEx.ini` and can be edited there:
 
 | Key | Default | Meaning |
 |-----|---------|---------|
