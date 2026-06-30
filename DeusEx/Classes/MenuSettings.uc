@@ -24,13 +24,19 @@ class MenuSettings expands MenuUIMenuWindow;
 event InitWindow()
 {
     local Class controllerScreenClass;
+    local Class autoSaveScreenClass;
 
     ButtonNames[6] = "Controller";
-    ButtonNames[7] = "Previous Menu";
+    ButtonNames[7] = "Autosave";
+    ButtonNames[8] = "Previous Menu";
 
     controllerScreenClass = Class(DynamicLoadObject("DXController.MenuScreenController", Class'Class', True));
     if (controllerScreenClass != None)
         buttonDefaults[6].invoke = controllerScreenClass;
+
+    autoSaveScreenClass = Class(DynamicLoadObject("DXController.MenuScreenAutoSave", Class'Class', True));
+    if (autoSaveScreenClass != None)
+        buttonDefaults[7].invoke = autoSaveScreenClass;
 
     Super.InitWindow();
 }
@@ -47,7 +53,8 @@ defaultproperties
      ButtonNames(4)="Colors"
      ButtonNames(5)="Sound"
      ButtonNames(6)="Controller"
-     ButtonNames(7)="Previous Menu"
+     ButtonNames(7)="Autosave"
+     ButtonNames(8)="Previous Menu"
      buttonXPos=7
      buttonWidth=282
      buttonDefaults(0)=(Y=13,Action=MA_MenuScreen,Invoke=Class'DeusEx.MenuScreenCustomizeKeys')
@@ -57,10 +64,11 @@ defaultproperties
      buttonDefaults(4)=(Y=157,Action=MA_MenuScreen,Invoke=Class'DeusEx.MenuScreenAdjustColors')
      buttonDefaults(5)=(Y=193,Action=MA_MenuScreen,Invoke=Class'DeusEx.MenuScreenSound')
      buttonDefaults(6)=(Y=229,Action=MA_MenuScreen)
-     buttonDefaults(7)=(Y=265,Action=MA_Previous)
+     buttonDefaults(7)=(Y=265,Action=MA_MenuScreen)
+     buttonDefaults(8)=(Y=301,Action=MA_Previous)
      Title="Settings"
      ClientWidth=294
-     ClientHeight=308
+     ClientHeight=344
      clientTextures(0)=Texture'DeusExUI.UserInterface.MenuOptionsBackground_1'
      clientTextures(1)=Texture'DeusExUI.UserInterface.MenuOptionsBackground_2'
      clientTextures(2)=Texture'DeusExUI.UserInterface.MenuOptionsBackground_3'

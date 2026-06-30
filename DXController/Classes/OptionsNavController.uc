@@ -3,8 +3,9 @@
 // that use the standard choices[] pattern, plus the bottom action bar.
 //
 // Wired screens: MenuScreenOptions, MenuScreenDisplay, MenuScreenSound,
-// MenuScreenControls, MenuScreenAdjustColors, MenuScreenBrightness. All
-// six have identical action-bar layouts (Cancel / OK / Reset Defaults).
+// MenuScreenControls, MenuScreenAdjustColors, MenuScreenBrightness,
+// MenuScreenController, MenuScreenAutoSave. All have identical
+// action-bar layouts (Cancel / OK / Reset Defaults).
 //
 // Linear focus cycle:
 //   Choice[0] ⇄ Choice[1] ⇄ … ⇄ Choice[last enabled] ⇄ Action bar ⇄ Choice[0]
