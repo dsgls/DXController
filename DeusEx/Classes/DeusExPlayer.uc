@@ -386,8 +386,6 @@ var float BaseWaterSpeed;
 // Calibration constants (see spec §6). No ini surface — opinionated defaults.
 const GamepadWalkRunThreshold       = 0.60;
 const GamepadWalkRunThresholdHyst   = 0.05;
-const GamepadCrouchSpeedCap         = 0.50;
-const GamepadCarrySpeedCap          = 0.50;
 const GamepadMinScaledSpeed         = 30;
 const GamepadWalkAnimSpeedFraction  = 0.50;
 const bGamepadMovementDebug         = False;
@@ -12304,31 +12302,26 @@ final function float CurrentSpeedFraction()
     return FClamp(GroundSpeed / Default.GroundSpeed, 0.0, 1.5);
 }
 
-// Multiplies the stock-computed speed cap by L-stick deflection, with
-// crouch and carry caps applied as FMin (not multiplicative) so that
-// low deflection still produces low speed when crouched or carrying.
+// Multiplies the stock-computed speed cap by L-stick deflection so full
+// deflection reaches the keyboard's max speed under the same conditions.
 // Floor at GamepadMinScaledSpeed (overrides stock's FMax(_, 100)).
+//
+// No crouch/carry cap: stock crouch doesn't reduce GroundSpeed at all,
+// and carry already reduces it in ProcessMove before this runs, so an
+// extra cap here would slow the gamepad below the keyboard at full
+// deflection (requirement: full deflection == keyboard max).
 //
 // If the stick is centered (mag == 0) we're either on keyboard or the
 // gamepad is centered — return unchanged so keyboard players see no
 // change.
 final function float ApplyGamepadSpeedScale(float speedCap)
 {
-    local float mag, scaled;
+    local float scaled;
 
     if (GamepadStickMag <= 0.0)
         return speedCap;
 
-    mag = GamepadStickMag;
-
-    if (bIsCrouching || bForceDuck)
-        mag = FMin(mag, GamepadCrouchSpeedCap);
-
-    if (CarriedDecoration != None ||
-        (inHand != None && inHand.IsA('POVCorpse')))
-        mag = FMin(mag, GamepadCarrySpeedCap);
-
-    scaled = speedCap * mag;
+    scaled = speedCap * GamepadStickMag;
     return FMax(scaled, GamepadMinScaledSpeed);
 }
 
