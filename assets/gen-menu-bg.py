@@ -1,44 +1,15 @@
 #!/usr/bin/env python3
-"""Generate the DXController controller-settings menu-background tile sets.
+"""Generate DXController menu-background tile sets for multiple page specs.
 
-The controller settings page (MenuScreenController) shows a variable
-number of option rows depending on the selected stick response curves.
-Each stick contributes 2 rows (Linear), 3 (Power/Expo), or 5 (Sigmoid),
-plus one always-visible sensitivity row for the right stick, and the page
-packs them contiguously from the top, so the panel only ever needs
-recesses for the *total* visible-row count. We render one tile set per
-possible total (ROW_COUNTS below) and the menu swaps to the matching set
-at runtime.
+Drives a list of page specs (controller settings + autosave) and produces
+one tile set per page × row-count combination. The controller settings page
+uses one tile set per possible total row count (the menu swaps sets at
+runtime); the autosave page has a fixed 3-row layout so it emits a single
+tile set with no _N_ infix.
 
-For each row count N, the composite is a 768x512 image cut into a 2x3
-grid of 256x256 tiles so MenuUIClientWindow's hardcoded 256-grid
-placement (texturePosX/Y[i] = col*256, row*256) drops each tile in the
-right place:
-
-  MenuControllerBackground_N_1.png  256x256  at (  0,   0)
-  MenuControllerBackground_N_2.png  256x256  at (256,   0)
-  MenuControllerBackground_N_3.png  256x256  at (512,   0)  [right 48 px clipped]
-  MenuControllerBackground_N_4.png  256x256  at (  0, 256)
-  MenuControllerBackground_N_5.png  256x256  at (256, 256)
-  MenuControllerBackground_N_6.png  256x256  at (512, 256)  [right 48/bottom 32 clipped]
-
-MenuScreenController has ClientWidth=720, ClientHeight=480, so the
-composite right-edge 48 px and bottom 32 px fall outside the visible
-client area and need no special content. The visible border lives at
-x=719 and y=479 in texture space.
-
-Each visible row is an [action-button | value-button] recess pair; the
-layout mirrors MenuUIScreenWindow + MenuUIChoice. Dimensions taken from:
-
-  MenuScreenController.uc       (ClientWidth/Height, helpPosY)
-  MenuUIScreenWindow.uc         (choiceStartX/Y, choiceVerticalGap)
-  MenuUIChoice.uc               (choiceControlPosX=270)
-  MenuUIChoiceEnum.uc           (defaultInfoWidth=77, defaultInfoPosX=270)
-  MenuUIChoiceButton.uc         (SetWidth(243))
-  MenuUIActionButtonWindow.uc   (buttonHeight=19)
-  MenuUIWindow.uc               (defaultHelpHeight=27,
-                                 defaultHelpLeftOffset=7,
-                                 defaultHelpClientDiffY=21)
+For each composite the image is cut into 256×256 tiles so
+MenuUIClientWindow's hardcoded 256-grid placement (texturePosX/Y[i] =
+col*256, row*256) drops each tile in the right place.
 
 Style sampled from MenuGameOptionsBackground_{1..6}.pcx:
   - Lighter neutral-grey panel base with a 2-px faux scanline.
@@ -61,26 +32,32 @@ from pathlib import Path
 from PIL import Image
 
 # ===== PARAMETERS ============================================================
-# Visible client area (MenuScreenController.ClientWidth/Height). Pixels
-# outside this rectangle are clipped by the client window — content
-# placed there is harmless but invisible.
-CLIENT_W = 720
-CLIENT_H = 480
+# Per-page specs. Each page's recesses are positioned from client_w/client_h/
+# help_y, which MUST match the screen class's defaultproperties exactly:
+#   MenuControllerBackground -> MenuScreenController.uc
+#   MenuAutoSaveBackground   -> MenuScreenAutoSave.uc
+#
+# 10 rows is unreachable for the controller page (no l in {2,3,5}, r in
+# {3,4,6} sum to 10); its row-count set is [5,6,7,8,9,11]. The autosave page
+# has a fixed 3-row layout -> a single tile set with no _N_ infix.
+PAGES = [
+    dict(
+        prefix="MenuControllerBackground",
+        client_w=720, client_h=480, help_y=438,
+        row_counts=sorted({l + r for l in (2, 3, 5) for r in (3, 4, 6)}),
+        single_set=False,
+    ),
+    dict(
+        prefix="MenuAutoSaveBackground",
+        client_w=400, client_h=200, help_y=160,
+        row_counts=[3],
+        single_set=True,
+    ),
+]
 
-# Composite dimensions — 2 rows x 3 cols of 256x256 tiles. The engine's
-# hardcoded 256-grid forces this shape; we just pay the right-edge and
-# bottom-edge waste in exchange for the visible area we need.
-W, H = 768, 512
-
-# Visible-row totals the controller settings page can show. Each stick
-# contributes 2 rows (Linear), 3 (Power/Expo), or 5 (Sigmoid); the right
-# stick adds one always-visible sensitivity row; the page shows the sum.
-# 10 is unreachable (no l in {2,3,5}, r in {3,4,6} sum to 10). One tile
-# set is rendered per total -> [5, 6, 7, 8, 9, 11].
-ROW_COUNTS = sorted({l + r for l in (2, 3, 5) for r in (3, 4, 6)})
-
-# Row layout — mirrors MenuUIScreenWindow + MenuUIChoice. Every visible
-# row is an [action-button | value-button] recess pair.
+# Shared row layout — mirrors MenuUIScreenWindow + MenuUIChoice. Every visible
+# row is an [action-button | value-button] recess pair. Identical for any
+# options screen, so it is page-independent.
 ROW_X     = 7
 ROW_Y0    = 27
 ROW_GAP   = 36
@@ -90,10 +67,8 @@ VAL_X     = ROW_X + 270   # row pos + MenuUIChoiceEnum.defaultInfoPosX
 VAL_W     = 77
 VAL_H     = 19
 
-# Help/info bar (MenuUIWindow.ConfigurationChanged geometry).
+# Help/info bar geometry shared except for its Y (per-page help_y).
 HELP_X = 7
-HELP_Y = 438              # MenuScreenController.helpPosY
-HELP_W = CLIENT_W - 21    # CLIENT_W - defaultHelpClientDiffY
 HELP_H = 27               # defaultHelpHeight
 
 PANEL_HI = (37, 37, 37)
@@ -102,23 +77,25 @@ PANEL_LO = (33, 33, 33)
 INSET_HI = (22, 22, 22)
 INSET_LO = (18, 18, 18)
 
-# Halo luma boost by distance from element edge (idx 0 unused). Tuned to
-# match the vanilla decay profile sampled near button rims.
+# Halo luma boost by distance from element edge (idx 0 unused).
 HALO_BOOST = [0, 48, 38, 30, 22, 16, 11, 7, 4, 2]
 
 BLACK = (0, 0, 0)
-
-# Crop rectangles (left, top, right, bottom) for the six 256x256 tiles of
-# the 768x512 composite. Tile index (1..6) is the list position + 1.
-TILE_RECTS = [
-    (0,   0,   256, 256),
-    (256, 0,   512, 256),
-    (512, 0,   768, 256),
-    (0,   256, 256, 512),
-    (256, 256, 512, 512),
-    (512, 256, 768, 512),
-]
 # ============================================================================
+
+
+def tile_grid(client_w, client_h):
+    """Composite size and 256-px tile crop rects covering the client area.
+    Width/height round up to whole 256-px tiles; the engine's
+    MenuUIClientWindow places tile i at (col*256, row*256)."""
+    cols = (client_w + 255) // 256
+    rows = (client_h + 255) // 256
+    W, H = cols * 256, rows * 256
+    rects = []
+    for r in range(rows):
+        for c in range(cols):
+            rects.append((c * 256, r * 256, c * 256 + 256, r * 256 + 256))
+    return W, H, rects
 
 
 def panel_color(y):
@@ -168,7 +145,7 @@ def element_interior(x0, y0, x1, y1, notch_tl, notch_br):
     return interior
 
 
-def edge_pixels(interior):
+def edge_pixels(interior, W, H):
     edges = set()
     for x, y in interior:
         for nx, ny in ((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)):
@@ -177,13 +154,12 @@ def edge_pixels(interior):
     return edges
 
 
-def stamp_element(img, interior, face_hi, face_lo, all_interiors, halo_seeds):
-    """Fill element face, draw 1-px black rim outside, and grow `halo_seeds`
-    with the next ring out (where the halo glow will be painted)."""
+def stamp_element(img, interior, face_hi, face_lo, all_interiors, halo_seeds, W, H):
+    """Fill element face, draw 1-px black rim outside, and grow `halo_seeds`."""
     px = img.load()
     for (x, y) in interior:
         px[x, y] = face_hi if (y % 2 == 0) else face_lo
-    rim = edge_pixels(interior)
+    rim = edge_pixels(interior, W, H)
     for (x, y) in rim:
         px[x, y] = BLACK
     for x, y in rim:
@@ -196,7 +172,7 @@ def stamp_element(img, interior, face_hi, face_lo, all_interiors, halo_seeds):
     all_interiors |= interior
 
 
-def paint_halo(img, halo_seeds, all_interiors):
+def paint_halo(img, halo_seeds, all_interiors, W, H):
     """BFS outward from halo_seeds and brighten panel pixels per HALO_BOOST."""
     px = img.load()
     blend_len = len(HALO_BOOST) - 1
@@ -224,54 +200,42 @@ def paint_halo(img, halo_seeds, all_interiors):
             q.append((nx, ny))
 
 
-def stamp_row_recess(img, x, y, w, h, all_interiors, halo_seeds,
+def stamp_row_recess(img, x, y, w, h, all_interiors, halo_seeds, W, H,
                      notch_tl=3, notch_br=6):
-    """Recess sized exactly to a row button (the button border textures
-    sit on top of this dark fill). Notch depths mirror the vanilla
-    button border art (MenuActionButtonNormal_Left has a ~3-px top-left
-    chamfer; MenuActionButtonNormal_Right has a ~6x6 bottom-right
-    chamfer) so the recess corners line up with the button corners."""
     interior = element_interior(x, y, x + w, y + h, notch_tl, notch_br)
-    stamp_element(img, interior, INSET_HI, INSET_LO, all_interiors, halo_seeds)
+    stamp_element(img, interior, INSET_HI, INSET_LO, all_interiors, halo_seeds, W, H)
 
 
-def compose(num_rows):
-    """Build the full 768x512 composite for a `num_rows`-row layout.
+def compose(page, num_rows):
+    """Build the composite for a `num_rows`-row layout of `page`."""
+    client_w, client_h, help_y = page["client_w"], page["client_h"], page["help_y"]
+    W, H, _ = tile_grid(client_w, client_h)
 
-    Content sits inside the visible 720x480 client area. The 48-px right
-    and 32-px bottom strips outside that rectangle hold only scanlined
-    panel — they're clipped before reaching the screen.
-    """
     img = Image.new("RGB", (W, H), PANEL_HI)
     fill_scanlines(img, 0, 0, W, H, PANEL_HI, PANEL_LO)
 
-    # Outer 1-px black border around the visible client area. The texture
-    # extends past the client; pixels past the border would be clipped.
-    hline(img, 0, CLIENT_W, 0, BLACK)
-    hline(img, 0, CLIENT_W, CLIENT_H - 1, BLACK)
-    vline(img, 0, 0, CLIENT_H, BLACK)
-    vline(img, CLIENT_W - 1, 0, CLIENT_H, BLACK)
+    # Outer 1-px black border around the visible client area.
+    hline(img, 0, client_w, 0, BLACK)
+    hline(img, 0, client_w, client_h - 1, BLACK)
+    vline(img, 0, 0, client_h, BLACK)
+    vline(img, client_w - 1, 0, client_h, BLACK)
 
     all_interiors = set()
     halo_seeds = set()
 
-    # Row recesses: an [action button | value button] pair per visible
-    # row. Every row has a value-cycling control, so both columns are
-    # stamped for all rows.
     for n in range(num_rows):
         y = ROW_Y0 + n * ROW_GAP
-        stamp_row_recess(img, ROW_X, y, BTN_W, BTN_H, all_interiors, halo_seeds)
-        stamp_row_recess(img, VAL_X, y, VAL_W, VAL_H, all_interiors, halo_seeds)
+        stamp_row_recess(img, ROW_X, y, BTN_W, BTN_H, all_interiors, halo_seeds, W, H)
+        stamp_row_recess(img, VAL_X, y, VAL_W, VAL_H, all_interiors, halo_seeds, W, H)
 
-    # Help/info bar — wider, taller, larger corner notches than the row
-    # recesses to give it visual weight as a separate region.
+    help_w = client_w - 21    # CLIENT_W - defaultHelpClientDiffY
     help_interior = element_interior(
-        HELP_X, HELP_Y, HELP_X + HELP_W, HELP_Y + HELP_H,
+        HELP_X, help_y, HELP_X + help_w, help_y + HELP_H,
         notch_tl=3, notch_br=6,
     )
-    stamp_element(img, help_interior, INSET_HI, INSET_LO, all_interiors, halo_seeds)
+    stamp_element(img, help_interior, INSET_HI, INSET_LO, all_interiors, halo_seeds, W, H)
 
-    paint_halo(img, halo_seeds, all_interiors)
+    paint_halo(img, halo_seeds, all_interiors, W, H)
     return img
 
 
@@ -279,17 +243,24 @@ def main():
     standalone = len(sys.argv) <= 1
     out_dir = Path(sys.argv[1]) if not standalone else Path(__file__).parent / "menu-bg-gen"
     out_dir.mkdir(parents=True, exist_ok=True)
-    for num_rows in ROW_COUNTS:
-        full = compose(num_rows)
-        for idx, (x0, y0, x1, y1) in enumerate(TILE_RECTS, start=1):
-            tile = full.crop((x0, y0, x1, y1))
-            tile.save(out_dir / f"MenuControllerBackground_{num_rows}_{idx}.png")
-        # The composites are a visual sanity check for standalone runs;
-        # suppress them from the build so png-to-pcx doesn't ship stray
-        # *_full.pcx files alongside the real tiles.
-        if standalone:
-            full.save(out_dir / f"MenuControllerBackground_{num_rows}_full.png")
-    n_tiles = len(ROW_COUNTS) * len(TILE_RECTS)
+    n_tiles = 0
+    for page in PAGES:
+        _, _, rects = tile_grid(page["client_w"], page["client_h"])
+        for num_rows in page["row_counts"]:
+            full = compose(page, num_rows)
+            for idx, (x0, y0, x1, y1) in enumerate(rects, start=1):
+                tile = full.crop((x0, y0, x1, y1))
+                if page["single_set"]:
+                    name = f"{page['prefix']}_{idx}.png"
+                else:
+                    name = f"{page['prefix']}_{num_rows}_{idx}.png"
+                tile.save(out_dir / name)
+                n_tiles += 1
+            if standalone:
+                if page["single_set"]:
+                    full.save(out_dir / f"{page['prefix']}_full.png")
+                else:
+                    full.save(out_dir / f"{page['prefix']}_{num_rows}_full.png")
     print(f"wrote {n_tiles} tiles{' + composites' if standalone else ''} to {out_dir}")
 
 
