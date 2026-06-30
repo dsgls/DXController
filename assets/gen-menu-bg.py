@@ -228,7 +228,7 @@ def compose(page, num_rows):
         stamp_row_recess(img, ROW_X, y, BTN_W, BTN_H, all_interiors, halo_seeds, W, H)
         stamp_row_recess(img, VAL_X, y, VAL_W, VAL_H, all_interiors, halo_seeds, W, H)
 
-    help_w = client_w - 21    # CLIENT_W - defaultHelpClientDiffY
+    help_w = client_w - 21    # client_w - defaultHelpClientDiffY
     help_interior = element_interior(
         HELP_X, help_y, HELP_X + help_w, help_y + HELP_H,
         notch_tl=3, notch_br=6,
