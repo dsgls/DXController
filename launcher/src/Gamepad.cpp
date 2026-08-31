@@ -47,11 +47,12 @@ namespace
     static_assert(SDL_GAMEPAD_BUTTON_COUNT <= 32, "button mask is a Uint32");
 
     //Slots the fixed axis pipeline already emits on (EmitStickAxes/
-    //EmitTriggerAxis -- see Poll()). A [DXController.GamepadButtonMap] entry
-    //targeting one of these is rejected: per-source edge tracking can't share
-    //a destination slot without breaking the press/release and zero-edge
-    //contracts. The §5 axis map (T5) will extend this check with its own
-    //registered destinations once it exists.
+    //EmitTriggerAxis -- see Poll()). A [DXController.GamepadButtonMap] or
+    //[DXController.GamepadAxisMap] entry targeting one of these is rejected:
+    //per-source edge tracking can't share a destination slot without breaking
+    //the press/release and zero-edge contracts. LoadAxisMap() extends the
+    //check with the resolved button map and the axis entries it has already
+    //accepted.
     bool IsReservedAxisDestination(const EInputKey eKey)
     {
         return eKey == IK_JoyX || eKey == IK_JoyY ||
@@ -107,6 +108,95 @@ namespace
             return true;
         }
         return false;
+    }
+
+    //Parses a [DXController.GamepadAxisMap] key into a source kind (spec §5):
+    //"gyro.pitch|yaw|roll", "accel.x|y|z", "touchpad.x|y", or "joyaxis.N" for
+    //a raw joystick axis index. Case-insensitive. *piOutJoyAxis is only
+    //meaningful for the joyaxis form. Returns false for anything else.
+    bool ParseAxisSourceName(const wchar_t* const pszName,
+                             CGamepad::EAxisSource* const peOutSource,
+                             int* const piOutJoyAxis)
+    {
+        struct SourceName
+        {
+            const wchar_t*        pszName;
+            CGamepad::EAxisSource eSource;
+        };
+        static const SourceName kNames[] =
+        {
+            { L"gyro.pitch",  CGamepad::EAxisSource::GyroPitch },
+            { L"gyro.yaw",    CGamepad::EAxisSource::GyroYaw   },
+            { L"gyro.roll",   CGamepad::EAxisSource::GyroRoll  },
+            { L"accel.x",     CGamepad::EAxisSource::AccelX    },
+            { L"accel.y",     CGamepad::EAxisSource::AccelY    },
+            { L"accel.z",     CGamepad::EAxisSource::AccelZ    },
+            { L"touchpad.x",  CGamepad::EAxisSource::TouchpadX },
+            { L"touchpad.y",  CGamepad::EAxisSource::TouchpadY },
+        };
+        if (!pszName)
+        {
+            return false;
+        }
+        for (const SourceName& Name : kNames)
+        {
+            if (_wcsicmp(pszName, Name.pszName) == 0)
+            {
+                *peOutSource   = Name.eSource;
+                *piOutJoyAxis  = 0;
+                return true;
+            }
+        }
+
+        static const wchar_t* const pszJoyAxisPrefix = L"joyaxis.";
+        const size_t iPrefixLen = wcslen(pszJoyAxisPrefix);
+        if (_wcsnicmp(pszName, pszJoyAxisPrefix, iPrefixLen) == 0)
+        {
+            const wchar_t* const pszIndex = pszName + iPrefixLen;
+            wchar_t* pEnd = nullptr;
+            const long iIndex = wcstol(pszIndex, &pEnd, 10);
+            //Upper bound is a sanity limit, not an SDL one; the real axis
+            //count is checked against the live joystick at read time.
+            if (pEnd != pszIndex && pEnd && *pEnd == L'\0' && iIndex >= 0 && iIndex < 64)
+            {
+                *peOutSource  = CGamepad::EAxisSource::JoyAxis;
+                *piOutJoyAxis = static_cast<int>(iIndex);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    //True for the sensor-derived sources, which never count as pad activity
+    //(spec §6).
+    bool IsSensorAxisSource(const CGamepad::EAxisSource eSource)
+    {
+        switch (eSource)
+        {
+        case CGamepad::EAxisSource::GyroPitch:
+        case CGamepad::EAxisSource::GyroYaw:
+        case CGamepad::EAxisSource::GyroRoll:
+        case CGamepad::EAxisSource::AccelX:
+        case CGamepad::EAxisSource::AccelY:
+        case CGamepad::EAxisSource::AccelZ:
+            return true;
+        default:
+            return false;
+        }
+    }
+
+    //Strict float parse: the whole token must be consumed, so "1e" or "12x"
+    //is rejected rather than silently read as a prefix.
+    bool ParseFloatToken(const wchar_t* const pszToken, float* const pfOut)
+    {
+        wchar_t* pEnd = nullptr;
+        const double dValue = wcstod(pszToken, &pEnd);
+        if (pEnd == pszToken || !pEnd || *pEnd != L'\0')
+        {
+            return false;
+        }
+        *pfOut = static_cast<float>(dValue);
+        return true;
     }
 
     //Stick deflection at which a non-active pad's AXIS_MOTION claims the active
@@ -209,6 +299,9 @@ namespace
 CGamepad::CGamepad()
 :m_bInitialized(false),
  m_pViewport(nullptr),
+ m_bWantGyro(false),
+ m_bWantAccel(false),
+ m_bWantTouchpad(false),
  m_iLeftStickDeadzone(3500),
  m_iRightStickDeadzone(3500),
  m_iTriggerThreshold(30),
@@ -301,6 +394,7 @@ bool CGamepad::Init(UViewport* const pViewport)
     }
 
     LoadButtonMap();
+    LoadAxisMap();
 
     //Pads already connected at startup. SDL also queues an ADDED event for
     //each of them, which ProcessEvents ignores as already-open.
@@ -313,7 +407,8 @@ bool CGamepad::Init(UViewport* const pViewport)
             SDL_Gamepad* const pPad = SDL_OpenGamepad(pIds[i]);
             if (pPad)
             {
-                m_OpenPads.push_back({ pIds[i], pPad });
+                m_OpenPads.push_back({ pIds[i], pPad, false, false });
+                ApplyPadSensors(m_OpenPads.back());
                 if (m_iActivePadId == 0)
                 {
                     m_iActivePadId = pIds[i];
@@ -639,6 +734,196 @@ void CGamepad::LoadButtonMap()
     }
 }
 
+void CGamepad::LoadAxisMap()
+{
+    assert(GConfig);
+
+    static const wchar_t* const kSection = L"DXController.GamepadAxisMap";
+
+    //Rebuilt from scratch every load. Callers flush the old entries first
+    //(Reload -> ReleaseAll), so dropping their fPrev state here can't strand a
+    //held value on a slot the new map no longer emits on.
+    m_AxisMap.clear();
+    m_bWantGyro     = false;
+    m_bWantAccel    = false;
+    m_bWantTouchpad = false;
+
+    TMultiMap<FString, FString>* const pSection = GConfig->GetSectionPrivate(kSection, FALSE, TRUE);
+    if (!pSection)
+    {
+        return; //absent section = empty map; nothing is backfilled (spec §5)
+    }
+
+    for (TMultiMap<FString, FString>::TIterator It(*pSection); It; ++It)
+    {
+        EAxisSource eSource  = EAxisSource::JoyAxis;
+        int         iJoyAxis = 0;
+        if (!ParseAxisSourceName(*It.Key(), &eSource, &iJoyAxis))
+        {
+            GLog->Logf(L"Gamepad: [DXController.GamepadAxisMap] unknown source '%s' -- ignored.", *It.Key());
+            continue;
+        }
+
+        //Value form: "<SlotName> [Scale=<f>] [Deadzone=<f>]", whitespace
+        //separated. wcstok_s writes into its input, so work on a copy.
+        wchar_t szValue[256];
+        wcsncpy_s(szValue, *It.Value(), _TRUNCATE);
+        wchar_t*       pContext = nullptr;
+        const wchar_t* pszSlot  = wcstok_s(szValue, L" \t", &pContext);
+
+        EInputKey eKey = IK_None;
+        if (!ParseEInputKeyValue(pszSlot, m_pViewport, &eKey))
+        {
+            GLog->Logf(L"Gamepad: [DXController.GamepadAxisMap] %s=%s does not name a known key -- ignored.", *It.Key(), *It.Value());
+            continue;
+        }
+        if (eKey == IK_None)
+        {
+            continue; //"None" or an empty value: the line is deliberately inert
+        }
+
+        float fScale    = 1000.0f; //suits the -1..1 sources; gyro/accel need an explicit one
+        float fDeadzone = 0.0f;
+        for (const wchar_t* pszToken = wcstok_s(nullptr, L" \t", &pContext);
+             pszToken != nullptr;
+             pszToken = wcstok_s(nullptr, L" \t", &pContext))
+        {
+            float* pfTarget = nullptr;
+            const wchar_t* pszNumber = nullptr;
+            if (_wcsnicmp(pszToken, L"Scale=", 6) == 0)
+            {
+                pfTarget  = &fScale;
+                pszNumber = pszToken + 6;
+            }
+            else if (_wcsnicmp(pszToken, L"Deadzone=", 9) == 0)
+            {
+                pfTarget  = &fDeadzone;
+                pszNumber = pszToken + 9;
+            }
+            else
+            {
+                GLog->Logf(L"Gamepad: [DXController.GamepadAxisMap] %s: unknown parameter '%s' -- ignored.", *It.Key(), pszToken);
+                continue;
+            }
+
+            float fParsed = 0.0f;
+            if (!ParseFloatToken(pszNumber, &fParsed) || (pfTarget == &fDeadzone && fParsed < 0.0f))
+            {
+                GLog->Logf(L"Gamepad: [DXController.GamepadAxisMap] %s: bad parameter '%s' -- default kept.", *It.Key(), pszToken);
+                continue;
+            }
+            *pfTarget = fParsed;
+        }
+
+        //Destination registry (spec §5, same rule as §4): the fixed
+        //stick/trigger slots, then the already-resolved button map, then the
+        //axis entries accepted from earlier lines. Later line loses.
+        if (IsReservedAxisDestination(eKey))
+        {
+            GLog->Logf(L"Gamepad: [DXController.GamepadAxisMap] %s targets a slot the stick/trigger pipeline already emits on -- ignored.", *It.Key());
+            continue;
+        }
+        bool bTaken = false;
+        for (const EInputKey eButtonKey : m_ResolvedButtonKeys)
+        {
+            if (eButtonKey == eKey)
+            {
+                bTaken = true;
+                break;
+            }
+        }
+        if (!bTaken)
+        {
+            for (const SAxisEntry& Entry : m_AxisMap)
+            {
+                if (Entry.eKey == eKey)
+                {
+                    bTaken = true;
+                    break;
+                }
+            }
+        }
+        if (bTaken)
+        {
+            GLog->Logf(L"Gamepad: [DXController.GamepadAxisMap] %s's destination is already claimed by a button or another axis entry -- ignored.", *It.Key());
+            continue;
+        }
+
+        m_AxisMap.push_back({ eSource, iJoyAxis, eKey, fScale, fDeadzone, 0.0f });
+
+        switch (eSource)
+        {
+        case EAxisSource::GyroPitch:
+        case EAxisSource::GyroYaw:
+        case EAxisSource::GyroRoll:
+            m_bWantGyro = true;
+            break;
+        case EAxisSource::AccelX:
+        case EAxisSource::AccelY:
+        case EAxisSource::AccelZ:
+            m_bWantAccel = true;
+            break;
+        case EAxisSource::TouchpadX:
+        case EAxisSource::TouchpadY:
+            m_bWantTouchpad = true;
+            break;
+        default:
+            break;
+        }
+    }
+}
+
+void CGamepad::ApplyPadSensors(SOpenPad& Pad)
+{
+    struct SensorRequest
+    {
+        SDL_SensorType eType;
+        bool           bWanted;
+        bool*          pbLogged;
+        const wchar_t* pszName;
+    };
+    const SensorRequest aRequests[] =
+    {
+        { SDL_SENSOR_GYRO,  m_bWantGyro,  &Pad.bLoggedMissingGyro,  L"gyro"  },
+        { SDL_SENSOR_ACCEL, m_bWantAccel, &Pad.bLoggedMissingAccel, L"accel" },
+    };
+
+    for (const SensorRequest& Request : aRequests)
+    {
+        if (!SDL_GamepadHasSensor(Pad.pPad, Request.eType))
+        {
+            //Logged once per pad so "why doesn't my gyro bind work" is
+            //answerable from DeusEx.log without guessing at the hardware.
+            if (Request.bWanted && !*Request.pbLogged)
+            {
+                GLog->Logf(L"Gamepad: [DXController.GamepadAxisMap] binds %s.* but pad %u has no such sensor -- those entries stay silent.",
+                    Request.pszName, Pad.iId);
+                *Request.pbLogged = true;
+            }
+            continue;
+        }
+        //Disabling when nothing is bound is the point of the demand-driven
+        //rule: an enabled sensor costs report rate (and BT battery) whether or
+        //not anything reads it.
+        if (!SDL_SetGamepadSensorEnabled(Pad.pPad, Request.eType, Request.bWanted))
+        {
+            GLog->Logf(L"Gamepad: could not %s the %s sensor on pad %u: %hs",
+                Request.bWanted ? L"enable" : L"disable", Request.pszName, Pad.iId, SDL_GetError());
+        }
+    }
+}
+
+void CGamepad::ApplyPadSensors()
+{
+    //Every open pad, not just the active one: any of them can take the active
+    //slot on the user's next input, and a sensor enabled after the fact starts
+    //cold.
+    for (SOpenPad& Pad : m_OpenPads)
+    {
+        ApplyPadSensors(Pad);
+    }
+}
+
 void CGamepad::Reload(UEngine* const pEngine, UViewport* const pViewport)
 {
     if (pViewport)
@@ -663,6 +948,8 @@ void CGamepad::Reload(UEngine* const pEngine, UViewport* const pViewport)
 
     LoadSettings();
     LoadButtonMap();
+    LoadAxisMap();
+    ApplyPadSensors();
 }
 
 void CGamepad::SampleCurve(const EStick eStick, int iCount, FOutputDevice& Ar) const
@@ -916,10 +1203,113 @@ void CGamepad::FlushHeldAxes(UEngine* const pEngine, UViewport* const pViewport)
     }
 }
 
+void CGamepad::EmitAxisMap(UEngine* const pEngine, UViewport* const pViewport,
+                           SDL_Gamepad* const pPad, bool& bOutActivity)
+{
+    if (m_AxisMap.empty())
+    {
+        return;
+    }
+
+    //Read each source once per tick rather than once per entry: three gyro
+    //axes bound to three slots is one sensor read, not three.
+    float aGyro[3]  = { 0.0f, 0.0f, 0.0f };
+    float aAccel[3] = { 0.0f, 0.0f, 0.0f };
+    if (m_bWantGyro && !SDL_GetGamepadSensorData(pPad, SDL_SENSOR_GYRO, aGyro, 3))
+    {
+        aGyro[0] = aGyro[1] = aGyro[2] = 0.0f;
+    }
+    if (m_bWantAccel && !SDL_GetGamepadSensorData(pPad, SDL_SENSOR_ACCEL, aAccel, 3))
+    {
+        aAccel[0] = aAccel[1] = aAccel[2] = 0.0f;
+    }
+
+    //Touchpad 0, finger 0. A lifted finger reads as zero, so the generic
+    //zero-edge below turns finger-up into the single 0.0 emit the contract
+    //owes the engine.
+    float fTouchX = 0.0f;
+    float fTouchY = 0.0f;
+    if (m_bWantTouchpad)
+    {
+        bool  bDown     = false;
+        float fRawX     = 0.0f;
+        float fRawY     = 0.0f;
+        float fPressure = 0.0f;
+        if (SDL_GetGamepadTouchpadFinger(pPad, 0, 0, &bDown, &fRawX, &fRawY, &fPressure) && bDown)
+        {
+            //SDL reports 0..1 with the origin at the upper left; re-center to
+            //-1..1 and negate Y so up is positive, matching the sticks.
+            fTouchX =   fRawX * 2.0f - 1.0f;
+            fTouchY = -(fRawY * 2.0f - 1.0f);
+        }
+    }
+
+    SDL_Joystick* const pJoystick = SDL_GetGamepadJoystick(pPad);
+    const int           iNumAxes  = pJoystick ? SDL_GetNumJoystickAxes(pJoystick) : 0;
+
+    for (SAxisEntry& Entry : m_AxisMap)
+    {
+        float fSource = 0.0f;
+        switch (Entry.eSource)
+        {
+        case EAxisSource::GyroPitch: fSource = aGyro[0];  break;
+        case EAxisSource::GyroYaw:   fSource = aGyro[1];  break;
+        case EAxisSource::GyroRoll:  fSource = aGyro[2];  break;
+        case EAxisSource::AccelX:    fSource = aAccel[0]; break;
+        case EAxisSource::AccelY:    fSource = aAccel[1]; break;
+        case EAxisSource::AccelZ:    fSource = aAccel[2]; break;
+        case EAxisSource::TouchpadX: fSource = fTouchX;   break;
+        case EAxisSource::TouchpadY: fSource = fTouchY;   break;
+        case EAxisSource::JoyAxis:
+            if (Entry.iJoyAxis < iNumAxes)
+            {
+                fSource = static_cast<float>(SDL_GetJoystickAxis(pJoystick, Entry.iJoyAxis)) / 32767.0f;
+            }
+            break;
+        }
+
+        //out = clamp(deadzone(source) * Scale, -1000, 1000): the deadzone is
+        //in the source's own units and applies before the scale (spec §5).
+        if (std::fabs(fSource) < Entry.fDeadzone)
+        {
+            fSource = 0.0f;
+        }
+        float fOut = fSource * Entry.fScale;
+        fOut = std::min(kAxisRange, std::max(-kAxisRange, fOut));
+
+        if (fOut != 0.0f)
+        {
+            pEngine->InputEvent(pViewport, Entry.eKey, IST_Axis, fOut);
+            if (!IsSensorAxisSource(Entry.eSource))
+            {
+                bOutActivity = true;
+            }
+        }
+        else if (Entry.fPrev != 0.0f)
+        {
+            pEngine->InputEvent(pViewport, Entry.eKey, IST_Axis, 0.0f);
+        }
+        Entry.fPrev = fOut;
+    }
+}
+
+void CGamepad::FlushAxisMap(UEngine* const pEngine, UViewport* const pViewport)
+{
+    for (SAxisEntry& Entry : m_AxisMap)
+    {
+        if (Entry.fPrev != 0.0f)
+        {
+            pEngine->InputEvent(pViewport, Entry.eKey, IST_Axis, 0.0f);
+            Entry.fPrev = 0.0f;
+        }
+    }
+}
+
 void CGamepad::ReleaseAll(UEngine* const pEngine, UViewport* const pViewport)
 {
     ReleaseHeldButtons(pEngine, pViewport);
     FlushHeldAxes(pEngine, pViewport);
+    FlushAxisMap(pEngine, pViewport);
     m_fLeftStickRawMag  = 0.0f;
     m_fRightStickRawMag = 0.0f;
 }
@@ -1004,7 +1394,8 @@ void CGamepad::ProcessEvents(UEngine* const pEngine, UViewport* const pViewport)
             SDL_Gamepad* const pPad = SDL_OpenGamepad(Event.gdevice.which);
             if (pPad)
             {
-                m_OpenPads.push_back({ Event.gdevice.which, pPad });
+                m_OpenPads.push_back({ Event.gdevice.which, pPad, false, false });
+                ApplyPadSensors(m_OpenPads.back());
                 if (m_iActivePadId == 0)
                 {
                     m_iActivePadId = Event.gdevice.which;
@@ -1133,7 +1524,12 @@ void CGamepad::Poll(UEngine* const pEngine, UViewport* const pViewport, const bo
     m_fPrevLeftTrigger  = EmitTriggerAxis(pEngine, pViewport, iLeftTrig,  m_fPrevLeftTrigger,  IK_JoyZ);
     m_fPrevRightTrigger = EmitTriggerAxis(pEngine, pViewport, iRightTrig, m_fPrevRightTrigger, IK_JoyR);
 
+    //Only the touchpad/joyaxis entries report activity here -- see EmitAxisMap.
+    bool bAxisMapActivity = false;
+    EmitAxisMap(pEngine, pViewport, pPad, bAxisMapActivity);
+
     const bool bPadActiveThisPoll =
+        bAxisMapActivity ||
         iButtonsChanged != 0 ||
         m_fPrevLeftStickX  != 0.0f || m_fPrevLeftStickY  != 0.0f ||
         m_fPrevRightStickX != 0.0f || m_fPrevRightStickY != 0.0f ||

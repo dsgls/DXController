@@ -14,6 +14,16 @@ public:
 
     enum class EStick { Left, Right };
 
+    //Source kinds a [DXController.GamepadAxisMap] line can name (spec §5).
+    //Natural units: gyro rad/s, accel m/s², touchpad and joyaxis -1..1.
+    enum class EAxisSource
+    {
+        GyroPitch, GyroYaw, GyroRoll,
+        AccelX, AccelY, AccelZ,
+        TouchpadX, TouchpadY,
+        JoyAxis
+    };
+
     struct SStickCurve
     {
         EStickCurveType eType;
@@ -35,8 +45,8 @@ public:
     // calls SDL_Init(SDL_INIT_GAMEPAD), loads an optional
     // gamecontrollerdb.txt sitting next to the exe, reads
     // [DXController.GamepadButtonMap] (layered over the compiled-in default
-    // button map -- see LoadButtonMap()), and opens every pad already
-    // connected. Stores pViewport for later EInputKey name resolution
+    // button map -- see LoadButtonMap()) and [DXController.GamepadAxisMap]
+    // (see LoadAxisMap()), and opens every pad already connected. Stores pViewport for later EInputKey name resolution
     // (Reload() re-resolves against whatever viewport it is next given). On
     // failure, logs once via GLog->Logf and returns false, leaving
     // m_bInitialized false; every other CGamepad entry point no-ops in that
@@ -79,14 +89,15 @@ public:
     void NotifyMouseActivity(int iDeltaX, int iDeltaY);
 
     // Re-reads the [DXController.ControllerSettings] section, then
-    // [DXController.GamepadButtonMap] (see LoadButtonMap()), into the
-    // in-memory state. Safe to call between Poll() invocations; the next Poll
+    // [DXController.GamepadButtonMap] (see LoadButtonMap()) and
+    // [DXController.GamepadAxisMap] (see LoadAxisMap()), into the
+    // in-memory state, and re-applies the demand-driven sensor enables. Safe to call between Poll() invocations; the next Poll
     // uses the new settings/map. Held-stick cached values are deliberately
     // preserved so live tuning doesn't produce a spurious release/zero frame
-    // -- but everything the *button* map holds is released first (see
-    // LoadButtonMap()'s comment): per-source edge tracking can't survive a
-    // map change that moves a held button to a different EInputKey slot
-    // without emitting a release for the old slot first. pEngine/pViewport
+    // -- but everything the *button* and *axis* maps hold is released/flushed
+    // first: per-source edge tracking can't survive a map change that moves a
+    // held source to a different EInputKey slot without emitting a
+    // release/zero for the old slot first. pEngine/pViewport
     // are the same as Poll()'s; either may be null (e.g. called before the
     // engine/viewport exist), in which case the release step is skipped and
     // only the in-memory settings/map are refreshed.
@@ -113,11 +124,29 @@ public:
 
 private:
     //One opened SDL gamepad. iId is the SDL_JoystickID (SDL's instance id,
-    //never 0 for a real device, so 0 doubles as "no active pad").
+    //never 0 for a real device, so 0 doubles as "no active pad"). The
+    //bLoggedMissing* flags keep the "you mapped gyro but this pad has none"
+    //diagnostic to one line per pad instead of one per reload.
     struct SOpenPad
     {
         std::uint32_t iId;
         SDL_Gamepad*  pPad;
+        bool          bLoggedMissingGyro;
+        bool          bLoggedMissingAccel;
+    };
+
+    //One resolved [DXController.GamepadAxisMap] line. fDeadzone is in the
+    //source's natural units and applies before fScale; fPrev caches the last
+    //emitted value in -1000..1000 axis units, giving every entry its own
+    //zero-edge state.
+    struct SAxisEntry
+    {
+        EAxisSource eSource;
+        int         iJoyAxis;   //joyaxis.N index; ignored by the other sources
+        EInputKey   eKey;
+        float       fScale;
+        float       fDeadzone;
+        float       fPrev;
     };
 
     bool m_bInitialized;
@@ -134,6 +163,16 @@ private:
     //defaults layered under any ini override; sized to SDL_GAMEPAD_BUTTON_COUNT
     //there. Empty until the first successful LoadButtonMap() call.
     std::vector<EInputKey> m_ResolvedButtonKeys;
+
+    //Resolved [DXController.GamepadAxisMap] entries, in file order. Empty by
+    //default -- this section has no compiled-in entries and is not backfilled.
+    //The m_bWant* flags summarize which source kinds the map uses: they drive
+    //the demand-driven sensor enable (ApplyPadSensors) and let Poll skip
+    //reading a source nothing is bound to.
+    std::vector<SAxisEntry> m_AxisMap;
+    bool m_bWantGyro;
+    bool m_bWantAccel;
+    bool m_bWantTouchpad;
 
     //Settings (loaded by LoadSettings(); refreshed by Reload())
     int m_iLeftStickDeadzone;       //Sint16 magnitude, 0..32767
@@ -183,6 +222,19 @@ private:
     //than a bare numeric byte) are rejected until a viewport is available.
     void LoadButtonMap();
 
+    //Rebuilds m_AxisMap from [DXController.GamepadAxisMap]. Runs after
+    //LoadButtonMap(): an entry whose destination collides with a fixed
+    //stick/trigger slot, a resolved button mapping, or an earlier accepted
+    //axis entry is logged and dropped (later line loses). Invalid source
+    //names, slots and parameters are logged and ignored. No backfill.
+    void LoadAxisMap();
+
+    //Enables SDL_SENSOR_GYRO/ACCEL on the pad exactly when the axis map binds
+    //that source kind, and disables them again when it stops. Applied to every
+    //open pad (any of them may become active) on pad open and on Reload.
+    void ApplyPadSensors(SOpenPad& Pad);
+    void ApplyPadSensors();
+
     //Drains SDL's event queue: opens/closes pads on hotplug and moves the
     //active-pad selection to whichever pad the user just touched. Emits only
     //the releases/flushes that a disconnect or an active-pad change owes the
@@ -215,6 +267,20 @@ private:
     //is non-zero, then zeros the prev. Used by the focus-loss and disconnect
     //paths so scripts see a clean release rather than a stuck last value.
     void FlushHeldAxes(UEngine* pEngine, UViewport* pViewport);
+
+    //Reads each mapped source off pPad and emits it as
+    //clamp(deadzone(source) * Scale, -1000, 1000) with the same zero-edge
+    //contract the fixed axes use (spec §5). Sets bOutActivity when a
+    //non-sensor entry emits a non-zero value -- gyro/accel are deliberately
+    //excluded from the pad-activity signal (spec §6): a pad resting on a desk
+    //registers small rates, and counting them would hide a mousing user's
+    //cursor.
+    void EmitAxisMap(UEngine* pEngine, UViewport* pViewport, SDL_Gamepad* pPad, bool& bOutActivity);
+
+    //Emits IST_Axis(0.0f) for every axis-map entry holding a non-zero value,
+    //then zeros it -- FlushHeldAxes' counterpart for the ini-mapped sources,
+    //called from ReleaseAll (focus loss, disconnect, pad switch, reload).
+    void FlushAxisMap(UEngine* pEngine, UViewport* pViewport);
 
     //Emits IST_Axis on (eKeyX, eKeyY) after applying radial deadzone with the
     //given iDeadzone parameter (Sint16 magnitude), then applying the configured
