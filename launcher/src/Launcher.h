@@ -21,6 +21,7 @@ private:
     size_t m_iSizeX = 0;
     size_t m_iSizeY = 0;
     UViewport* m_pViewPort = nullptr; //If user closes window, viewport disappears before we get WM_QUIT
+    UEngine* m_pEngine = nullptr; //Set once in the constructor; used by Exec() (GamepadReload) which has no other route to it
     bool m_bPrevInMenu = false;
     bool m_bPrevHasFocus = false;
     bool m_bInBorderlessFullscreenWindow = false;

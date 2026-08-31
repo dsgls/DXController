@@ -11,10 +11,11 @@ namespace
         EInputKey         eKey;
     };
 
-    //Compiled-in default button map. The snapshot mask uses one bit per entry
-    //(bit i = kButtonMap[i]), so order is load-bearing only in that it must
-    //stay stable within a run -- the engine slot is what users bind.
-    //SDL_GAMEPAD_BUTTON_GUIDE and MISC2..6 are deliberately unmapped.
+    //Compiled-in default button map -- the base layer LoadButtonMap() resolves
+    //[DXController.GamepadButtonMap] ini overrides onto. The snapshot mask
+    //(see Poll()) indexes by SDL_GamepadButton value, not by position in this
+    //table. SDL_GAMEPAD_BUTTON_GUIDE and MISC2..6 are deliberately unmapped
+    //by default (reachable via the ini map).
     constexpr ButtonMapEntry kButtonMap[] =
     {
         { SDL_GAMEPAD_BUTTON_SOUTH,          IK_Joy1        },
@@ -39,6 +40,74 @@ namespace
         { SDL_GAMEPAD_BUTTON_DPAD_RIGHT,     IK_JoyPovRight },
     };
     static_assert(ARRAY_COUNT(kButtonMap) <= 32, "button mask is a Uint32");
+
+    //The snapshot mask (Poll()) and m_ResolvedButtonKeys are both indexed by
+    //SDL_GamepadButton value directly, so the full enum -- not just the
+    //compiled defaults above -- must fit in the Uint32 mask.
+    static_assert(SDL_GAMEPAD_BUTTON_COUNT <= 32, "button mask is a Uint32");
+
+    //Slots the fixed axis pipeline already emits on (EmitStickAxes/
+    //EmitTriggerAxis -- see Poll()). A [DXController.GamepadButtonMap] entry
+    //targeting one of these is rejected: per-source edge tracking can't share
+    //a destination slot without breaking the press/release and zero-edge
+    //contracts. The §5 axis map (T5) will extend this check with its own
+    //registered destinations once it exists.
+    bool IsReservedAxisDestination(const EInputKey eKey)
+    {
+        return eKey == IK_JoyX || eKey == IK_JoyY ||
+               eKey == IK_JoyZ || eKey == IK_JoyR ||
+               eKey == IK_JoyU || eKey == IK_JoyV;
+    }
+
+    //SDL's button/key-name vocabulary is ASCII, so a small stack buffer always
+    //fits in practice; a name that somehow doesn't fit just fails to resolve
+    //below rather than corrupting anything. Returns false if the conversion
+    //failed (e.g. buffer too small).
+    bool NarrowFromWide(const wchar_t* const pszWide, char* const pszOut, const int iOutSize)
+    {
+        return WideCharToMultiByte(CP_UTF8, 0, pszWide, -1, pszOut, iOutSize, NULL, NULL) != 0;
+    }
+
+    //Inverse of NarrowFromWide, for spelling SDL's button-name strings back
+    //into the ini during backfill.
+    void WideFromNarrow(const char* const pszNarrow, wchar_t* const pszOut, const int iOutSize)
+    {
+        MultiByteToWideChar(CP_UTF8, 0, pszNarrow, -1, pszOut, iOutSize);
+    }
+
+    //Parses a [DXController.GamepadButtonMap] value: "None"/empty (unmapped),
+    //an EInputKey name without the "IK_" prefix (resolved via
+    //pViewport->Input->FindKeyName() -- the same table [Extension.InputExt]
+    //binding names resolve against; pViewport may be null if Init()/Reload()
+    //hasn't been given one yet, in which case name lookup is skipped and only
+    //the numeric fallback below can succeed), or a bare numeric byte value as
+    //a fallback spelling. Returns false (leaving *peOutKey untouched) if
+    //pszValue matches none of these.
+    bool ParseEInputKeyValue(const wchar_t* const pszValue, UViewport* const pViewport, EInputKey* const peOutKey)
+    {
+        if (!pszValue || pszValue[0] == L'\0' || _wcsicmp(pszValue, L"None") == 0)
+        {
+            *peOutKey = IK_None;
+            return true;
+        }
+        if (pViewport && pViewport->Input)
+        {
+            EInputKey eKey;
+            if (pViewport->Input->FindKeyName(pszValue, eKey))
+            {
+                *peOutKey = eKey;
+                return true;
+            }
+        }
+        wchar_t* pEnd = nullptr;
+        const long iVal = wcstol(pszValue, &pEnd, 10);
+        if (pEnd != pszValue && pEnd && *pEnd == L'\0' && iVal >= 0 && iVal < IK_MAX)
+        {
+            *peOutKey = static_cast<EInputKey>(iVal);
+            return true;
+        }
+        return false;
+    }
 
     //Stick deflection at which a non-active pad's AXIS_MOTION claims the active
     //slot: ~25%, deliberately coarser than the emission deadzones so a resting
@@ -139,6 +208,7 @@ namespace
 
 CGamepad::CGamepad()
 :m_bInitialized(false),
+ m_pViewport(nullptr),
  m_iLeftStickDeadzone(3500),
  m_iRightStickDeadzone(3500),
  m_iTriggerThreshold(30),
@@ -181,8 +251,10 @@ CGamepad::~CGamepad()
     }
 }
 
-bool CGamepad::Init(UViewport* /*pViewport*/)
+bool CGamepad::Init(UViewport* const pViewport)
 {
+    m_pViewport = pViewport;
+
     //Probe for the delay-loaded SDL3.dll before making any SDL call, so a
     //machine without it degrades to gamepad-less instead of failing to
     //start. Keep the handle, never FreeLibrary it -- the delay-load thunks
@@ -227,6 +299,8 @@ bool CGamepad::Init(UViewport* /*pViewport*/)
             }
         }
     }
+
+    LoadButtonMap();
 
     //Pads already connected at startup. SDL also queues an ADDED event for
     //each of them, which ProcessEvents ignores as already-open.
@@ -344,9 +418,167 @@ void CGamepad::LoadSettings()
     }
 }
 
-void CGamepad::Reload()
+void CGamepad::LoadButtonMap()
 {
+    assert(GConfig);
+
+    static const wchar_t* const kSection = L"DXController.GamepadButtonMap";
+
+    //Compiled-in defaults, indexed by SDL_GamepadButton value (guide and
+    //misc2..6 resolve to IK_None here -- they have no compiled default).
+    //Kept separate from the resolved table below: backfill writes this
+    //default back for an absent ini line, not whatever another button's
+    //override happened to leave the slot as.
+    std::vector<EInputKey> DefaultKeys(SDL_GAMEPAD_BUTTON_COUNT, IK_None);
+    for (const ButtonMapEntry& Entry : kButtonMap)
+    {
+        DefaultKeys[Entry.eButton] = Entry.eKey;
+    }
+
+    std::vector<EInputKey> ResolvedKeys = DefaultKeys;
+
+    //Tracks which EInputKey slots are already claimed -- by a surviving
+    //default or by an ini line processed earlier in file order -- so a later
+    //line targeting an occupied slot is rejected rather than silently
+    //stealing it. Sized to IK_MAX; EInputKey values are bytes.
+    std::vector<bool> Occupied(IK_MAX, false);
+    for (const EInputKey eKey : ResolvedKeys)
+    {
+        if (eKey != IK_None)
+        {
+            Occupied[eKey] = true;
+        }
+    }
+
+    TMultiMap<FString, FString>* const pSection = GConfig->GetSectionPrivate(kSection, FALSE, TRUE);
+    if (pSection)
+    {
+        //Duplicate ini lines for the same key land as separate pairs in file
+        //order -- iterate, don't Find, so later lines can override earlier ones.
+        for (TMultiMap<FString, FString>::TIterator It(*pSection); It; ++It)
+        {
+            char szKeyUtf8[64];
+            if (!NarrowFromWide(*It.Key(), szKeyUtf8, static_cast<int>(sizeof(szKeyUtf8))))
+            {
+                GLog->Logf(L"Gamepad: [DXController.GamepadButtonMap] key '%s' is not representable -- ignored.", *It.Key());
+                continue;
+            }
+            const SDL_GamepadButton eButton = SDL_GetGamepadButtonFromString(szKeyUtf8);
+            if (eButton == SDL_GAMEPAD_BUTTON_INVALID)
+            {
+                GLog->Logf(L"Gamepad: [DXController.GamepadButtonMap] unknown button name '%s' -- ignored.", *It.Key());
+                continue;
+            }
+
+            EInputKey eNewKey;
+            if (!ParseEInputKeyValue(*It.Value(), m_pViewport, &eNewKey))
+            {
+                GLog->Logf(L"Gamepad: [DXController.GamepadButtonMap] %s=%s does not name a known key -- ignored.", *It.Key(), *It.Value());
+                continue;
+            }
+
+            const EInputKey eOldKey = ResolvedKeys[eButton];
+            if (eNewKey != IK_None && eNewKey != eOldKey)
+            {
+                if (IsReservedAxisDestination(eNewKey))
+                {
+                    GLog->Logf(L"Gamepad: [DXController.GamepadButtonMap] %s=%s targets a slot the axis pipeline already emits on -- ignored.", *It.Key(), *It.Value());
+                    continue;
+                }
+                if (Occupied[eNewKey])
+                {
+                    GLog->Logf(L"Gamepad: [DXController.GamepadButtonMap] %s=%s duplicates another button's destination -- ignored.", *It.Key(), *It.Value());
+                    continue;
+                }
+            }
+
+            if (eOldKey != IK_None && eOldKey != eNewKey)
+            {
+                Occupied[eOldKey] = false;
+            }
+            ResolvedKeys[eButton] = eNewKey;
+            if (eNewKey != IK_None)
+            {
+                Occupied[eNewKey] = true;
+            }
+        }
+    }
+
+    m_ResolvedButtonKeys = std::move(ResolvedKeys);
+
+    //Backfill: any SDL button name absent from the section gets its compiled
+    //default written back, spelled via SDL_GetGamepadStringForButton() (key
+    //side) and Input->GetKeyName() (value side -- the same table FindKeyName
+    //resolves against, so the round trip is exact), so the ini
+    //self-documents every button name and its current slot. Same pattern as
+    //LoadSettings(): only missing keys are written, one Flush if anything was.
+    bool bAnyMissing = false;
+    for (int i = 0; i < SDL_GAMEPAD_BUTTON_COUNT; ++i)
+    {
+        const char* const pszButtonName = SDL_GetGamepadStringForButton(static_cast<SDL_GamepadButton>(i));
+        if (!pszButtonName)
+        {
+            continue;
+        }
+        wchar_t szButtonNameWide[64];
+        WideFromNarrow(pszButtonName, szButtonNameWide, static_cast<int>(ARRAY_COUNT(szButtonNameWide)));
+
+        wchar_t szExisting[64];
+        if (GConfig->GetString(kSection, szButtonNameWide, szExisting, static_cast<INT>(ARRAY_COUNT(szExisting))))
+        {
+            continue; //already present -- present-but-invalid lines are left alone, not rewritten
+        }
+
+        const EInputKey eDefaultKey = DefaultKeys[i];
+        wchar_t szValueWide[64] = L"None";
+        if (eDefaultKey != IK_None)
+        {
+            const TCHAR* const pszKeyName = (m_pViewport && m_pViewport->Input) ? m_pViewport->Input->GetKeyName(eDefaultKey) : nullptr;
+            if (pszKeyName && pszKeyName[0] != L'\0')
+            {
+                wcscpy_s(szValueWide, pszKeyName);
+            }
+            else
+            {
+                //No viewport yet, or the engine has no name for this key:
+                //fall back to the numeric spelling ParseEInputKeyValue also
+                //accepts, so the backfilled line still round-trips.
+                _snwprintf_s(szValueWide, _TRUNCATE, L"%d", static_cast<int>(eDefaultKey));
+            }
+        }
+        GConfig->SetString(kSection, szButtonNameWide, szValueWide);
+        bAnyMissing = true;
+    }
+    if (bAnyMissing)
+    {
+        GConfig->Flush(FALSE);
+    }
+}
+
+void CGamepad::Reload(UEngine* const pEngine, UViewport* const pViewport)
+{
+    if (pViewport)
+    {
+        m_pViewport = pViewport;
+    }
+
+    //Release/flush everything held under the OLD button map before rebuilding
+    //it below -- m_iPrevButtons/m_fPrev* are per-source (per SDL button/axis),
+    //but EmitButtonChanges/ReleaseHeldButtons translate a held source to an
+    //EInputKey via m_ResolvedButtonKeys, which is about to change. Without
+    //this, a button held across a reload that moves it to a new slot would
+    //leave the old slot's Press with no matching Release, and never emit a
+    //Press for the new slot until the physical button is released and
+    //re-pressed. Mirrors ReleaseAll()'s use in the disconnect/pad-switch
+    //paths. Skipped if either pointer is null (e.g. reload requested before
+    //the engine/viewport exist) -- only the in-memory state is refreshed then.
+    if (pEngine && pViewport)
+    {
+        ReleaseAll(pEngine, pViewport);
+    }
+
     LoadSettings();
+    LoadButtonMap();
 }
 
 void CGamepad::SampleCurve(const EStick eStick, int iCount, FOutputDevice& Ar) const
@@ -442,15 +674,19 @@ void CGamepad::EmitButtonChanges(UEngine* const pEngine, UViewport* const pViewp
     {
         return;
     }
-    for (size_t i = 0; i < ARRAY_COUNT(kButtonMap); ++i)
+    for (size_t i = 0; i < m_ResolvedButtonKeys.size(); ++i)
     {
         const std::uint32_t iBit = 1u << i;
         if ((iChanged & iBit) == 0)
         {
             continue;
         }
-        const EInputAction eAction = (iNewButtons & iBit) ? IST_Press : IST_Release;
-        pEngine->InputEvent(pViewport, kButtonMap[i].eKey, eAction, 0.0f);
+        const EInputKey eKey = m_ResolvedButtonKeys[i];
+        if (eKey != IK_None)
+        {
+            const EInputAction eAction = (iNewButtons & iBit) ? IST_Press : IST_Release;
+            pEngine->InputEvent(pViewport, eKey, eAction, 0.0f);
+        }
     }
     m_iPrevButtons = iNewButtons;
 }
@@ -461,11 +697,16 @@ void CGamepad::ReleaseHeldButtons(UEngine* const pEngine, UViewport* const pView
     {
         return;
     }
-    for (size_t i = 0; i < ARRAY_COUNT(kButtonMap); ++i)
+    for (size_t i = 0; i < m_ResolvedButtonKeys.size(); ++i)
     {
-        if (m_iPrevButtons & (1u << i))
+        if ((m_iPrevButtons & (1u << i)) == 0)
         {
-            pEngine->InputEvent(pViewport, kButtonMap[i].eKey, IST_Release, 0.0f);
+            continue;
+        }
+        const EInputKey eKey = m_ResolvedButtonKeys[i];
+        if (eKey != IK_None)
+        {
+            pEngine->InputEvent(pViewport, eKey, IST_Release, 0.0f);
         }
     }
     m_iPrevButtons = 0;
@@ -726,7 +967,8 @@ std::uint32_t CGamepad::SupplementalButtonMask(SDL_Gamepad* const /*pPad*/) cons
     //single point where a supplemental source -- e.g. a launcher-side
     //GameInput read for Xbox Elite paddles, which stock SDL cannot report on
     //Windows -- ORs extra bits into the snapshot mask, using the same bit
-    //positions as kButtonMap. Structure only; nothing supplements today.
+    //positions as the SDL_GamepadButton enum (the snapshot mask's index, see
+    //Poll()). Structure only; nothing supplements today.
     return 0;
 }
 
@@ -755,9 +997,13 @@ void CGamepad::Poll(UEngine* const pEngine, UViewport* const pViewport, const bo
     }
 
     std::uint32_t iButtons = 0;
-    for (size_t i = 0; i < ARRAY_COUNT(kButtonMap); ++i)
+    for (size_t i = 0; i < m_ResolvedButtonKeys.size(); ++i)
     {
-        if (SDL_GetGamepadButton(pPad, kButtonMap[i].eButton))
+        if (m_ResolvedButtonKeys[i] == IK_None)
+        {
+            continue; //unmapped -- no destination to emit on, skip the SDL query too
+        }
+        if (SDL_GetGamepadButton(pPad, static_cast<SDL_GamepadButton>(i)))
         {
             iButtons |= (1u << i);
         }

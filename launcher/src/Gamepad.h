@@ -33,10 +33,14 @@ public:
     // pEngine->Init() and the viewport lookup -- SDL must not start before
     // then (see CGamepad()). Probes for the delay-loaded SDL3.dll, then
     // calls SDL_Init(SDL_INIT_GAMEPAD), loads an optional
-    // gamecontrollerdb.txt sitting next to the exe, and opens every pad
-    // already connected. On failure, logs once via GLog->Logf and returns
-    // false, leaving m_bInitialized false; every other CGamepad entry point
-    // no-ops in that case.
+    // gamecontrollerdb.txt sitting next to the exe, reads
+    // [DXController.GamepadButtonMap] (layered over the compiled-in default
+    // button map -- see LoadButtonMap()), and opens every pad already
+    // connected. Stores pViewport for later EInputKey name resolution
+    // (Reload() re-resolves against whatever viewport it is next given). On
+    // failure, logs once via GLog->Logf and returns false, leaving
+    // m_bInitialized false; every other CGamepad entry point no-ops in that
+    // case.
     bool Init(UViewport* pViewport);
 
     // Called once per engine tick (gated to FPS limit by the caller). Drains
@@ -74,11 +78,19 @@ public:
     // configured pixel threshold, the signal flips to mouse.
     void NotifyMouseActivity(int iDeltaX, int iDeltaY);
 
-    // Re-reads the [DXController.ControllerSettings] section into the in-memory
-    // settings. Safe to call between Poll() invocations; the next Poll uses
-    // the new settings. Held-stick cached values are deliberately preserved so
-    // live tuning doesn't produce a spurious release/zero frame.
-    void Reload();
+    // Re-reads the [DXController.ControllerSettings] section, then
+    // [DXController.GamepadButtonMap] (see LoadButtonMap()), into the
+    // in-memory state. Safe to call between Poll() invocations; the next Poll
+    // uses the new settings/map. Held-stick cached values are deliberately
+    // preserved so live tuning doesn't produce a spurious release/zero frame
+    // -- but everything the *button* map holds is released first (see
+    // LoadButtonMap()'s comment): per-source edge tracking can't survive a
+    // map change that moves a held button to a different EInputKey slot
+    // without emitting a release for the old slot first. pEngine/pViewport
+    // are the same as Poll()'s; either may be null (e.g. called before the
+    // engine/viewport exist), in which case the release step is skipped and
+    // only the in-memory settings/map are refreshed.
+    void Reload(UEngine* pEngine, UViewport* pViewport);
 
     // Samples the current stick curve at iCount evenly spaced points across
     // the full normalized input range [0, 1] and writes a CSV of normalized
@@ -109,6 +121,19 @@ private:
     };
 
     bool m_bInitialized;
+
+    //Stored by Init() (and refreshed by Reload() when given a non-null one)
+    //so LoadButtonMap() can resolve EInputKey names via
+    //pViewport->Input->FindKeyName() without needing the viewport threaded
+    //through every call.
+    UViewport* m_pViewport;
+
+    //Resolved [DXController.GamepadButtonMap] destinations, indexed by
+    //SDL_GamepadButton value (also the snapshot-mask bit index -- see Poll()).
+    //IK_None = unmapped. Built by LoadButtonMap() from the compiled-in
+    //defaults layered under any ini override; sized to SDL_GAMEPAD_BUTTON_COUNT
+    //there. Empty until the first successful LoadButtonMap() call.
+    std::vector<EInputKey> m_ResolvedButtonKeys;
 
     //Settings (loaded by LoadSettings(); refreshed by Reload())
     int m_iLeftStickDeadzone;       //Sint16 magnitude, 0..32767
@@ -148,6 +173,15 @@ private:
     //corresponding members and clamps the curve parameters into their
     //valid ranges. Called from the constructor and from Reload().
     void LoadSettings();
+
+    //Builds m_ResolvedButtonKeys from the compiled-in default button map (see
+    //kButtonMap in Gamepad.cpp) layered under [DXController.GamepadButtonMap]
+    //overrides, then backfills the ini section with any SDL button name it
+    //didn't already contain (spec sec4). Called from Init() and Reload();
+    //requires m_pViewport for EInputKey name resolution -- SDL button names
+    //still resolve without it, but ini lines naming a key by name (rather
+    //than a bare numeric byte) are rejected until a viewport is available.
+    void LoadButtonMap();
 
     //Drains SDL's event queue: opens/closes pads on hotplug and moves the
     //active-pad selection to whichever pad the user just touched. Emits only

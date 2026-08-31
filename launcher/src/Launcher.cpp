@@ -192,6 +192,7 @@ CLauncher::CLauncher()
         {
             GError->Log(L"Engine initialization failed.");
         }
+        m_pEngine = pEngine;
 
         pEngine->Init();
 
@@ -622,8 +623,8 @@ UBOOL CLauncher::Exec(const TCHAR * Cmd, FOutputDevice & Ar)
     }
     else if (ParseCommand(&Cmd, TEXT("GamepadReload")))
     {
-        m_Gamepad.Reload();
-        Ar.Logf(TEXT("Gamepad: settings reloaded from [DXController.ControllerSettings]"));
+        m_Gamepad.Reload(m_pEngine, m_pViewPort);
+        Ar.Logf(TEXT("Gamepad: settings reloaded from [DXController.ControllerSettings] and [DXController.GamepadButtonMap]"));
         return TRUE;
     }
     else if (ParseCommand(&Cmd, TEXT("GamepadSampleCurve")))
