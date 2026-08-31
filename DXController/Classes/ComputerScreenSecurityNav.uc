@@ -339,6 +339,9 @@ function OnTick(float deltaSeconds)
 
     dYaw   = (rx / 1000.0) * panSpeed * deltaSeconds;
     dPitch = (ry / 1000.0) * panSpeed * deltaSeconds;
+    // This is a look view, so InvertLookY applies locally (rx/yaw untouched).
+    if (Class'ControllerSettings'.Default.InvertLookY)
+        dPitch = -dPitch;
     if (dYaw != 0.0 || dPitch != 0.0)
         sec.GamepadPan(dYaw, dPitch);
 

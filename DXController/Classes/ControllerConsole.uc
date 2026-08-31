@@ -184,6 +184,21 @@ event bool KeyEvent(EInputKey Key, EInputAction Action, FLOAT Delta)
         }
         if (Key == IK_JoyU || Key == IK_JoyV)
         {
+            // Invariant: when InvertLookY is set, the launcher emits IK_JoyV
+            // already negated ("inverted stick" is the on-the-wire meaning of
+            // JoyV). This block is the single place that restores raw values
+            // for script/UI consumers (radial.UpdateStick, activeNav.
+            // HandleScroll below). Any future JoyV consumer must live inside
+            // this block, or negate locally with clear intent (as
+            // ComputerScreenSecurityNav.OnTick does for its look view).
+            // When neither consumer takes the event, control falls through to
+            // Super.KeyEvent (~line 329) unconsumed; the binding system reads
+            // the native event's own delta for aLookUp, not this local
+            // variable, so negating Delta here cannot leak into gameplay look
+            // (see ~/git/deusex-native-re/docs/input-chain.md).
+            if (Key == IK_JoyV && Class'ControllerSettings'.Default.InvertLookY)
+                Delta = -Delta;
+
             root = ControllerRootWindow(p.rootWindow);
             if (root != None && root.radial != None && root.radial.IsViewLocked())
             {

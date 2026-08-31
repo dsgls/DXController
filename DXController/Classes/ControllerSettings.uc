@@ -23,3 +23,4 @@ var config float  StickCurveSigmoidSteepnessLeft, StickCurveSigmoidSteepnessRigh
 var config float  StickCurveSigmoidMidpointLeft,  StickCurveSigmoidMidpointRight;
 var config float  StickCurveSigmoidStrengthLeft,  StickCurveSigmoidStrengthRight;
 var config float  StickScaleRight;
+var config bool   InvertLookY;
