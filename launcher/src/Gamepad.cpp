@@ -312,6 +312,7 @@ CGamepad::CGamepad()
  m_LeftStickCurve{  EStickCurveType::Power,   2.0f, 0.60f, 6.0f, 0.60f, 0.60f },
  m_RightStickCurve{ EStickCurveType::Sigmoid, 2.0f, 0.60f, 8.0f, 0.70f, 0.90f },
  m_fRightStickScale(0.6f),
+ m_bInvertLookY(0),
  m_iActivePadId(0),
  m_iPrevButtons(0),
  m_fPrevLeftStickX(0.0f),
@@ -496,6 +497,11 @@ void CGamepad::LoadSettings()
     bool bMissScaleRight          = !GConfig->GetFloat(kSection, L"StickScaleRight",                 m_fRightStickScale);
     m_fRightStickScale = std::min(1.0f, std::max(0.1f, m_fRightStickScale));
 
+    //Gameplay-look Y inversion; negates the raw right-stick Y sample at the
+    //EmitStickAxes call site in Poll(). See development.md's input-chain
+    //axis table (IK_JoyV footnote) for the launcher/script split.
+    bool bMissInvertLookY         = !GConfig->GetBool(kSection, L"InvertLookY",                      m_bInvertLookY);
+
     auto ClampCurve = [](SStickCurve& Curve)
     {
         Curve.fPower        = std::min(10.0f,  std::max(0.1f,  Curve.fPower));
@@ -531,6 +537,7 @@ void CGamepad::LoadSettings()
     if (bMissSigStrengthLeft)  { GConfig->SetFloat(kSection, L"StickCurveSigmoidStrengthLeft",            m_LeftStickCurve.fSigStrength);     bAnyMissing = true; }
     if (bMissSigStrengthRight) { GConfig->SetFloat(kSection, L"StickCurveSigmoidStrengthRight",           m_RightStickCurve.fSigStrength);    bAnyMissing = true; }
     if (bMissScaleRight)       { GConfig->SetFloat(kSection, L"StickScaleRight",                          m_fRightStickScale);                bAnyMissing = true; }
+    if (bMissInvertLookY)      { GConfig->SetBool(kSection,  L"InvertLookY",                              m_bInvertLookY);                     bAnyMissing = true; }
 
     if (bAnyMissing)
     {
@@ -1620,8 +1627,16 @@ void CGamepad::Poll(UEngine* const pEngine, UViewport* const pViewport, const bo
                   m_LeftStickCurve, 1.0f,
                   IK_JoyX, IK_JoyY,
                   m_fPrevLeftStickX, m_fPrevLeftStickY);
+
+    //InvertLookY negates the raw Y here rather than the emitted output: the
+    //curve pipeline shapes magnitude (radially symmetric), so negating raw is
+    //equivalent to negating the result, and it keeps fPrevRightStickY's
+    //non-zero -> zero edge detection consistent with what EmitStickAxes just
+    //emitted. iRightY is already clamped to [-32767, 32767] (NegateStickY),
+    //so this negation cannot overflow.
+    const int iRightYForEmit = m_bInvertLookY ? -iRightY : iRightY;
     EmitStickAxes(pEngine, pViewport,
-                  iRightX, iRightY, m_iRightStickDeadzone,
+                  iRightX, iRightYForEmit, m_iRightStickDeadzone,
                   m_RightStickCurve, m_fRightStickScale,
                   IK_JoyU, IK_JoyV,
                   m_fPrevRightStickX, m_fPrevRightStickY);

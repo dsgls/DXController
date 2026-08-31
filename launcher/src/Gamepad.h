@@ -200,6 +200,7 @@ private:
     SStickCurve m_LeftStickCurve;   //response curve applied to post-deadzone left-stick magnitude
     SStickCurve m_RightStickCurve;  //response curve applied to post-deadzone right-stick magnitude
     float m_fRightStickScale;       //post-curve output scale for the right stick, 0.10..1.00; 1.0 = full axis range
+    UBOOL m_bInvertLookY;           //negates the emitted IK_JoyV so gameplay look inverts; UBOOL for GConfig->GetBool
 
     //Runtime state
     std::vector<SOpenPad> m_OpenPads;

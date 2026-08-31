@@ -263,7 +263,7 @@ axes below are fixed, not ini-mapped.
 | Left trigger                 | `IK_JoyZ`             | 0xE2        | `IST_Axis`      |
 | Right trigger                | `IK_JoyR`             | 0xE3        | `IST_Axis`      |
 | Right stick X                | `IK_JoyU`             | 0xE8        | `IST_Axis`      |
-| Right stick Y                | `IK_JoyV`             | 0xE9        | `IST_Axis`      |
+| Right stick Y                | `IK_JoyV`‡            | 0xE9        | `IST_Axis`      |
 | South (A)                    | `IK_Joy1`             | 0xC8        | Press / Release |
 | East (B)                     | `IK_Joy2`             | 0xC9        | Press / Release |
 | West (X)                     | `IK_Joy3`             | 0xCA        | Press / Release |
@@ -287,6 +287,11 @@ axes below are fixed, not ini-mapped.
 
 † Modern names from `Actor.uc`. In `Console`-scope these slots are
 `IK_UnknownF0..F3` (Console.uc's stale enum) — see UnrealScript quirks.
+
+‡ When `InvertLookY` is set, the launcher emits this axis negated
+(`Gamepad.cpp`, right-stick `EmitStickAxes` call). `ControllerConsole`
+restores raw values for UI consumers (radial stick, text/camera
+scroll); gameplay look sees the negated value via the engine binding.
 
 `Guide` and `Misc2`-`Misc6` are unmapped by default (OS-owned / rare
 macro keys); reachable via the ini map, like any other slot.
