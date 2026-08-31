@@ -29,7 +29,7 @@ Two sibling working trees, both read-only references:
 
 | Component                          | Where                       | Modifiable? |
 |------------------------------------|-----------------------------|-------------|
-| `DeusEx.exe` launcher / XInput shim / WinDrv runtime patches | `launcher/` | yes |
+| `DeusEx.exe` launcher / gamepad backend (SDL3, vendored via `launcher/fetch-sdl3.sh`) / WinDrv runtime patches | `launcher/` | yes |
 | `DXController.u` (the mod)         | `DXController/Classes/`     | yes |
 | Edits to `DeusEx.u` classes        | `DeusEx/Classes/` (overlay) | yes (rebuilt) |
 | `Engine.dll`, `Core.dll`, `Extension.dll`, `WinDrv.dll`, `Render.dll`, stock `.u` packages | stock game install | no (in-memory patches only, via the launcher) |
@@ -82,8 +82,8 @@ Y then waits for Z then frobs the fizz" is useless verbosity.
 
 ## Flag, don't compensate
 
-**User-owned native code:** the launcher executable and its XInput shim
-in `launcher/`, plus the runtime byte patches it applies to
+**User-owned native code:** the launcher executable and its gamepad
+backend in `launcher/`, plus the runtime byte patches it applies to
 `WinDrv.dll` at startup (`launcher/src/WinDrvPatch.cpp`). Fixed at the
 source.
 

@@ -3,7 +3,7 @@
 Script-side mod for the DXController project, plus the launcher source it
 ships alongside. Builds `DXController.u` (the mod), an overlay on stock
 `DeusEx.u` (a few hooks into base-game classes), and `DeusEx.exe` (the
-launcher with the XInput shim).
+launcher with the SDL3-based gamepad backend).
 
 ## Repo layout
 
@@ -165,10 +165,10 @@ weapons mid-menu.
 ## Input flow
 
 ```
-[OS / XInput pad]
+[OS / gamepad, via SDL3]
        │
        ▼
-[XInput shim in launcher/src/XInput.cpp]
+[Gamepad backend in launcher/src/Gamepad.cpp]
    per-tick poll, deadzone + response curve, edge dedup,
    focus-loss synthetic releases
        │  IK_Joy*/IK_JoyPov*/IK_JoyX/Y/U/V/Z/R + IST_Press/Release/Axis
@@ -193,10 +193,11 @@ overrides exist — see [State-scoped dispatch](#state-scoped-dispatch).
 ### Native input pipeline
 
 `UseJoystick=False` in `[Engine.Engine]`. This disables `WinDrv.dll`'s
-legacy `joyGetPosEx` poll path entirely — the XInput shim is the *only*
-source of joystick events. Don't re-enable `UseJoystick`: the legacy
-path has known bugs (see `../deusex-native-re/docs/windrv-input.md`)
-and would race the shim for the same `IK_Joy*` slots.
+legacy `joyGetPosEx` poll path entirely — the launcher's gamepad
+backend is the *only* source of joystick events. Don't re-enable
+`UseJoystick`: the legacy path has known bugs (see
+`../deusex-native-re/docs/windrv-input.md`) and would race the backend
+for the same `IK_Joy*` slots.
 
 The launcher also patches `WinDrv.dll` at startup (see
 `launcher/src/WinDrvPatch.cpp` and `windrv-input.md`) to fix two
@@ -248,40 +249,96 @@ routes typing into `rootWindow.Key` for UI text controls.
 every frame regardless of UI state. What can make axes appear dead in
 script is the `state Menuing` short-circuit covered above.
 
-### XInput → UE event mapping
+### SDL → UE event mapping
 
-The C++ shim (`launcher/src/XInput.cpp`, see `kButtonMap`) feeds these
-`EInputKey` slots into `Console.KeyEvent`:
+`launcher/src/Gamepad.cpp` (see `kButtonMap`) feeds these `EInputKey`
+slots into `Console.KeyEvent`. Buttons beyond the original 14 + D-pad
+are ini-remappable via `[DXController.GamepadButtonMap]` (README); the
+axes below are fixed, not ini-mapped.
 
-| XInput source              | UE `EInputKey`        | Byte        | Action          |
-|----------------------------|-----------------------|-------------|-----------------|
-| Left stick X               | `IK_JoyX`             | 0xE0        | `IST_Axis`      |
-| Left stick Y               | `IK_JoyY`             | 0xE1        | `IST_Axis`      |
-| Left trigger               | `IK_JoyZ`             | 0xE2        | `IST_Axis`      |
-| Right trigger              | `IK_JoyR`             | 0xE3        | `IST_Axis`      |
-| Right stick X              | `IK_JoyU`             | 0xE8        | `IST_Axis`      |
-| Right stick Y              | `IK_JoyV`             | 0xE9        | `IST_Axis`      |
-| A button                   | `IK_Joy1`             | 0xC8        | Press / Release |
-| B button                   | `IK_Joy2`             | 0xC9        | Press / Release |
-| X button                   | `IK_Joy3`             | 0xCA        | Press / Release |
-| Y button                   | `IK_Joy4`             | 0xCB        | Press / Release |
-| Left shoulder (LB)         | `IK_Joy5`             | 0xCC        | Press / Release |
-| Right shoulder (RB)        | `IK_Joy6`             | 0xCD        | Press / Release |
-| Back button                | `IK_Joy7`             | 0xCE        | Press / Release |
-| Start button               | `IK_Joy8`             | 0xCF        | Press / Release |
-| Left stick click           | `IK_Joy9`             | 0xD0        | Press / Release |
-| Right stick click          | `IK_Joy10`            | 0xD1        | Press / Release |
-| D-pad Up                   | `IK_JoyPovUp`†        | 0xF0        | Press / Release |
-| D-pad Down                 | `IK_JoyPovDown`†      | 0xF1        | Press / Release |
-| D-pad Left                 | `IK_JoyPovLeft`†      | 0xF2        | Press / Release |
-| D-pad Right                | `IK_JoyPovRight`†     | 0xF3        | Press / Release |
+| SDL source                  | UE `EInputKey`        | Byte        | Action          |
+|------------------------------|-----------------------|-------------|-----------------|
+| Left stick X                 | `IK_JoyX`             | 0xE0        | `IST_Axis`      |
+| Left stick Y                 | `IK_JoyY`             | 0xE1        | `IST_Axis`      |
+| Left trigger                 | `IK_JoyZ`             | 0xE2        | `IST_Axis`      |
+| Right trigger                | `IK_JoyR`             | 0xE3        | `IST_Axis`      |
+| Right stick X                | `IK_JoyU`             | 0xE8        | `IST_Axis`      |
+| Right stick Y                | `IK_JoyV`             | 0xE9        | `IST_Axis`      |
+| South (A)                    | `IK_Joy1`             | 0xC8        | Press / Release |
+| East (B)                     | `IK_Joy2`             | 0xC9        | Press / Release |
+| West (X)                     | `IK_Joy3`             | 0xCA        | Press / Release |
+| North (Y)                    | `IK_Joy4`             | 0xCB        | Press / Release |
+| Left shoulder (LB)           | `IK_Joy5`             | 0xCC        | Press / Release |
+| Right shoulder (RB)          | `IK_Joy6`             | 0xCD        | Press / Release |
+| Back                         | `IK_Joy7`             | 0xCE        | Press / Release |
+| Start                        | `IK_Joy8`             | 0xCF        | Press / Release |
+| Left stick click             | `IK_Joy9`             | 0xD0        | Press / Release |
+| Right stick click            | `IK_Joy10`            | 0xD1        | Press / Release |
+| Paddle1 (upper right)        | `IK_Joy11`            | 0xD2        | Press / Release |
+| Paddle2 (upper left)         | `IK_Joy12`            | 0xD3        | Press / Release |
+| Paddle3 (lower right)        | `IK_Joy13`            | 0xD4        | Press / Release |
+| Paddle4 (lower left)         | `IK_Joy14`            | 0xD5        | Press / Release |
+| Misc1                        | `IK_Joy15`            | 0xD6        | Press / Release |
+| Touchpad click                | `IK_Joy16`            | 0xD7        | Press / Release |
+| D-pad Up                     | `IK_JoyPovUp`†        | 0xF0        | Press / Release |
+| D-pad Down                   | `IK_JoyPovDown`†      | 0xF1        | Press / Release |
+| D-pad Left                   | `IK_JoyPovLeft`†      | 0xF2        | Press / Release |
+| D-pad Right                  | `IK_JoyPovRight`†     | 0xF3        | Press / Release |
 
 † Modern names from `Actor.uc`. In `Console`-scope these slots are
 `IK_UnknownF0..F3` (Console.uc's stale enum) — see UnrealScript quirks.
 
-Active-controller selection is also shim-side: whichever XInput slot
-most recently produced input becomes the active slot, and only its
-events are forwarded.
+`Guide` and `Misc2`-`Misc6` are unmapped by default (OS-owned / rare
+macro keys); reachable via the ini map, like any other slot.
+`[DXController.GamepadAxisMap]` (README) adds further analog sources —
+gyro rate, accelerometer, touchpad position, raw joystick axes — onto
+spare `UnknownXX` slots; see the scope caveat below.
+
+Active-pad selection: the first pad opened becomes active; a button
+press or a stick push past a fixed switch threshold from a different
+pad hands it the active slot (`CGamepad::ProcessEvents`,
+`kActiveSwitchAxisValue`). Trigger motion never switches the active
+pad — some pads report a non-zero trigger floor, and SDL delivers
+initial axis-state events right after a pad opens, so an idle pad must
+not steal the slot. Only the active pad's events are forwarded;
+switching first releases/flushes everything the outgoing pad held.
+
+### `[DXController.GamepadButtonMap]`
+
+Layers ini overrides onto the compiled-in default button map
+(`LoadButtonMap()`): a line names an SDL button (resolved via
+`SDL_GetGamepadButtonFromString`) and an `EInputKey` destination
+(resolved via `pViewport->Input->FindKeyName()`, same table
+`[Extension.InputExt]` bindings use). Applied as defaults-then-overrides,
+then validated on the *final* resolved map — a destination collision
+(with another button, a fixed axis slot, or an axis-map destination)
+is rejected and logged, and the losing button reverts to its default
+or to `None`. This is what makes a two-line swap onto an occupied slot
+valid: the displaced button's own remap line removes it from the
+default slot before validation runs. Backfills unset SDL button names
+on load, like `[DXController.ControllerSettings]`. User-facing format
+and worked examples are in the README.
+
+### `[DXController.GamepadAxisMap]`
+
+No compiled-in defaults — an empty map does nothing, and the section
+is never backfilled. Each line names a source (`gyro.*`, `accel.*`,
+`touchpad.*`, `joyaxis.N`) and an `EInputKey` destination with optional
+`Scale`/`Deadzone`, resolved and validated the same way as the button
+map (`LoadAxisMap()` runs after `LoadButtonMap()`, so it also rejects
+destinations the button map already claimed). `gyro.*`/`accel.*`
+sources demand-enable the corresponding SDL sensor on the active
+pad's hardware only while the map contains such an entry, and disable
+it again once the last entry referencing it is removed. See the
+README for source units, the free-slot list, and required-`Scale` /
+required-`Deadzone` pitfalls.
+
+Ini-mapped axis slots are outside the ranges the mod's script-side
+input hooks whitelist: `ControllerConsole.IsGamepadKey` covers
+`Joy1..16`/D-pad/`JoyX/Y/Z/R/U/V` only, and `state Menuing`'s axis
+override forwards only `JoyX/Y/U/V`. Sources bound through this map
+drive `[Extension.InputExt]` bindings but are invisible to the mod's
+cursor-mode logic and menu input hook.
 
 ### Axis value range: `-1000..1000`, not `-1..1`
 
@@ -296,24 +353,24 @@ Implication for script-side thresholds: scale against `-1000..1000`.
 value at all" duty; the shim's deadzone is what actually decides
 held-state.
 
-### Deadzone, response curve, edge events: all done in the shim
+### Deadzone, response curve, edge events: all done in the backend
 
-The shim already applies a configurable radial deadzone, a power-curve
-response shape (`XInputLeftStickExponent` / `XInputRightStickExponent`,
-default `2.0`), and edge-emits `IST_Axis(0.0)` exactly once when an axis
-crosses from non-zero to zero. It also synthesises releases (button
-`IST_Release` / axis `IST_Axis(0.0)`) on focus loss and controller
-disconnect.
+The gamepad backend already applies a configurable radial deadzone, a
+per-stick response curve (`StickCurveLeft`/`StickCurveRight` — Linear,
+Power, Expo, or Sigmoid, each with its own tunable parameters), and
+edge-emits `IST_Axis(0.0)` exactly once when an axis crosses from
+non-zero to zero. It also synthesises releases (button `IST_Release` /
+axis `IST_Axis(0.0)`) on focus loss and controller disconnect.
 
 - **Don't add a script-side deadzone or response curve** — re-tune the
-  shim's ini settings instead. Two stacked deadzones interact
+  backend's ini settings instead. Two stacked deadzones interact
   non-linearly.
 - **Don't add a "stuck input on alt-tab" workaround in script.** If you
-  see one, flag it as a shim/focus defect per [Flag, don't compensate](#flag-dont-compensate).
+  see one, flag it as a backend/focus defect per [Flag, don't compensate](#flag-dont-compensate).
 - **Trust the zero-edge `IST_Axis`.** When the stick re-enters the
-  deadzone the shim emits one final `IST_Axis(0.0)` and stops sending —
-  script can rely on "received `0.0` means the player let go" and clear
-  accumulators on that edge.
+  deadzone the backend emits one final `IST_Axis(0.0)` and stops
+  sending — script can rely on "received `0.0` means the player let
+  go" and clear accumulators on that edge.
 
 ### Downstream of the shim: FOV scaling and integer rotation truncation
 
@@ -351,14 +408,19 @@ code only.
 
 The launcher exposes exec commands consumed from script:
 
-- `XInputReload` — re-reads `[DXController.ControllerSettings]` and
-  re-applies clamps. Called by `MenuChoice_*` after `SaveConfig()` so
-  stick-feel changes take effect without restart.
-- `XInputSampleCurve <Left|Right> <N>` — returns N comma-separated
+- `GamepadReload` — re-reads `[DXController.ControllerSettings]`,
+  `[DXController.GamepadButtonMap]`, and `[DXController.GamepadAxisMap]`,
+  and re-applies the demand-driven sensor enables. Called by
+  `MenuChoice_*` after `SaveConfig()` so stick-feel changes take effect
+  without restart.
+- `GamepadSampleCurve <Left|Right> <N>` — returns N comma-separated
   curve outputs sampled at `x = i/(N-1)`. The settings UI uses this to
   render the curve without re-implementing the shape script-side.
-- `XInputGetRawMag` — returns `"L=<f> R=<f>"` (per-stick raw magnitude
+- `GamepadGetRawMag` — returns `"L=<f> R=<f>"` (per-stick raw magnitude
   in `[0,1]`). Polled per Tick by the preview windows.
+- `GamepadGetInfo` — returns a short token naming the active pad's
+  controller family (from `SDL_GetGamepadType`), e.g. `PS5`,
+  `XboxOne`, `SwitchPro`, `Unknown`, or `None` when no pad is active.
 
 Canonical pattern when a native runtime component owns state that
 script-side UI needs to read or react to: add exec commands on the
