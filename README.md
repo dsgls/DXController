@@ -12,6 +12,16 @@ navigation for every menu, conversation, and in-world device (keypads,
 ATMs, computers, security terminals), so the game is playable end to
 end without a mouse or keyboard.
 
+## Requirements
+
+- *Deus Ex: Game of the Year Edition* — the standard GOG or Steam release.
+- **A modern renderer** — with the game's default renderer, opening the
+  weapon/augmentation wheel typically crashes the game or renders the
+  wheels incorrectly. Install
+  [Kentie's D3D10 renderer](https://www.kentie.net/article/d3d10drv/)
+  (recommended). See [Linux and Steam Deck](#linux-and-steam-deck) for
+  alternatives if it doesn't work on your setup.
+
 ## Download
 
 Get the latest release from the
@@ -25,10 +35,6 @@ The release `.zip` contains everything you need:
 | `SDL3.dll`          | Controller backend the launcher loads (SDL3)           |
 | `DeusEx.u`          | Stock package with small controller hooks added        |
 | `DXController.u`    | The mod                                                |
-
-## Requirements
-
-*Deus Ex: Game of the Year Edition* — the standard GOG or Steam release.
 
 ## Screenshots
 
@@ -49,9 +55,12 @@ Copy `DeusEx.exe`, `SDL3.dll`, `DeusEx.u`, and `DXController.u` from the
    [`gamecontrollerdb.txt`](https://github.com/mdqinc/SDL_GameControllerDB)
    next to `DeusEx.exe`; the launcher loads it automatically if present.
 
-Install a modern renderer. I recommend [Kentie's D3D10 renderer](https://www.kentie.net/article/d3d10drv/).
-For some reason the main menu won't come up with the default one, don't
-know why. But the modern one is way better anyway.
+Install a modern renderer (see [Requirements](#requirements)) —
+[Kentie's D3D10 renderer](https://www.kentie.net/article/d3d10drv/) is
+recommended. If it doesn't work on your setup,
+[Kentie's D3D11 renderer](https://www.kentie.net/article/d3d11drv/) and
+the [enhanced OpenGL renderer](https://www.cwdohnal.com/utglr/) are
+known to work too.
 
 I highly recommend enabling "Toggle Crouch" in the control settings.
 
@@ -74,12 +83,16 @@ If you have any other mods installed, start with a fresh game install
 and install only DXController. Compatibility with other mods has not
 been tested.
 
-## Steam Deck
+## Linux and Steam Deck
 
-A user reported that the mod did not work on the Steam Deck with the
-D3D10 renderer, but was able to get it working with the
-[D3D11 renderer](https://www.kentie.net/article/d3d10drv/). They also
-needed to set proton compatibility options to "Proton Experimental".
+The mod works on Linux under Proton, and the D3D renderers run fine
+there. A Steam Deck user reported that the D3D10 renderer did not work
+for them, but the
+[D3D11 renderer](https://www.kentie.net/article/d3d11drv/) did; they
+also needed to set the Proton compatibility option to "Proton
+Experimental". The
+[enhanced OpenGL renderer](https://www.cwdohnal.com/utglr/) is another
+fallback if neither D3D renderer works.
 
 ## Controls
 
