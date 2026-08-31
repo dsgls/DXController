@@ -1,6 +1,6 @@
 #pragma once
 
-#include "XInput.h"
+#include "Gamepad.h"
 
 class CLauncher : private FExecHook
 {
@@ -24,7 +24,7 @@ private:
     bool m_bPrevInMenu = false;
     bool m_bPrevHasFocus = false;
     bool m_bInBorderlessFullscreenWindow = false;
-    CXInput m_XInput;
+    CGamepad m_Gamepad;
 
     //Settings
     float m_fFPSLimit = 120.0f; //Because GetMaxTickRate() is float

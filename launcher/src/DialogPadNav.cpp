@@ -11,8 +11,9 @@ namespace
     constexpr ULONGLONG kRepeatDelayMs    = 400;
     constexpr ULONGLONG kRepeatIntervalMs = 100;
     //Probing empty XInput slots is slow (documented multi-ms stalls), so
-    //rescan for a hotplugged pad at most once a second -- same rationale as
-    //CXInput::m_iHotplugScanMs.
+    //rescan for a hotplugged pad at most once a second. Only these pre-game
+    //dialogs still poll XInput directly; the in-game path is SDL-based
+    //(CGamepad) and gets hotplug from events.
     constexpr ULONGLONG kHotplugScanMs    = 1000;
 
     //Direction order matches SPadNavEntry::iNeighbour: up/down/left/right.

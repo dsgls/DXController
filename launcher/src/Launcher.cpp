@@ -142,7 +142,7 @@ CLauncher::CLauncher()
         }
 
         //Gamepad bindings, in User.ini. XInputExt synthesizes Joy* events from
-        //the launcher's XInput shim; UseJoystick=False above just suppresses
+        //the launcher's gamepad shim; UseJoystick=False above just suppresses
         //DirectInput's joystick enumeration so it doesn't double up.
         const wchar_t* const pszUserIni = *static_cast<FConfigCacheIni*>(GConfig)->UserIni;
         ConfigOverrides.emplace_back(L"Extension.InputExt", L"Joy1",        L"Jump",                   pszUserIni);
@@ -207,6 +207,10 @@ CLauncher::CLauncher()
                 GLog->Log(L"Unable to get viewport.");
             }
         }
+
+        //SDL starts here, not in the constructor: after the engine and viewport
+        //exist, and after the launcher/FixApp dialogs are done polling XInput.
+        m_Gamepad.Init(m_pViewPort);
 
         //Move window to launcher's monitor
         if (hMonitor != NULL && m_hWnd)
@@ -334,7 +338,7 @@ void CLauncher::MainLoop(UEngine* const pEngine)
         //is just as stale as the bitmaps until the missed keyup arrives (it never
         //does). GetAsyncKeyState is live hardware state, so on the focus rising edge
         //release any modifier the OS says is up. Injecting at UEngine::InputEvent is
-        //the same entry point the XInput shim uses for synthesized buttons; the
+        //the same entry point the gamepad shim uses for synthesized buttons; the
         //release flows Console::Key -> XInputExt::Process -> XRootWindow::Process and
         //heals all the tables consistently. A release for a key the engine never
         //thought was down is harmless (same thing WinDrv's trailer emits routinely).
@@ -361,7 +365,7 @@ void CLauncher::MainLoop(UEngine* const pEngine)
         //Scheduling jitter in polls_per_tick caused jerky right-stick look.
         if(bTickThisIteration)
         {
-            m_XInput.Poll(pEngine, m_pViewPort, bHasFocus);
+            m_Gamepad.Poll(pEngine, m_pViewPort, bHasFocus);
         }
         if(m_pViewPort)
         {
@@ -445,7 +449,7 @@ void CLauncher::MainLoop(UEngine* const pEngine)
 
             const bool bMouseInClientRect = PtInRect(&rClientScreen, CursorPos)!=0; //This makes sure resize cursor isn't hidden
             const bool bCaptured = GetCapture() == m_hWnd;
-            const bool bHideForPad = m_XInput.IsPadActive();
+            const bool bHideForPad = m_Gamepad.IsPadActive();
             if (bHideForPad || (bMouseInClientRect && (bMouseOverWindow || bCaptured))) //Want to show cursor when over preferences window when we don't have focus, but not when it's under the window if we do; force-hide while pad-active
             {
                 while(ShowCursor(FALSE) > 0); //Get rid of double mouse cursors when game doesn't clip it
@@ -483,7 +487,7 @@ void CLauncher::MainLoop(UEngine* const pEngine)
                     //OS cursor was over (menu focus steal, conversation cursor flash).
                     const int iXPos = GET_X_LPARAM(Msg.lParam);
                     const int iYPos = GET_Y_LPARAM(Msg.lParam);
-                    if (bMouseOverWindow && m_XInput.IsMouseActive()) //Because preferences window defers mousemove calls to us, somehow
+                    if (bMouseOverWindow && m_Gamepad.IsMouseActive()) //Because preferences window defers mousemove calls to us, somehow
                     {
                         //Use WM_MOUSEMOVE to control menu cursor
                         pEngine->MousePosition(m_pViewPort, 0, static_cast<float>(iXPos), static_cast<float>(iYPos));
@@ -511,10 +515,19 @@ void CLauncher::MainLoop(UEngine* const pEngine)
                     UINT rawSize = sizeof(raw);
                     GetRawInputData(reinterpret_cast<HRAWINPUT>(Msg.lParam), RID_INPUT, &raw, &rawSize, sizeof(RAWINPUTHEADER));
 
+                    //We only register for mouse usage, but SDL's joystick RawInput
+                    //driver can be turned on by hint, and then every packet lands
+                    //here too -- reading raw.data.mouse out of a HID packet would
+                    //be garbage.
+                    if (raw.header.dwType != RIM_TYPEMOUSE)
+                    {
+                        break;
+                    }
+
                     //Raw deltas are physical-motion ground truth (synthetic SetCursorPos
                     //moves never generate WM_INPUT), so this is where mouse activity is
                     //detected for the pad-vs-mouse active-source signal.
-                    m_XInput.NotifyMouseActivity(raw.data.mouse.lLastX, raw.data.mouse.lLastY);
+                    m_Gamepad.NotifyMouseActivity(raw.data.mouse.lLastX, raw.data.mouse.lLastY);
 
                     const float fDeltaX = static_cast<float>(raw.data.mouse.lLastX);
                     const float fDeltaY = static_cast<float>(raw.data.mouse.lLastY);
@@ -605,8 +618,8 @@ UBOOL CLauncher::Exec(const TCHAR * Cmd, FOutputDevice & Ar)
     }
     else if (ParseCommand(&Cmd, TEXT("XInputReload")))
     {
-        m_XInput.Reload();
-        Ar.Logf(TEXT("XInput: settings reloaded from [DXController.ControllerSettings]"));
+        m_Gamepad.Reload();
+        Ar.Logf(TEXT("Gamepad: settings reloaded from [DXController.ControllerSettings]"));
         return TRUE;
     }
     else if (ParseCommand(&Cmd, TEXT("XInputSampleCurve")))
@@ -616,18 +629,18 @@ UBOOL CLauncher::Exec(const TCHAR * Cmd, FOutputDevice & Ar)
         {
             return TRUE;
         }
-        CXInput::EStick eStick;
-        if      (_wcsicmp(szSide, L"Left")  == 0) eStick = CXInput::EStick::Left;
-        else if (_wcsicmp(szSide, L"Right") == 0) eStick = CXInput::EStick::Right;
+        CGamepad::EStick eStick;
+        if      (_wcsicmp(szSide, L"Left")  == 0) eStick = CGamepad::EStick::Left;
+        else if (_wcsicmp(szSide, L"Right") == 0) eStick = CGamepad::EStick::Right;
         else                                      return TRUE;
 
         const int iCount = appAtoi(Cmd);
-        m_XInput.SampleCurve(eStick, iCount, Ar);
+        m_Gamepad.SampleCurve(eStick, iCount, Ar);
         return TRUE;
     }
     else if (ParseCommand(&Cmd, TEXT("XInputGetRawMag")))
     {
-        m_XInput.GetRawStickMags(Ar);
+        m_Gamepad.GetRawStickMags(Ar);
         return TRUE;
     }
     else
