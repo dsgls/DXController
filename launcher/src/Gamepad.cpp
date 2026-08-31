@@ -946,6 +946,17 @@ void CGamepad::Reload(UEngine* const pEngine, UViewport* const pViewport)
         m_pViewport = pViewport;
     }
 
+    //Without SDL3.dll, Init() never ran and none of the below is safe --
+    //LoadButtonMap()/LoadAxisMap() reach SDL_GetGamepadButtonFromString() /
+    //SDL_GetGamepadStringForButton() delay-load thunks unconditionally while
+    //writing back defaults, which crashes the process on a missing module.
+    //Settings sliders in the in-game menu exec this path, so this has to be
+    //silent rather than logged-and-bail like the other guarded entry points.
+    if (!m_bInitialized)
+    {
+        return;
+    }
+
     //Release/flush everything held under the OLD button map before rebuilding
     //it below -- m_iPrevButtons/m_fPrev* are per-source (per SDL button/axis),
     //but EmitButtonChanges/ReleaseHeldButtons translate a held source to an

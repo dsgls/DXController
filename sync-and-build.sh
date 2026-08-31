@@ -141,15 +141,18 @@ fi
 # installs (stale .exe + fresh .u) hide which side broke.
 MSBUILD="$("$REPO_DIR/launcher/find-msbuild.sh")"
 if (( DRY_RUN )); then
+    echo "sync-and-build: (dry-run) would fetch SDL3 via $REPO_DIR/launcher/fetch-sdl3.sh"
     echo "sync-and-build: (dry-run) would run msbuild via $MSBUILD"
-    echo "sync-and-build: (dry-run) would install DeusEx.exe + DeusEx.pdb to $BUILD_DIR/System/"
+    echo "sync-and-build: (dry-run) would install DeusEx.exe + DeusEx.pdb + SDL3.dll to $BUILD_DIR/System/"
 else
+    "$REPO_DIR/launcher/fetch-sdl3.sh"
     "$MSBUILD" "$(wslpath -w "$REPO_DIR/launcher/launcher.sln")" \
         -p:Configuration=Release -p:Platform=Win32 \
         -m -verbosity:minimal -nologo
     cp "$REPO_DIR/launcher/Release/DeusEx.exe" "$BUILD_DIR/System/DeusEx.exe"
     cp "$REPO_DIR/launcher/Release/DeusEx.pdb" "$BUILD_DIR/System/DeusEx.pdb"
-    echo "sync-and-build: installed DeusEx.exe + DeusEx.pdb to $BUILD_DIR/System/"
+    cp "$REPO_DIR/launcher/external/SDL3/lib/x86/SDL3.dll" "$BUILD_DIR/System/SDL3.dll"
+    echo "sync-and-build: installed DeusEx.exe + DeusEx.pdb + SDL3.dll to $BUILD_DIR/System/"
 fi
 
 if (( DRY_RUN )); then
