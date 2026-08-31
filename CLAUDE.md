@@ -14,7 +14,7 @@ Two sibling working trees, both read-only references:
 
 - `../deusex-scripts/` — batch-exported `.uc` files for every stock
   package. Look up stock classes here when overlaying.
-- `../deusex-native-re/` — Ghidra RE notes for the stock `System/*.dll`
+- `~/git/deusex-native-re/` — Ghidra RE notes for the stock `System/*.dll`
   binaries. The authoritative source for "but why does the engine do
   X?" questions. Most relevant docs:
   - `docs/input-chain.md` — end-to-end event flow from the OS through
