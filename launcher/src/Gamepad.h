@@ -93,6 +93,12 @@ public:
     // controller is connected or the window has lost focus.
     void GetRawStickMags(FOutputDevice& Ar) const;
 
+    // Returns a short token naming the active pad's controller family,
+    // derived from SDL_GetGamepadType() (spec §3): Xbox360, XboxOne, PS3,
+    // PS4, PS5, SwitchPro, JoyconLeft, JoyconRight, JoyconPair, GameCube,
+    // Standard, or Unknown. "None" when uninitialized or no pad is active.
+    const wchar_t* GetInfo() const;
+
 private:
     //One opened SDL gamepad. iId is the SDL_JoystickID (SDL's instance id,
     //never 0 for a real device, so 0 doubles as "no active pad").

@@ -407,6 +407,34 @@ void CGamepad::GetRawStickMags(FOutputDevice& Ar) const
     Ar.Logf(L"%s", szBuffer);
 }
 
+const wchar_t* CGamepad::GetInfo() const
+{
+    if (!m_bInitialized)
+    {
+        return L"None";
+    }
+    SDL_Gamepad* const pPad = GetActivePad();
+    if (pPad == nullptr)
+    {
+        return L"None";
+    }
+    switch (SDL_GetGamepadType(pPad))
+    {
+        case SDL_GAMEPAD_TYPE_XBOX360:                     return L"Xbox360";
+        case SDL_GAMEPAD_TYPE_XBOXONE:                     return L"XboxOne";
+        case SDL_GAMEPAD_TYPE_PS3:                          return L"PS3";
+        case SDL_GAMEPAD_TYPE_PS4:                          return L"PS4";
+        case SDL_GAMEPAD_TYPE_PS5:                          return L"PS5";
+        case SDL_GAMEPAD_TYPE_NINTENDO_SWITCH_PRO:          return L"SwitchPro";
+        case SDL_GAMEPAD_TYPE_NINTENDO_SWITCH_JOYCON_LEFT:  return L"JoyconLeft";
+        case SDL_GAMEPAD_TYPE_NINTENDO_SWITCH_JOYCON_RIGHT: return L"JoyconRight";
+        case SDL_GAMEPAD_TYPE_NINTENDO_SWITCH_JOYCON_PAIR:  return L"JoyconPair";
+        case SDL_GAMEPAD_TYPE_GAMECUBE:                     return L"GameCube";
+        case SDL_GAMEPAD_TYPE_STANDARD:                     return L"Standard";
+        default:                                            return L"Unknown";
+    }
+}
+
 void CGamepad::EmitButtonChanges(UEngine* const pEngine, UViewport* const pViewport, const std::uint32_t iNewButtons)
 {
     const std::uint32_t iChanged = iNewButtons ^ m_iPrevButtons;

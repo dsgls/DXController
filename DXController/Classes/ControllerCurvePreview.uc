@@ -3,7 +3,7 @@
 //
 // Renders, per stick: a vertical deadzone bar at x = deadzone/32767, a
 // 128-sample dot trace of the curve (queried from the launcher via
-// XInputSampleCurve), and a live input dot (polled via XInputGetRawMag).
+// GamepadSampleCurve), and a live input dot (polled via GamepadGetRawMag).
 //
 // Refresh() is called explicitly by the parent screen whenever the
 // stick's settings change. Live dot updates per Tick. No curve math
@@ -71,7 +71,7 @@ function Refresh()
         for (i = 0; i < NUM_SAMPLES; i++) samples[i] = 0.0;
         return;
     }
-    raw = pawn.ConsoleCommand("XInputSampleCurve " $ sideName $ " " $ string(NUM_SAMPLES));
+    raw = pawn.ConsoleCommand("GamepadSampleCurve " $ sideName $ " " $ string(NUM_SAMPLES));
     if (raw == "")
     {
         // Launcher doesn't support the command yet — leave samples zero.
@@ -106,7 +106,7 @@ event Tick(float dt)
 
     pawn = GetPlayerPawn();
     if (pawn == None) { liveU = 0.0; return; }
-    raw = pawn.ConsoleCommand("XInputGetRawMag");
+    raw = pawn.ConsoleCommand("GamepadGetRawMag");
     if (raw == "") { liveU = 0.0; return; }
 
     // Format: "L=0.4200 R=0.0500".

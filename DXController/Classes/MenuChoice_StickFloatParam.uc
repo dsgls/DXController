@@ -86,7 +86,7 @@ function ApplyAndReload(float newVal)
     Class'ControllerSettings'.static.StaticSaveConfig();
 
     if (player != None)
-        player.ConsoleCommand("XInputReload");
+        player.ConsoleCommand("GamepadReload");
 
     SetValue(int(newVal * 100));
     NotifyParent();

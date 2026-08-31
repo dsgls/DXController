@@ -155,6 +155,10 @@ CLauncher::CLauncher()
         ConfigOverrides.emplace_back(L"Extension.InputExt", L"Joy8",        L"ShowMainMenu",           pszUserIni);
         ConfigOverrides.emplace_back(L"Extension.InputExt", L"Joy9",        L"",                       pszUserIni);
         ConfigOverrides.emplace_back(L"Extension.InputExt", L"Joy10",       L"",                       pszUserIni);
+        ConfigOverrides.emplace_back(L"Extension.InputExt", L"Joy11",       L"",                       pszUserIni);
+        ConfigOverrides.emplace_back(L"Extension.InputExt", L"Joy12",       L"",                       pszUserIni);
+        ConfigOverrides.emplace_back(L"Extension.InputExt", L"Joy13",       L"",                       pszUserIni);
+        ConfigOverrides.emplace_back(L"Extension.InputExt", L"Joy14",       L"",                       pszUserIni);
         ConfigOverrides.emplace_back(L"Extension.InputExt", L"Joy15",       L"",                       pszUserIni);
         ConfigOverrides.emplace_back(L"Extension.InputExt", L"Joy16",       L"",                       pszUserIni);
         ConfigOverrides.emplace_back(L"Extension.InputExt", L"JoyPovUp",    L"ActivateBelt 1",         pszUserIni);
@@ -616,13 +620,13 @@ UBOOL CLauncher::Exec(const TCHAR * Cmd, FOutputDevice & Ar)
         }
         return FALSE;
     }
-    else if (ParseCommand(&Cmd, TEXT("XInputReload")))
+    else if (ParseCommand(&Cmd, TEXT("GamepadReload")))
     {
         m_Gamepad.Reload();
         Ar.Logf(TEXT("Gamepad: settings reloaded from [DXController.ControllerSettings]"));
         return TRUE;
     }
-    else if (ParseCommand(&Cmd, TEXT("XInputSampleCurve")))
+    else if (ParseCommand(&Cmd, TEXT("GamepadSampleCurve")))
     {
         wchar_t szSide[8] = {};
         if (!ParseToken(Cmd, szSide, _countof(szSide), 0))
@@ -638,9 +642,14 @@ UBOOL CLauncher::Exec(const TCHAR * Cmd, FOutputDevice & Ar)
         m_Gamepad.SampleCurve(eStick, iCount, Ar);
         return TRUE;
     }
-    else if (ParseCommand(&Cmd, TEXT("XInputGetRawMag")))
+    else if (ParseCommand(&Cmd, TEXT("GamepadGetRawMag")))
     {
         m_Gamepad.GetRawStickMags(Ar);
+        return TRUE;
+    }
+    else if (ParseCommand(&Cmd, TEXT("GamepadGetInfo")))
+    {
+        Ar.Logf(TEXT("%s"), m_Gamepad.GetInfo());
         return TRUE;
     }
     else

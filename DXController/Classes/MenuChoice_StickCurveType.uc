@@ -71,7 +71,7 @@ function ApplyAndReload(int newIdx)
     Class'ControllerSettings'.static.StaticSaveConfig();
 
     if (player != None)
-        player.ConsoleCommand("XInputReload");
+        player.ConsoleCommand("GamepadReload");
 
     SetValue(newIdx);
     NotifyParent();
