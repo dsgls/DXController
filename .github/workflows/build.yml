@@ -133,6 +133,10 @@ jobs:
       - name: Add MSBuild to PATH
         uses: microsoft/setup-msbuild@v3
 
+      - name: Fetch SDL3
+        shell: bash
+        run: launcher/fetch-sdl3.sh
+
       - name: Build launcher
         shell: pwsh
         run: |
@@ -171,6 +175,7 @@ jobs:
           Copy-Item "$env:RUNNER_TEMP\build\System\DXController.u" $stage\
           Copy-Item launcher\Release\DeusEx.exe $stage\
           Copy-Item launcher\Release\DeusEx.pdb $stage\
+          Copy-Item launcher\external\SDL3\lib\x86\SDL3.dll $stage\
 
       - name: Create release zip
         if: startsWith(github.ref, 'refs/tags/v')
