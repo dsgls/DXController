@@ -40,9 +40,13 @@ namespace
     };
     static_assert(ARRAY_COUNT(kButtonMap) <= 32, "button mask is a Uint32");
 
-    //Axis deflection at which a non-active pad's AXIS_MOTION claims the active
+    //Stick deflection at which a non-active pad's AXIS_MOTION claims the active
     //slot: ~25%, deliberately coarser than the emission deadzones so a resting
-    //stick on a second pad can't steal input.
+    //stick on a second pad can't steal input. Triggers are excluded from the
+    //switch signal entirely (see IsStickAxis): they rest at 0 and only rise,
+    //some pads have a non-zero trigger floor, and SDL delivers initial
+    //axis-state events right after SDL_OpenGamepad, so an idle or freshly
+    //plugged-in pad would otherwise steal the slot.
     constexpr int kActiveSwitchAxisValue = 8000;
 
     //Case-insensitive parse of the curve-type INI token. Returns eDefault when
@@ -113,12 +117,23 @@ namespace
         }
     }
 
-    //SDL Y axes are positive-down; the pipeline wants positive-up. Widened to
-    //int because SDL can report -32768, whose negation overflows Sint16 back
-    //to -32768 (full-down would read as full-down).
+    //SDL can report -32768, one past the positive end of the range. Clamp to
+    //-32767 so both axes are symmetric and negation can't overflow.
+    int ClampStickAxis(const int iRaw)
+    {
+        return (iRaw <= -32767) ? -32767 : iRaw;
+    }
+
+    //SDL Y axes are positive-down; the pipeline wants positive-up.
     int NegateStickY(const int iRaw)
     {
-        return (iRaw <= -32767) ? 32767 : -iRaw;
+        return -ClampStickAxis(iRaw);
+    }
+
+    bool IsStickAxis(const Uint8 iAxis)
+    {
+        return iAxis == SDL_GAMEPAD_AXIS_LEFTX  || iAxis == SDL_GAMEPAD_AXIS_LEFTY ||
+               iAxis == SDL_GAMEPAD_AXIS_RIGHTX || iAxis == SDL_GAMEPAD_AXIS_RIGHTY;
     }
 }
 
@@ -254,6 +269,10 @@ void CGamepad::LoadSettings()
     bool bMissTriggerThreshold   = !GConfig->GetInt(kSection, L"TriggerThreshold",   m_iTriggerThreshold);
     bool bMissMouseActivityPx    = !GConfig->GetInt(kSection, L"MouseActivityPx",    m_iMouseActivityPx);
     bool bMissPadActiveGraceMs   = !GConfig->GetInt(kSection, L"PadActiveGraceMs",   m_iPadActiveGraceMs);
+
+    //The threshold keeps its 0..255 meaning; out-of-range hand-edits would
+    //overflow the scale into SDL's trigger range in EmitTriggerAxis.
+    m_iTriggerThreshold = std::min(255, std::max(0, m_iTriggerThreshold));
 
     //Per-stick response curves. String token chosen so adding/removing curve
     //types in future never invalidates a hand-edited ini. Each numeric param is
@@ -660,7 +679,8 @@ void CGamepad::ProcessEvents(UEngine* const pEngine, UViewport* const pViewport)
             break;
 
         case SDL_EVENT_GAMEPAD_AXIS_MOTION:
-            if (Event.gaxis.value > kActiveSwitchAxisValue || Event.gaxis.value < -kActiveSwitchAxisValue)
+            if (IsStickAxis(Event.gaxis.axis) &&
+                (Event.gaxis.value > kActiveSwitchAxisValue || Event.gaxis.value < -kActiveSwitchAxisValue))
             {
                 SetActivePad(pEngine, pViewport, Event.gaxis.which);
             }
@@ -716,9 +736,9 @@ void CGamepad::Poll(UEngine* const pEngine, UViewport* const pViewport, const bo
     }
     iButtons |= SupplementalButtonMask(pPad);
 
-    const int iLeftX      = SDL_GetGamepadAxis(pPad, SDL_GAMEPAD_AXIS_LEFTX);
+    const int iLeftX      = ClampStickAxis(SDL_GetGamepadAxis(pPad, SDL_GAMEPAD_AXIS_LEFTX));
     const int iLeftY      = NegateStickY(SDL_GetGamepadAxis(pPad, SDL_GAMEPAD_AXIS_LEFTY));
-    const int iRightX     = SDL_GetGamepadAxis(pPad, SDL_GAMEPAD_AXIS_RIGHTX);
+    const int iRightX     = ClampStickAxis(SDL_GetGamepadAxis(pPad, SDL_GAMEPAD_AXIS_RIGHTX));
     const int iRightY     = NegateStickY(SDL_GetGamepadAxis(pPad, SDL_GAMEPAD_AXIS_RIGHTY));
     const int iLeftTrig   = SDL_GetGamepadAxis(pPad, SDL_GAMEPAD_AXIS_LEFT_TRIGGER);
     const int iRightTrig  = SDL_GetGamepadAxis(pPad, SDL_GAMEPAD_AXIS_RIGHT_TRIGGER);
