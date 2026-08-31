@@ -39,6 +39,9 @@
     <ClCompile Include="XInput.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="Gamepad.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="DialogPadNav.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -90,6 +93,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="XInput.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Gamepad.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="DialogPadNav.h">
