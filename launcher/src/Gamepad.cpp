@@ -407,7 +407,7 @@ bool CGamepad::Init(UViewport* const pViewport)
             SDL_Gamepad* const pPad = SDL_OpenGamepad(pIds[i]);
             if (pPad)
             {
-                m_OpenPads.push_back({ pIds[i], pPad, false, false });
+                m_OpenPads.push_back({ pIds[i], pPad, false, false, false });
                 ApplyPadSensors(m_OpenPads.back());
                 if (m_iActivePadId == 0)
                 {
@@ -784,6 +784,7 @@ void CGamepad::LoadAxisMap()
 
         float fScale    = 1000.0f; //suits the -1..1 sources; gyro/accel need an explicit one
         float fDeadzone = 0.0f;
+        bool  bBadLine  = false;
         for (const wchar_t* pszToken = wcstok_s(nullptr, L" \t", &pContext);
              pszToken != nullptr;
              pszToken = wcstok_s(nullptr, L" \t", &pContext))
@@ -812,7 +813,21 @@ void CGamepad::LoadAxisMap()
                 GLog->Logf(L"Gamepad: [DXController.GamepadAxisMap] %s: bad parameter '%s' -- default kept.", *It.Key(), pszToken);
                 continue;
             }
+            //NaN/Inf pass every range test above and would peg the axis (a NaN
+            //comparison is false, so the clamp in EmitAxisMap leaves -1000).
+            //Dropping the line is the safe reading of a value that has no
+            //sane substitute.
+            if (!std::isfinite(fParsed))
+            {
+                GLog->Logf(L"Gamepad: [DXController.GamepadAxisMap] %s: parameter '%s' is not a finite number -- line ignored.", *It.Key(), pszToken);
+                bBadLine = true;
+                break;
+            }
             *pfTarget = fParsed;
+        }
+        if (bBadLine)
+        {
+            continue;
         }
 
         //Destination registry (spec §5, same rule as §4): the fixed
@@ -1203,6 +1218,52 @@ void CGamepad::FlushHeldAxes(UEngine* const pEngine, UViewport* const pViewport)
     }
 }
 
+void CGamepad::ReportUnsatisfiedJoyAxes(const int iNumAxes)
+{
+    SOpenPad* pActive = nullptr;
+    for (SOpenPad& Pad : m_OpenPads)
+    {
+        if (Pad.iId == m_iActivePadId)
+        {
+            pActive = &Pad;
+            break;
+        }
+    }
+    if (!pActive || pActive->bLoggedMissingJoyAxis)
+    {
+        return;
+    }
+
+    //Collect first, log second: one line naming every index this pad can't
+    //satisfy beats one line per entry, and the flag below means a pad only
+    //ever produces this line once.
+    wchar_t szIndices[128] = {};
+    int     iWritten       = 0;
+    for (const SAxisEntry& Entry : m_AxisMap)
+    {
+        if (Entry.eSource != EAxisSource::JoyAxis || Entry.iJoyAxis < iNumAxes)
+        {
+            continue;
+        }
+        const int iCap = static_cast<int>(ARRAY_COUNT(szIndices)) - iWritten;
+        const int iN   = _snwprintf_s(szIndices + iWritten, iCap, _TRUNCATE,
+                                      (iWritten == 0) ? L"%d" : L", %d", Entry.iJoyAxis);
+        if (iN < 0)
+        {
+            break; //buffer full -- the line is already diagnostic enough
+        }
+        iWritten += iN;
+    }
+    if (iWritten == 0)
+    {
+        return; //this pad satisfies every joyaxis entry
+    }
+
+    GLog->Logf(L"Gamepad: [DXController.GamepadAxisMap] joyaxis.%s out of range -- pad %u reports %d axes; those entries stay silent.",
+        szIndices, pActive->iId, iNumAxes);
+    pActive->bLoggedMissingJoyAxis = true;
+}
+
 void CGamepad::EmitAxisMap(UEngine* const pEngine, UViewport* const pViewport,
                            SDL_Gamepad* const pPad, bool& bOutActivity)
 {
@@ -1246,6 +1307,13 @@ void CGamepad::EmitAxisMap(UEngine* const pEngine, UViewport* const pViewport,
 
     SDL_Joystick* const pJoystick = SDL_GetGamepadJoystick(pPad);
     const int           iNumAxes  = pJoystick ? SDL_GetNumJoystickAxes(pJoystick) : 0;
+
+    //A joyaxis.N past this pad's axis count reads as zero below and would
+    //otherwise stay silently inert. Diagnosed here rather than rejected at
+    //load: axis counts are per-pad, and the map outlives any one pad. Logged
+    //once per pad (they hotplug; a pad that can satisfy the entry says
+    //nothing), naming every offending index in one line.
+    ReportUnsatisfiedJoyAxes(iNumAxes);
 
     for (SAxisEntry& Entry : m_AxisMap)
     {
@@ -1394,7 +1462,7 @@ void CGamepad::ProcessEvents(UEngine* const pEngine, UViewport* const pViewport)
             SDL_Gamepad* const pPad = SDL_OpenGamepad(Event.gdevice.which);
             if (pPad)
             {
-                m_OpenPads.push_back({ Event.gdevice.which, pPad, false, false });
+                m_OpenPads.push_back({ Event.gdevice.which, pPad, false, false, false });
                 ApplyPadSensors(m_OpenPads.back());
                 if (m_iActivePadId == 0)
                 {

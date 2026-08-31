@@ -125,14 +125,16 @@ public:
 private:
     //One opened SDL gamepad. iId is the SDL_JoystickID (SDL's instance id,
     //never 0 for a real device, so 0 doubles as "no active pad"). The
-    //bLoggedMissing* flags keep the "you mapped gyro but this pad has none"
-    //diagnostic to one line per pad instead of one per reload.
+    //bLoggedMissing* flags keep the "you mapped gyro (or a joyaxis index this
+    //pad doesn't have) but this pad has none" diagnostics to one line per pad
+    //instead of one per reload -- or, for the joyaxis one, per tick.
     struct SOpenPad
     {
         std::uint32_t iId;
         SDL_Gamepad*  pPad;
         bool          bLoggedMissingGyro;
         bool          bLoggedMissingAccel;
+        bool          bLoggedMissingJoyAxis;
     };
 
     //One resolved [DXController.GamepadAxisMap] line. fDeadzone is in the
@@ -276,6 +278,12 @@ private:
     //registers small rates, and counting them would hide a mousing user's
     //cursor.
     void EmitAxisMap(UEngine* pEngine, UViewport* pViewport, SDL_Gamepad* pPad, bool& bOutActivity);
+
+    //Logs, once per pad, every joyaxis.N the active pad cannot satisfy
+    //(N >= its joystick's axis count) -- otherwise such an entry reads as a
+    //constant zero with nothing to explain it. Counterpart to the missing-
+    //sensor log in ApplyPadSensors; iNumAxes is the active pad's axis count.
+    void ReportUnsatisfiedJoyAxes(int iNumAxes);
 
     //Emits IST_Axis(0.0f) for every axis-map entry holding a non-zero value,
     //then zeros it -- FlushHeldAxes' counterpart for the ini-mapped sources,
