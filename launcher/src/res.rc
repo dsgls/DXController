@@ -168,7 +168,7 @@ BEGIN
         BLOCK "040904b0"
         BEGIN
             VALUE "CompanyName", "Davíð Steinn Geirsson"
-            VALUE "FileDescription", "Deus Ex with XInput controller support"
+            VALUE "FileDescription", "Deus Ex launcher with gamepad support"
             VALUE "FileVersion", LAUNCHER_FILEVERSION_STR
             VALUE "InternalName", "DXController"
             VALUE "LegalCopyright", "Copyright (C) 2024-2026 Davíð Steinn Geirsson, (C) 2016 Marijn Kentie"
