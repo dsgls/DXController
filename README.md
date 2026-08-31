@@ -45,22 +45,19 @@ The release `.zip` contains everything you need:
 
 ## Install
 
-Copy `DeusEx.exe`, `SDL3.dll`, `DeusEx.u`, and `DXController.u` from the
-   release `.zip` into the game's `System` folder (e.g.
+1. Copy `DeusEx.exe`, `SDL3.dll`, `DeusEx.u`, and `DXController.u` from
+   the release `.zip` into the game's `System` folder (e.g.
    `C:\GOG Games\Deus Ex GOTY\System\`), overwriting the existing
-   `DeusEx.exe` and `DeusEx.u`. `SDL3.dll` can be swapped for a newer
-   official x86 build (from [libsdl.org](https://github.com/libsdl-org/SDL/releases))
-   to pick up controller-support updates without waiting for a new
-   DXController release. If your controller isn't recognized, drop a
-   [`gamecontrollerdb.txt`](https://github.com/mdqinc/SDL_GameControllerDB)
-   next to `DeusEx.exe`; the launcher loads it automatically if present.
+   `DeusEx.exe` and `DeusEx.u`.
+2. Install a modern renderer (see [Requirements](#requirements)) —
+   [Kentie's D3D10 renderer](https://www.kentie.net/article/d3d10drv/)
+   is recommended.
 
-Install a modern renderer (see [Requirements](#requirements)) —
-[Kentie's D3D10 renderer](https://www.kentie.net/article/d3d10drv/) is
-recommended. If it doesn't work on your setup,
-[Kentie's D3D11 renderer](https://www.kentie.net/article/d3d11drv/) and
-the [enhanced OpenGL renderer](https://www.cwdohnal.com/utglr/) are
-known to work too.
+If you have any other mods installed, start with a fresh game install
+and install only DXController. Compatibility with other mods has not
+been tested.
+
+## Recommended settings
 
 I highly recommend enabling "Toggle Crouch" in the control settings.
 
@@ -78,10 +75,6 @@ whatever you bound it to.
 The mod also autosaves periodically during play. Writing each save can cause
 a brief stutter — if it bothers you, make autosaves less frequent or turn
 them off entirely in Settings → Autosave.
-
-If you have any other mods installed, start with a fresh game install
-and install only DXController. Compatibility with other mods has not
-been tested.
 
 ## Linux and Steam Deck
 
@@ -229,6 +222,17 @@ presses arriving as ordinary buttons). Paddles on DualSense Edge,
 
 The pre-game launcher and "FixApp" dialogs use the same SDL gamepad
 support as the game, so any supported controller can navigate them.
+
+## Unrecognized controllers and SDL3 updates
+
+If your controller isn't recognized, drop a
+[`gamecontrollerdb.txt`](https://github.com/mdqinc/SDL_GameControllerDB)
+next to `DeusEx.exe`; the launcher loads it automatically if present.
+
+`SDL3.dll` can be swapped for a newer official x86 build (from
+[libsdl.org](https://github.com/libsdl-org/SDL/releases)) to pick up
+controller-support updates without waiting for a new DXController
+release.
 
 ## Auto-save
 
