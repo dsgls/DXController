@@ -63,6 +63,13 @@ INT WINAPI WinMain(HINSTANCE /*hInInstance*/, HINSTANCE /*hPrevInstance*/, LPSTR
 
 CLauncher::CLauncher()
 {
+    //Starts SDL's gamepad subsystem ahead of the pre-game launcher/FixApp
+    //dialogs below, which navigate via CDialogPadNav polling SDL directly.
+    //The rest of gamepad setup (button/axis maps, opening connected pads)
+    //waits for m_Gamepad.Init() further down, after the engine and viewport
+    //exist.
+    m_Gamepad.InitSdl();
+
     if (!Misc::SetDEP(0)) //Disable DEP for process (also need NXCOMPAT=NO); needed for Galaxy.dll
     {
         GLog->Log(L"Failed to set process DEP flags.");
@@ -213,8 +220,10 @@ CLauncher::CLauncher()
             }
         }
 
-        //SDL starts here, not in the constructor: after the engine and viewport
-        //exist, and after the launcher/FixApp dialogs are done polling XInput.
+        //Button/axis maps and open-pad enumeration wait until here, after the
+        //engine and viewport exist; SDL itself was already started by
+        //m_Gamepad.InitSdl() at the top of the constructor, ahead of the
+        //launcher/FixApp dialogs.
         m_Gamepad.Init(m_pViewPort);
 
         //Move window to launcher's monitor

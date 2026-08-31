@@ -296,6 +296,8 @@ namespace
     }
 }
 
+bool CGamepad::s_bSdlAvailable = false;
+
 CGamepad::CGamepad()
 :m_bInitialized(false),
  m_pViewport(nullptr),
@@ -344,10 +346,8 @@ CGamepad::~CGamepad()
     }
 }
 
-bool CGamepad::Init(UViewport* const pViewport)
+bool CGamepad::InitSdl()
 {
-    m_pViewport = pViewport;
-
     //Probe for the delay-loaded SDL3.dll before making any SDL call, so a
     //machine without it degrades to gamepad-less instead of failing to
     //start. Keep the handle, never FreeLibrary it -- the delay-load thunks
@@ -368,7 +368,13 @@ bool CGamepad::Init(UViewport* const pViewport)
         return false;
     }
 
-    m_bInitialized = true;
+    //CDialogPadNav polls gamepads directly (SDL_UpdateGamepads()) during the
+    //pre-game dialogs, which run before Init() enables events -- leave the
+    //queue disabled until then so nothing accumulates in it unread.
+    SDL_SetGamepadEventsEnabled(false);
+
+    m_bInitialized  = true;
+    s_bSdlAvailable = true;
 
     //Optional user-supplied controller database next to the exe, for hardware
     //newer than the SDL build's built-in mappings.
@@ -392,6 +398,25 @@ bool CGamepad::Init(UViewport* const pViewport)
             }
         }
     }
+
+    return true;
+}
+
+bool CGamepad::Init(UViewport* const pViewport)
+{
+    m_pViewport = pViewport;
+
+    //InitSdl() (called from CLauncher's constructor, ahead of the pre-game
+    //dialogs) either failed or hasn't run; nothing below is safe without it.
+    if (!m_bInitialized)
+    {
+        return false;
+    }
+
+    //Dialog-phase navigation (CDialogPadNav) is done polling directly; let
+    //events start flowing so ProcessEvents' hotplug/active-pad tracking has
+    //something to drain.
+    SDL_SetGamepadEventsEnabled(true);
 
     LoadButtonMap();
     LoadAxisMap();

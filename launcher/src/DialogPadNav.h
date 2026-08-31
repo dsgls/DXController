@@ -1,5 +1,9 @@
 #pragma once
 
+#include <cstdint>
+
+struct SDL_Gamepad;
+
 //One nav-table row: a control and its four spatial neighbours, indexed by
 //CDialogPadNav's direction order up/down/left/right. 0 = no move.
 struct SPadNavEntry
@@ -8,9 +12,10 @@ struct SPadNavEntry
     int iNeighbour[4];
 };
 
-//XInput navigation for one native dialog. Create in WM_INITDIALOG, destroy in
-//WM_DESTROY, and forward WM_TIMER events carrying sm_iTimerId to OnTimer().
-//Adds pad input on top of normal mouse/keyboard handling; never replaces it.
+//SDL gamepad navigation for one native dialog. Create in WM_INITDIALOG,
+//destroy in WM_DESTROY, and forward WM_TIMER events carrying sm_iTimerId to
+//OnTimer(). Adds pad input on top of normal mouse/keyboard handling; never
+//replaces it.
 class CDialogPadNav
 {
 public:
@@ -65,11 +70,15 @@ private:
     int                 m_iHomeCtrl;
     const wchar_t*      m_pszNavigateHint;
 
-    DWORD               m_iSlot;
+    //The pad this instance itself opened via SDL_OpenGamepad (0/nullptr = none).
+    //CGamepad::Init() hasn't run yet while a dialog is up, so no pad is open
+    //on its behalf; SDL_OpenGamepad/SDL_CloseGamepad are refcounted per pad
+    //id, so this handle and whatever CGamepad opens later don't interfere.
+    std::uint32_t       m_iPadId;
+    SDL_Gamepad*        m_pPad;
     bool                m_bConnected;
     bool                m_bFocusVisualsEnabled;
     WORD                m_iPrevButtons;
-    ULONGLONG           m_iLastScanMs;
     SRepeatState        m_aRepeat[4];
 
     EMode               m_eMode;

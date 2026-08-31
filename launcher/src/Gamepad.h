@@ -39,18 +39,28 @@ public:
     CGamepad& operator=(const CGamepad&) = delete;
     ~CGamepad();
 
-    // New explicit init step, called from CLauncher's constructor after
-    // pEngine->Init() and the viewport lookup -- SDL must not start before
-    // then (see CGamepad()). Probes for the delay-loaded SDL3.dll, then
-    // calls SDL_Init(SDL_INIT_GAMEPAD), loads an optional
-    // gamecontrollerdb.txt sitting next to the exe, reads
-    // [DXController.GamepadButtonMap] (layered over the compiled-in default
-    // button map -- see LoadButtonMap()) and [DXController.GamepadAxisMap]
-    // (see LoadAxisMap()), and opens every pad already connected. Stores pViewport for later EInputKey name resolution
-    // (Reload() re-resolves against whatever viewport it is next given). On
-    // failure, logs once via GLog->Logf and returns false, leaving
-    // m_bInitialized false; every other CGamepad entry point no-ops in that
-    // case.
+    // Splits the SDL startup out of Init() so it can run before the pre-game
+    // launcher/FixApp dialogs -- CDialogPadNav polls SDL gamepads directly
+    // during those dialogs, ahead of any Init() call. Called from the top of
+    // CLauncher's constructor. Probes for the delay-loaded SDL3.dll, calls
+    // SDL_Init(SDL_INIT_GAMEPAD), and loads an optional gamecontrollerdb.txt
+    // sitting next to the exe. Leaves gamepad events disabled (Init() turns
+    // them on) so nothing accumulates in SDL's event queue during the dialog
+    // phase. On failure, logs once via GLog->Logf and returns false, leaving
+    // m_bInitialized false; every other CGamepad entry point (Init()
+    // included) no-ops in that case. IsSdlAvailable() mirrors the same flag
+    // for callers, such as CDialogPadNav, with no CGamepad instance to ask.
+    bool InitSdl();
+    static bool IsSdlAvailable() { return s_bSdlAvailable; }
+
+    // Called from CLauncher's constructor after pEngine->Init() and the
+    // viewport lookup, once the pre-game dialogs are done. Requires InitSdl()
+    // to have already succeeded (no-ops otherwise). Enables gamepad events,
+    // reads [DXController.GamepadButtonMap] (layered over the compiled-in
+    // default button map -- see LoadButtonMap()) and
+    // [DXController.GamepadAxisMap] (see LoadAxisMap()), and opens every pad
+    // already connected. Stores pViewport for later EInputKey name resolution
+    // (Reload() re-resolves against whatever viewport it is next given).
     bool Init(UViewport* pViewport);
 
     // Called once per engine tick (gated to FPS limit by the caller). Drains
@@ -152,6 +162,11 @@ private:
     };
 
     bool m_bInitialized;
+
+    //Mirrors m_bInitialized for IsSdlAvailable(): there is only ever one
+    //CGamepad instance (CLauncher's m_Gamepad), but CDialogPadNav has no
+    //reference to it, only to the class.
+    static bool s_bSdlAvailable;
 
     //Stored by Init() (and refreshed by Reload() when given a non-null one)
     //so LoadButtonMap() can resolve EInputKey names via

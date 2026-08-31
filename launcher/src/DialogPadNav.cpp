@@ -1,8 +1,9 @@
 #include "stdafx.h"
 #include "DialogPadNav.h"
+#include "Gamepad.h"
 #include "resource.h"
 
-#include <Xinput.h>
+#include <SDL3/SDL.h>
 
 namespace
 {
@@ -10,20 +11,19 @@ namespace
     //Keyboard-style auto-repeat for held d-pad directions.
     constexpr ULONGLONG kRepeatDelayMs    = 400;
     constexpr ULONGLONG kRepeatIntervalMs = 100;
-    //Probing empty XInput slots is slow (documented multi-ms stalls), so
-    //rescan for a hotplugged pad at most once a second. Only these pre-game
-    //dialogs still poll XInput directly; the in-game path is SDL-based
-    //(CGamepad) and gets hotplug from events.
-    constexpr ULONGLONG kHotplugScanMs    = 1000;
 
+    //Local bit assignments for the WORD mask ReadPad() returns -- SDL has no
+    //XInput-style bitmask to borrow, so these are arbitrary, just distinct.
     //Direction order matches SPadNavEntry::iNeighbour: up/down/left/right.
-    constexpr WORD kDirBits[4] =
-    {
-        XINPUT_GAMEPAD_DPAD_UP,
-        XINPUT_GAMEPAD_DPAD_DOWN,
-        XINPUT_GAMEPAD_DPAD_LEFT,
-        XINPUT_GAMEPAD_DPAD_RIGHT,
-    };
+    constexpr WORD kBitDpadUp    = 1 << 0;
+    constexpr WORD kBitDpadDown  = 1 << 1;
+    constexpr WORD kBitDpadLeft  = 1 << 2;
+    constexpr WORD kBitDpadRight = 1 << 3;
+    constexpr WORD kBitA         = 1 << 4;
+    constexpr WORD kBitB         = 1 << 5;
+    constexpr WORD kBitStart     = 1 << 6;
+
+    constexpr WORD kDirBits[4] = { kBitDpadUp, kBitDpadDown, kBitDpadLeft, kBitDpadRight };
 
     const wchar_t* const kEditHint  = L"Up/Down: +/-1   Left/Right: +/-10   A: confirm   B: revert";
     const wchar_t* const kComboHint = L"Up/Down: choose   A: confirm   B: revert";
@@ -40,11 +40,11 @@ CDialogPadNav::CDialogPadNav(const HWND hDlg, const SPadNavEntry* const pEntries
  m_iConfirmCtrl(iConfirmCtrl),
  m_iHomeCtrl(iHomeCtrl),
  m_pszNavigateHint(pszNavigateHint),
- m_iSlot(static_cast<DWORD>(-1)),
+ m_iPadId(0),
+ m_pPad(nullptr),
  m_bConnected(false),
  m_bFocusVisualsEnabled(false),
  m_iPrevButtons(0),
- m_iLastScanMs(0),
  m_aRepeat{},
  m_eMode(EMode::Navigate),
  m_hActiveCtrl(nullptr),
@@ -67,39 +67,64 @@ CDialogPadNav::CDialogPadNav(const HWND hDlg, const SPadNavEntry* const pEntries
 CDialogPadNav::~CDialogPadNav()
 {
     KillTimer(m_hDlg, sm_iTimerId);
+    if (m_pPad)
+    {
+        SDL_CloseGamepad(m_pPad);
+    }
 }
 
 bool CDialogPadNav::ReadPad(WORD& iButtons)
 {
     iButtons = 0;
-    XINPUT_STATE State = {};
-    if (m_iSlot != static_cast<DWORD>(-1))
+    if (!CGamepad::IsSdlAvailable())
     {
-        if (XInputGetState(m_iSlot, &State) == ERROR_SUCCESS)
-        {
-            iButtons = State.Gamepad.wButtons;
-            return true;
-        }
-        m_iSlot = static_cast<DWORD>(-1);
+        return false; //no SDL3.dll, or SDL_Init failed -- gamepad-less
     }
 
-    const ULONGLONG iNowMs = GetTickCount64();
-    if (m_iLastScanMs != 0 && iNowMs - m_iLastScanMs < kHotplugScanMs)
+    //Pumps SDL's gamepad/joystick state, hotplug included, without relying on
+    //the event queue -- CGamepad::InitSdl() leaves gamepad events disabled
+    //until CGamepad::Init() runs, which is after every pre-game dialog closes.
+    SDL_UpdateGamepads();
+
+    int iCount = 0;
+    SDL_JoystickID* const pIds = SDL_GetGamepads(&iCount);
+    const SDL_JoystickID iFirstId = (pIds && iCount > 0) ? pIds[0] : 0;
+    if (pIds)
+    {
+        SDL_free(pIds);
+    }
+
+    if (iFirstId != m_iPadId)
+    {
+        //Either the tracked pad disconnected or a different one is now first
+        //in SDL's list. SDL_CloseGamepad only decrements SDL's refcount, so
+        //dropping our handle here can't affect a handle CGamepad::Init()
+        //opens on the same pad later.
+        if (m_pPad)
+        {
+            SDL_CloseGamepad(m_pPad);
+            m_pPad = nullptr;
+        }
+        m_iPadId = iFirstId;
+        if (m_iPadId != 0)
+        {
+            m_pPad = SDL_OpenGamepad(m_iPadId);
+        }
+    }
+
+    if (!m_pPad)
     {
         return false;
     }
-    m_iLastScanMs = iNowMs;
 
-    for (DWORD i = 0; i < XUSER_MAX_COUNT; ++i)
-    {
-        if (XInputGetState(i, &State) == ERROR_SUCCESS)
-        {
-            m_iSlot = i;
-            iButtons = State.Gamepad.wButtons;
-            return true;
-        }
-    }
-    return false;
+    if (SDL_GetGamepadButton(m_pPad, SDL_GAMEPAD_BUTTON_DPAD_UP))    iButtons |= kBitDpadUp;
+    if (SDL_GetGamepadButton(m_pPad, SDL_GAMEPAD_BUTTON_DPAD_DOWN))  iButtons |= kBitDpadDown;
+    if (SDL_GetGamepadButton(m_pPad, SDL_GAMEPAD_BUTTON_DPAD_LEFT))  iButtons |= kBitDpadLeft;
+    if (SDL_GetGamepadButton(m_pPad, SDL_GAMEPAD_BUTTON_DPAD_RIGHT)) iButtons |= kBitDpadRight;
+    if (SDL_GetGamepadButton(m_pPad, SDL_GAMEPAD_BUTTON_SOUTH))      iButtons |= kBitA;
+    if (SDL_GetGamepadButton(m_pPad, SDL_GAMEPAD_BUTTON_EAST))       iButtons |= kBitB;
+    if (SDL_GetGamepadButton(m_pPad, SDL_GAMEPAD_BUTTON_START))      iButtons |= kBitStart;
+    return true;
 }
 
 void CDialogPadNav::OnTimer()
@@ -170,17 +195,17 @@ void CDialogPadNav::OnTimer()
 
     //Single-shot buttons. Return immediately after dispatch: BM_CLICK can run
     //EndDialog via the dialog's own WM_COMMAND handler.
-    if (iPressed & XINPUT_GAMEPAD_A)
+    if (iPressed & kBitA)
     {
         PressA();
         return;
     }
-    if (iPressed & XINPUT_GAMEPAD_B)
+    if (iPressed & kBitB)
     {
         PressB();
         return;
     }
-    if (iPressed & XINPUT_GAMEPAD_START)
+    if (iPressed & kBitStart)
     {
         PressStart();
         return;

@@ -204,9 +204,8 @@ presents the pad to the game as a virtual Xbox controller with paddle
 presses arriving as ordinary buttons). Paddles on DualSense Edge,
 8BitDo, Flydigi, and similar pads work natively with no workaround.
 
-The pre-game launcher and "FixApp" dialogs are navigable with an
-Xbox-compatible (XInput) controller only; other controllers can still
-navigate in-game.
+The pre-game launcher and "FixApp" dialogs use the same SDL gamepad
+support as the game, so any supported controller can navigate them.
 
 ## Auto-save
 
