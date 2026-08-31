@@ -435,27 +435,23 @@ void CGamepad::LoadButtonMap()
         DefaultKeys[Entry.eButton] = Entry.eKey;
     }
 
-    std::vector<EInputKey> ResolvedKeys = DefaultKeys;
-
-    //Tracks which EInputKey slots are already claimed -- by a surviving
-    //default or by an ini line processed earlier in file order -- so a later
-    //line targeting an occupied slot is rejected rather than silently
-    //stealing it. Sized to IK_MAX; EInputKey values are bytes.
-    std::vector<bool> Occupied(IK_MAX, false);
-    for (const EInputKey eKey : ResolvedKeys)
-    {
-        if (eKey != IK_None)
-        {
-            Occupied[eKey] = true;
-        }
-    }
+    //Step 2 (spec sec4): fold ini lines into per-button overrides. A later
+    //line for the same button wins over an earlier one (logged); OverrideLine
+    //records the winning line's position in file order -- used below to break
+    //ties when two overrides (neither a surviving default) target the same
+    //slot: the later one loses.
+    std::vector<bool>      HasOverride(SDL_GAMEPAD_BUTTON_COUNT, false);
+    std::vector<EInputKey> OverrideKey(SDL_GAMEPAD_BUTTON_COUNT, IK_None);
+    std::vector<int>       OverrideLine(SDL_GAMEPAD_BUTTON_COUNT, -1);
 
     TMultiMap<FString, FString>* const pSection = GConfig->GetSectionPrivate(kSection, FALSE, TRUE);
     if (pSection)
     {
-        //Duplicate ini lines for the same key land as separate pairs in file
-        //order -- iterate, don't Find, so later lines can override earlier ones.
-        for (TMultiMap<FString, FString>::TIterator It(*pSection); It; ++It)
+        //Duplicate ini lines land as separate pairs in file order -- iterate,
+        //don't Find, so a later line for the same button overrides an earlier
+        //one rather than being missed.
+        int iLine = 0;
+        for (TMultiMap<FString, FString>::TIterator It(*pSection); It; ++It, ++iLine)
         {
             char szKeyUtf8[64];
             if (!NarrowFromWide(*It.Key(), szKeyUtf8, static_cast<int>(sizeof(szKeyUtf8))))
@@ -477,34 +473,122 @@ void CGamepad::LoadButtonMap()
                 continue;
             }
 
-            const EInputKey eOldKey = ResolvedKeys[eButton];
-            if (eNewKey != IK_None && eNewKey != eOldKey)
+            if (HasOverride[eButton])
             {
-                if (IsReservedAxisDestination(eNewKey))
-                {
-                    GLog->Logf(L"Gamepad: [DXController.GamepadButtonMap] %s=%s targets a slot the axis pipeline already emits on -- ignored.", *It.Key(), *It.Value());
-                    continue;
-                }
-                if (Occupied[eNewKey])
-                {
-                    GLog->Logf(L"Gamepad: [DXController.GamepadButtonMap] %s=%s duplicates another button's destination -- ignored.", *It.Key(), *It.Value());
-                    continue;
-                }
+                GLog->Logf(L"Gamepad: [DXController.GamepadButtonMap] '%s' appears more than once -- an earlier line for it is shadowed.", *It.Key());
             }
-
-            if (eOldKey != IK_None && eOldKey != eNewKey)
-            {
-                Occupied[eOldKey] = false;
-            }
-            ResolvedKeys[eButton] = eNewKey;
-            if (eNewKey != IK_None)
-            {
-                Occupied[eNewKey] = true;
-            }
+            HasOverride[eButton]  = true;
+            OverrideKey[eButton]  = eNewKey;
+            OverrideLine[eButton] = iLine;
         }
     }
 
-    m_ResolvedButtonKeys = std::move(ResolvedKeys);
+    //Step 3: candidate map = defaults with overrides substituted. A button
+    //named in the ini has thereby abandoned its default slot -- this is what
+    //makes a two-line slot swap (e.g. y=Joy16 + touchpad=Joy4) valid: by the
+    //time either line is validated below, both defaults have already moved.
+    std::vector<EInputKey> Candidate(SDL_GAMEPAD_BUTTON_COUNT);
+    for (int i = 0; i < SDL_GAMEPAD_BUTTON_COUNT; ++i)
+    {
+        Candidate[i] = HasOverride[i] ? OverrideKey[i] : DefaultKeys[i];
+    }
+
+    //Step 4: validate the candidate map. A losing override falls back to its
+    //own compiled default; if that default now collides too, it falls back
+    //to None instead (both logged). UsedFallback marks a button that has
+    //already spent its one fallback, so a second collision goes straight to
+    //None rather than retrying (and re-logging) the same default forever.
+    //Runs in passes because reverting one button to its default can create a
+    //fresh collision with a still-standing override that was targeting that
+    //same default (a chain at most two deep per button, hence the bound).
+    std::vector<bool> UsedFallback(SDL_GAMEPAD_BUTTON_COUNT, false);
+    for (int iPass = 0; iPass <= SDL_GAMEPAD_BUTTON_COUNT; ++iPass)
+    {
+        //Destination -> claimant button indices, excluding IK_None.
+        std::vector<std::vector<int>> Claimants(IK_MAX);
+        for (int i = 0; i < SDL_GAMEPAD_BUTTON_COUNT; ++i)
+        {
+            if (Candidate[i] != IK_None)
+            {
+                Claimants[Candidate[i]].push_back(i);
+            }
+        }
+
+        bool bChanged = false;
+        for (int iDest = 0; iDest < IK_MAX; ++iDest)
+        {
+            const std::vector<int>& Group = Claimants[iDest];
+            if (Group.empty())
+            {
+                continue;
+            }
+            const bool bReserved = IsReservedAxisDestination(static_cast<EInputKey>(iDest));
+            if (!bReserved && Group.size() <= 1)
+            {
+                continue; //uncontested
+            }
+
+            //Winner priority: an untouched default holder always wins (it
+            //was never named in the ini, so there's no "later line" that
+            //could displace it); otherwise the earliest-line override wins.
+            //A fixed-axis-pipeline slot (bReserved) has no winner at all --
+            //every real claimant there loses.
+            int iWinner = -1;
+            if (!bReserved)
+            {
+                for (const int j : Group)
+                {
+                    if (!HasOverride[j])
+                    {
+                        iWinner = j;
+                        break;
+                    }
+                }
+                if (iWinner < 0)
+                {
+                    for (const int j : Group)
+                    {
+                        if (iWinner < 0 || OverrideLine[j] < OverrideLine[iWinner])
+                        {
+                            iWinner = j;
+                        }
+                    }
+                }
+            }
+
+            for (const int j : Group)
+            {
+                if (j == iWinner)
+                {
+                    continue;
+                }
+                const char* const pszButtonName = SDL_GetGamepadStringForButton(static_cast<SDL_GamepadButton>(j));
+                if (!UsedFallback[j])
+                {
+                    GLog->Logf(bReserved
+                        ? L"Gamepad: [DXController.GamepadButtonMap] %hs targets a slot the axis pipeline already emits on -- reverted to its default."
+                        : L"Gamepad: [DXController.GamepadButtonMap] %hs's override duplicates another button's destination -- reverted to its default.",
+                        pszButtonName ? pszButtonName : "?");
+                    Candidate[j]    = DefaultKeys[j];
+                    UsedFallback[j] = true;
+                }
+                else
+                {
+                    GLog->Logf(L"Gamepad: [DXController.GamepadButtonMap] %hs's default also collides -- left unmapped.",
+                        pszButtonName ? pszButtonName : "?");
+                    Candidate[j] = IK_None;
+                }
+                bChanged = true;
+            }
+        }
+
+        if (!bChanged)
+        {
+            break;
+        }
+    }
+
+    m_ResolvedButtonKeys = std::move(Candidate);
 
     //Backfill: any SDL button name absent from the section gets its compiled
     //default written back, spelled via SDL_GetGamepadStringForButton() (key
