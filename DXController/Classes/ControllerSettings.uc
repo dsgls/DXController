@@ -8,7 +8,7 @@
 // .ini is always complete by the time we read.
 //
 // No defaultproperties — defaults are owned entirely by the launcher
-// constructor (CXInput::CXInput in launcher/src/XInput.cpp). Mirroring
+// constructor (CGamepad::CGamepad in launcher/src/Gamepad.cpp). Mirroring
 // them on the script side would be a divergence trap.
 //=============================================================================
 class ControllerSettings extends Object

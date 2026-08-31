@@ -11,7 +11,7 @@
 //=============================================================================
 class ControllerConsole extends Console;
 
-// True if Key is one of the gamepad slots fed by the XInput shim:
+// True if Key is one of the gamepad slots fed by the launcher's gamepad backend:
 // buttons IK_Joy1..16 (0xC8-0xD7), D-pad (0xF0-0xF3), and the stick /
 // trigger axes JoyX/Y/Z/R (0xE0-0xE3) + JoyU/V (0xE8-0xE9). KeyEvent is
 // the first script entry point for ALL input — mouse (IK_MouseX/Y,
