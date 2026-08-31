@@ -241,6 +241,25 @@ function bool AllowsMenuToggle()
     return true;
 }
 
+// Returns true if this controller wants Start (Joy8) for a screen
+// action of its own. ControllerRootWindow routes Joy8 to
+// HandleActivate instead of toggling the persona menu when this is
+// true. Only meaningful on screens where Start has an obvious meaning
+// (the new-game screen's Start Game button).
+function bool ConsumesStartButton()
+{
+    return false;
+}
+
+// The on-screen keyboard that was editing a field on this screen has
+// closed. Pumped by ControllerRootWindow from the user-initiated close
+// paths (B, Esc) only — a teardown close happens while the target
+// screen is being destroyed, so there is nothing left to re-sync.
+// Override to refresh screen state that depends on the edited text.
+function KeyboardClosed()
+{
+}
+
 // Per-frame hook, pumped manually by ControllerRootWindow.Tick on the
 // active controller. MenuNavController is Object-scoped, so the engine
 // never ticks it directly — this is the substitute. Default no-op;

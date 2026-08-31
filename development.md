@@ -291,7 +291,9 @@ axes below are fixed, not ini-mapped.
 ‡ When `InvertLookY` is set, the launcher emits this axis negated
 (`Gamepad.cpp`, right-stick `EmitStickAxes` call). `ControllerConsole`
 restores raw values for UI consumers (radial stick, text/camera
-scroll); gameplay look sees the negated value via the engine binding.
+scroll), and look-like UI views re-negate locally so they invert too
+(`ComputerScreenSecurityNav`'s camera pitch); gameplay look sees the
+negated value via the engine binding.
 
 `Guide` and `Misc2`-`Misc6` are unmapped by default (OS-owned / rare
 macro keys); reachable via the ini map, like any other slot.

@@ -29,6 +29,14 @@ var MenuUIEditWindow target;        // field being edited; None when closed
 var Window           targetScreen;  // screen owning `target`; None when closed
 var string           promptLabel;  // caller-supplied; drawn at panel top
 
+// Allowed-character set, as a plain string of accepted characters.
+// Empty = accept everything. Keys outside the set are consumed
+// no-ops. Callers that target a field with a stock SetFilter set
+// (MenuScreenNewGame.filterString) pass it here, so the symbol keys
+// . - _ # cannot put an unfilterable character into the field —
+// whether the native InsertText honours SetFilter is unestablished.
+var string           allowedChars;
+
 // ---- grid focus ----
 // focusRow 0..3 = character rows; focusRow 4 = the special row.
 // focusCol 0..9 on character rows; 0..1 on the special row.
@@ -71,7 +79,8 @@ const FOOTER_H  = 20.0;
 // Open / close
 // ---------------------------------------------------------------------------
 
-function Open(MenuUIEditWindow t, Window ownerScreen, string label)
+function Open(MenuUIEditWindow t, Window ownerScreen, string label,
+              optional string allowed)
 {
     if (t == None)
         return;
@@ -79,6 +88,7 @@ function Open(MenuUIEditWindow t, Window ownerScreen, string label)
     target      = t;
     targetScreen = ownerScreen;
     promptLabel = label;
+    allowedChars = allowed;
     bOpen       = true;
     focusRow    = 1;   // home cell = 'Q'
     focusCol    = 0;
@@ -108,6 +118,7 @@ function CloseKbd(string reason)
     bOpen  = false;
     target = None;
     targetScreen = None;
+    allowedChars = "";
 
     class'DXControllerDebug'.static.DebugLog("DXC-KBD CLOSE reason=" $ reason);
 }
@@ -121,6 +132,7 @@ function ForceClose()
     bOpen  = false;
     target = None;
     targetScreen = None;
+    allowedChars = "";
     class'DXControllerDebug'.static.DebugLog("DXC-KBD CLOSE reason=teardown");
 }
 
@@ -203,6 +215,11 @@ function InsertChar(string ch)
 {
     if (target == None || ch == "")
         return;
+    if (allowedChars != "" && InStr(allowedChars, ch) < 0)
+    {
+        class'DXControllerDebug'.static.DebugLog("DXC-KBD KEY-FILTERED id=" $ ch);
+        return;
+    }
     target.InsertText(ch, true);
     class'DXControllerDebug'.static.DebugLog("DXC-KBD KEY id=" $ ch);
 }

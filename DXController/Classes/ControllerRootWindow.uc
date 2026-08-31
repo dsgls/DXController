@@ -145,10 +145,10 @@ function RegisterNavControllers()
     RegisterNav(Class'MenuScreenAutoSave',            Class'OptionsNavController');
     // Omitted: MenuScreenCustomizeKeys — list-based key binding UI.
 
-    // New Game screen — portrait + skills list + action bar.
-    // editName / editCodeName text fields are intentionally excluded
-    // from gamepad nav (no virtual keyboard); keyboard typing into
-    // editName remains independent via the engine's text-focus path.
+    // New Game screen — Real Name field + portrait + skills list +
+    // action bar. A on the name field opens the on-screen keyboard.
+    // editCodeName stays excluded from gamepad nav: vanilla marks it
+    // read-only (SetSensitivity(False)).
     RegisterNav(Class'DeusEx.MenuScreenNewGame', Class'NewGameNavController');
 
     // List-shape menu screens.
@@ -241,9 +241,9 @@ function int FindNavIndex(Class screenClass)
 //
 //   (controller, screen) when the topmost modal is registered.
 //   (None,       screen) when the topmost modal is not registered
-//                        (e.g., MenuScreenNewGame / CustomizeKeys /
-//                        RGB) — SwitchActiveNav then clears activeNav
-//                        so D-pad/A/X don't drive a screen beneath the
+//                        (e.g., MenuScreenCustomizeKeys) —
+//                        SwitchActiveNav then clears activeNav so
+//                        D-pad/A/X don't drive a screen beneath the
 //                        visible modal.
 //   (None,       None)   when no modal is foregrounded (gameplay).
 //
@@ -339,12 +339,15 @@ function SwitchActiveNav(MenuNavController desired, Window desiredScreen)
 
 // Open the gamepad on-screen keyboard targeting `target`. `label` is
 // drawn at the top of the keyboard panel (e.g. "ENTER USERNAME").
+// `allowedChars`, when non-empty, restricts which keys insert (see
+// OnScreenKeyboardWindow.allowedChars).
 // Invoked by nav controllers from their A-on-text-field handlers.
-function OpenKeyboard(MenuUIEditWindow target, Window ownerScreen, string label)
+function OpenKeyboard(MenuUIEditWindow target, Window ownerScreen, string label,
+                      optional string allowedChars)
 {
     if (keyboard == None || target == None)
         return;
-    keyboard.Open(target, ownerScreen, label);
+    keyboard.Open(target, ownerScreen, label, allowedChars);
 }
 
 // Override of the DeusExRootWindow.CloseGamepadKeyboard hook. Called
@@ -356,6 +359,8 @@ function bool CloseGamepadKeyboard()
     if (keyboard != None && keyboard.bOpen)
     {
         keyboard.CloseKbd("Esc");
+        if (activeNav != None)
+            activeNav.KeyboardClosed();
         return true;
     }
     return false;
@@ -476,11 +481,11 @@ event DescendantAdded(Window descendant)
     }
 
     // Unregistered DeusExBaseWindow pushed as a direct child of root
-    // (e.g., MenuScreenNewGame, MenuScreenCustomizeKeys — out of
-    // scope for this controller pass): clear activeNav so the
-    // underlying screen's nav doesn't continue handling D-pad / A /
-    // X under the new visible modal. B still works (synthesises
-    // IK_Escape on top window), so the user can back out.
+    // (e.g., MenuScreenCustomizeKeys — out of scope for this controller
+    // pass): clear activeNav so the underlying screen's nav doesn't
+    // continue handling D-pad / A / X under the new visible modal. B
+    // still works (synthesises IK_Escape on top window), so the user
+    // can back out.
     if (bIsModalScreen)
         SwitchActiveNav(None, None);
 }
@@ -800,6 +805,11 @@ event bool VirtualKeyPressed(EInputKey key, bool bRepeat)
     if (keyboard != None && keyboard.bOpen)
     {
         keyboard.HandleKey(key, bRepeat);
+        // B closes from inside HandleKey. Notify the active controller
+        // on that closing edge so it can re-sync screen state against
+        // the edited text (MenuNavController.KeyboardClosed).
+        if (!keyboard.bOpen && activeNav != None)
+            activeNav.KeyboardClosed();
         return true;
     }
 
@@ -874,6 +884,16 @@ event bool VirtualKeyPressed(EInputKey key, bool bRepeat)
     // same reason as Joy7.
     if (key == IK_Joy8 && !bRepeat)
     {
+        // A screen that binds Start to an action of its own (the
+        // new-game screen's Start Game button) claims it first. The
+        // on-screen keyboard intercept above already consumes every
+        // key while open, so Start during name entry cannot reach here.
+        if (activeNav != None && activeNav.ConsumesStartButton())
+        {
+            activeNav.HandleActivate(bkey);
+            return true;
+        }
+
         if (activeNav != None && !activeNav.AllowsMenuToggle())
         {
             class'DXControllerDebug'.static.DebugLog(
