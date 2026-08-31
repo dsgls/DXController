@@ -9,7 +9,7 @@
   </PropertyGroup>
   <ItemDefinitionGroup>
     <ClCompile>
-      <AdditionalIncludeDirectories>../games/DeusEx/engine/inc;../games/DeusEx/core/inc;../games/DeusEx/window/inc;../games/DeusEx/deusex/inc;../games/DeusEx/extension/inc;../detours;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>../games/DeusEx/engine/inc;../games/DeusEx/core/inc;../games/DeusEx/window/inc;../games/DeusEx/deusex/inc;../games/DeusEx/extension/inc;../detours;../external/SDL3/include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <!-- PROJECTNAME=L"DeusExe" intentionally hardcoded: this names the section in users' DeusEx.ini.
            Derived from $(ProjectName) would silently orphan existing user settings after the rename. -->
       <PreprocessorDefinitions>PROJECTNAME=L"DeusExe";_USE_MATH_DEFINES;NOMINMAX;_REALLY_WANT_DEBUG;WINDOWS_IGNORE_PACKING_MISMATCH;%(PreprocessorDefinitions)</PreprocessorDefinitions>
@@ -25,13 +25,15 @@
       <LanguageStandard>Default</LanguageStandard>
     </ClCompile>
     <Link>
-      <AdditionalDependencies>uxtheme.lib;version.lib;Shlwapi.lib;Comctl32.lib;Xinput.lib;../games/DeusEx/engine/lib/engine.lib;../games/DeusEx/core/lib/core.lib;../games/DeusEx/extension/lib/extension.lib;../games/DeusEx/window/lib/window.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>uxtheme.lib;version.lib;Shlwapi.lib;Comctl32.lib;Xinput.lib;SDL3.lib;delayimp.lib;../games/DeusEx/engine/lib/engine.lib;../games/DeusEx/core/lib/core.lib;../games/DeusEx/extension/lib/extension.lib;../games/DeusEx/window/lib/window.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>../external/SDL3/lib/x86;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <BaseAddress>
       </BaseAddress>
       <OutputFile>$(OutDir)DeusEx.exe</OutputFile>
       <DataExecutionPrevention>false</DataExecutionPrevention>
       <StackReserveSize>2097152</StackReserveSize>
       <LargeAddressAware>true</LargeAddressAware>
+      <DelayLoadDLLs>SDL3.dll;%(DelayLoadDLLs)</DelayLoadDLLs>
     </Link>
     <PreBuildEvent>
       <Command>

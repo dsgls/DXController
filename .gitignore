@@ -15,6 +15,7 @@ gamedir
 /launcher/Debug/
 /launcher/_work/
 /launcher/detours/
+/launcher/external/
 /launcher/.vs/
 /launcher/src/version_generated.h
 *.vcxproj.user
