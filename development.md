@@ -1035,7 +1035,7 @@ texture package.
   a list of page specs. The **controller-settings** page (`MenuScreenController`)
   shows a variable number of option rows depending on the selected stick
   curves, so it emits one 2×3 tile set per possible visible-row total
-  (`MenuControllerBackground_<N>_<tile>`, N in {5,6,7,8,9,11}); the menu swaps
+  (`MenuControllerBackground_<N>_<tile>`, N in {6,7,8,9,10,12}); the menu swaps
   to the matching set at runtime. The **autosave** page (`MenuScreenAutoSave`)
   has a fixed 3-row layout, so it emits a single narrower 2×1 tile set
   (`MenuAutoSaveBackground_<tile>`). The tile grid is derived from each page's

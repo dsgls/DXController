@@ -60,7 +60,11 @@ controller's deadzone. The mod does not apply the comically large deadzone
 used by most games, so if your controller sticks are not in good condition
 you will need to increase them. The same screen has a right-stick
 sensitivity setting (default 1.00) — lower it if turning at full stick
-deflection is too fast.
+deflection is too fast, and an "Invert look Y-axis" toggle that flips the
+right stick's up/down direction for gameplay look and the security camera.
+The launcher applies the inversion to the right-stick Y axis it emits, so if
+you rebind that axis away from `aLookUp` in `User.ini` the inversion follows
+whatever you bound it to.
 
 The mod also autosaves periodically during play. Writing each save can cause
 a brief stutter — if it bothers you, make autosaves less frequent or turn

@@ -33,18 +33,20 @@ from PIL import Image
 
 # ===== PARAMETERS ============================================================
 # Per-page specs. Each page's recesses are positioned from client_w/client_h/
-# help_y, which MUST match the screen class's defaultproperties exactly:
+# help_y/row_y0, which MUST match the screen class's defaultproperties exactly:
 #   MenuControllerBackground -> MenuScreenController.uc
 #   MenuAutoSaveBackground   -> MenuScreenAutoSave.uc
 #
-# 10 rows is unreachable for the controller page (no l in {2,3,5}, r in
-# {3,4,6} sum to 10); its row-count set is [5,6,7,8,9,11]. The autosave page
-# has a fixed 3-row layout -> a single tile set with no _N_ infix.
+# 11 rows is unreachable for the controller page (no l in {2,3,5}, r in
+# {4,5,7} sum to 11); its row-count set is [6,7,8,9,10,12]. The controller
+# page overrides row_y0/help_y to fit its 12th row above the help bar; the
+# autosave page has a fixed 3-row layout -> a single tile set with no _N_
+# infix.
 PAGES = [
     dict(
         prefix="MenuControllerBackground",
-        client_w=720, client_h=480, help_y=438,
-        row_counts=sorted({l + r for l in (2, 3, 5) for r in (3, 4, 6)}),
+        client_w=720, client_h=480, help_y=440, row_y0=20,
+        row_counts=sorted({l + r for l in (2, 3, 5) for r in (4, 5, 7)}),
         single_set=False,
     ),
     dict(
@@ -56,8 +58,8 @@ PAGES = [
 ]
 
 # Shared row layout — mirrors MenuUIScreenWindow + MenuUIChoice. Every visible
-# row is an [action-button | value-button] recess pair. Identical for any
-# options screen, so it is page-independent.
+# row is an [action-button | value-button] recess pair. ROW_Y0 is the default
+# first-row Y; a page spec may override it with row_y0.
 ROW_X     = 7
 ROW_Y0    = 27
 ROW_GAP   = 36
@@ -209,6 +211,7 @@ def stamp_row_recess(img, x, y, w, h, all_interiors, halo_seeds, W, H,
 def compose(page, num_rows):
     """Build the composite for a `num_rows`-row layout of `page`."""
     client_w, client_h, help_y = page["client_w"], page["client_h"], page["help_y"]
+    row_y0 = page.get("row_y0", ROW_Y0)
     W, H, _ = tile_grid(client_w, client_h)
 
     img = Image.new("RGB", (W, H), PANEL_HI)
@@ -224,7 +227,7 @@ def compose(page, num_rows):
     halo_seeds = set()
 
     for n in range(num_rows):
-        y = ROW_Y0 + n * ROW_GAP
+        y = row_y0 + n * ROW_GAP
         stamp_row_recess(img, ROW_X, y, BTN_W, BTN_H, all_interiors, halo_seeds, W, H)
         stamp_row_recess(img, VAL_X, y, VAL_W, VAL_H, all_interiors, halo_seeds, W, H)
 
