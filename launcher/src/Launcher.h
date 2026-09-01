@@ -15,7 +15,8 @@ private:
     void MainLoop(UEngine * const pEngine);
     void LoadSettings();
     void ToggleBorderlessWindowedFullscreen();
-    void RecordFrameStats(const double fFrameTimeMs, const double fLatenessMs);
+    void PumpMessages(UEngine* const pEngine, const bool bMouseOverWindow, const bool bHasFocus);
+    void RecordFrameStats(const double fFrameTimeMs, const double fOvershootMs);
     void LogAndResetFrameStats(FOutputDevice& Ar);
 
     HWND m_hWnd = NULL;
@@ -28,15 +29,15 @@ private:
     bool m_bPrevInMenu = false;
     bool m_bPrevHasFocus = false;
     bool m_bInBorderlessFullscreenWindow = false;
+    bool m_bClipHeld = false; //Whether the loop currently holds a ClipCursor rect
     CGamepad m_Gamepad;
 
-    //Frame-stats diagnostic ring buffer (GetFrameStats exec command). Baseline
-    //instrumentation on the CURRENT loop: frame duration is tick-to-tick time,
-    //lateness is how far fDeltaTime overshot the ideal period when the gate
-    //opened. Reset (count back to 0) whenever GetFrameStats is run.
+    //Frame-stats diagnostic ring buffer (GetFrameStats exec command). Frame
+    //duration is tick-to-tick time; overshoot is how far past its deadline the
+    //paced wait actually woke. Reset (count back to 0) whenever GetFrameStats is run.
     static constexpr size_t kiFrameStatsRingCapacity = 1024;
     std::array<double, kiFrameStatsRingCapacity> m_FrameStatsFrameTimeMs = {};
-    std::array<double, kiFrameStatsRingCapacity> m_FrameStatsLatenessMs = {};
+    std::array<double, kiFrameStatsRingCapacity> m_FrameStatsOvershootMs = {};
     size_t m_iFrameStatsWriteIndex = 0;
     size_t m_iFrameStatsCount = 0; //Valid entries, caps at kiFrameStatsRingCapacity
 

@@ -9,12 +9,142 @@
 #include "NativeHooks.h"
 #include "WinDrvPatch.h"
 #include "OutputDeviceFileFlush.h"
+#include "CursorPolicy.h"
+#include "FramePacing.h"
 #include "Launcher.h"
 
 //Do not put before stdafx.h
 #pragma comment(linker,"/manifestdependency:\"type='win32' name='Microsoft.Windows.Common-Controls' version='6.0.0.0' processorArchitecture='*' publicKeyToken='6595b64144ccf1df' language='*'\"")
+#pragma comment(lib, "winmm.lib") //timeBeginPeriod, for the fallback timer path only
+
+//Only in the Win10 1803 and newer SDKs; older kernels reject the flag at
+//runtime, which is what the fallback path below handles.
+#ifndef CREATE_WAITABLE_TIMER_HIGH_RESOLUTION
+#define CREATE_WAITABLE_TIMER_HIGH_RESOLUTION 0x00000002
+#endif
 
 extern "C" {wchar_t GPackage[64] = L"Launch"; } //Will be set to exe name later
+
+namespace
+{
+    //Asks MMCSS to schedule the main loop as a game thread. Resolved dynamically so
+    //a missing or stubbed avrt.dll (older Wine) degrades to a no-op.
+    class CMmcssRegistration
+    {
+    public:
+        CMmcssRegistration()
+        {
+            m_hAvrt = LoadLibraryW(L"avrt.dll");
+            if (!m_hAvrt)
+            {
+                GLog->Log(L"MMCSS: avrt.dll unavailable, running at default thread priority.");
+                return;
+            }
+
+            const auto pfnSet = reinterpret_cast<HANDLE(WINAPI*)(LPCWSTR, LPDWORD)>(GetProcAddress(m_hAvrt, "AvSetMmThreadCharacteristicsW"));
+            m_pfnRevert = reinterpret_cast<BOOL(WINAPI*)(HANDLE)>(GetProcAddress(m_hAvrt, "AvRevertMmThreadCharacteristics"));
+            DWORD dwTaskIndex = 0; //Must be zero-initialized or the call fails
+            m_hTask = pfnSet ? pfnSet(L"Games", &dwTaskIndex) : NULL;
+            GLog->Log(m_hTask ? L"MMCSS: main loop registered as a \"Games\" task." : L"MMCSS: registration failed, running at default thread priority.");
+        }
+
+        ~CMmcssRegistration()
+        {
+            if (m_hTask && m_pfnRevert)
+            {
+                m_pfnRevert(m_hTask);
+            }
+            if (m_hAvrt)
+            {
+                FreeLibrary(m_hAvrt);
+            }
+        }
+
+        CMmcssRegistration(const CMmcssRegistration&) = delete;
+        CMmcssRegistration& operator=(const CMmcssRegistration&) = delete;
+
+    private:
+        HMODULE m_hAvrt = NULL;
+        HANDLE m_hTask = NULL;
+        BOOL(WINAPI* m_pfnRevert)(HANDLE) = nullptr;
+    };
+
+    //Frame deadline timer plus the message-aware wait on it. Three paths, best
+    //first: a high-resolution waitable timer (~0.5 ms, no global timer period), a
+    //plain waitable timer with timeBeginPeriod(1), or no timer at all - the
+    //message wait's own millisecond timeout, which always works.
+    class CFrameTimer
+    {
+    public:
+        enum class EWake { Message, Deadline };
+
+        CFrameTimer()
+        {
+            m_hTimer = CreateWaitableTimerExW(NULL, NULL,
+                CREATE_WAITABLE_TIMER_MANUAL_RESET | CREATE_WAITABLE_TIMER_HIGH_RESOLUTION,
+                TIMER_MODIFY_STATE | SYNCHRONIZE); //Narrow mask; TIMER_ALL_ACCESS can fail under a restricted token
+            if (m_hTimer)
+            {
+                m_pszPathName = L"high-resolution waitable timer";
+                return;
+            }
+
+            m_hTimer = CreateWaitableTimerExW(NULL, NULL, CREATE_WAITABLE_TIMER_MANUAL_RESET, TIMER_MODIFY_STATE | SYNCHRONIZE);
+            if (m_hTimer)
+            {
+                m_bTimePeriodSet = timeBeginPeriod(1) == TIMERR_NOERROR;
+                m_pszPathName = m_bTimePeriodSet ? L"waitable timer with a 1 ms system timer period" : L"waitable timer at the default system timer period";
+                return;
+            }
+
+            m_pszPathName = L"message-wait timeout (no waitable timer available)";
+        }
+
+        ~CFrameTimer()
+        {
+            if (m_hTimer)
+            {
+                CloseHandle(m_hTimer);
+            }
+            if (m_bTimePeriodSet)
+            {
+                timeEndPeriod(1);
+            }
+        }
+
+        CFrameTimer(const CFrameTimer&) = delete;
+        CFrameTimer& operator=(const CFrameTimer&) = delete;
+
+        const wchar_t* GetPathName() const { return m_pszPathName; }
+
+        //Relative due time, in 100 ns units. Manual reset, so one arm per frame.
+        void Arm(const long long i100nsFromNow) const
+        {
+            if (!m_hTimer || i100nsFromNow <= 0)
+            {
+                return;
+            }
+            LARGE_INTEGER liDueTime;
+            liDueTime.QuadPart = -i100nsFromNow;
+            SetWaitableTimer(m_hTimer, &liDueTime, 0, NULL, NULL, FALSE);
+        }
+
+        //QS_ALLINPUT: any queued message wakes the wait so the window stays
+        //responsive at any cap. dwTimeoutMs bounds the wait even without a timer.
+        EWake Wait(const DWORD dwTimeoutMs) const
+        {
+            const HANDLE hTimer = m_hTimer;
+            const DWORD dwHandleCount = m_hTimer ? 1 : 0;
+            const DWORD dwResult = MsgWaitForMultipleObjects(dwHandleCount, dwHandleCount ? &hTimer : NULL, FALSE, dwTimeoutMs, QS_ALLINPUT);
+            return (dwResult == WAIT_OBJECT_0 + dwHandleCount) ? EWake::Message : EWake::Deadline;
+        }
+
+    private:
+        HANDLE m_hTimer = NULL;
+        bool m_bTimePeriodSet = false;
+        const wchar_t* m_pszPathName = L"";
+    };
+}
 
 INT WINAPI WinMain(HINSTANCE /*hInInstance*/, HINSTANCE /*hPrevInstance*/, LPSTR /*lpCmdLine*/, INT /*nCmdShow*/)
 {
@@ -300,10 +430,10 @@ void CLauncher::ApplyAutoFOV(const size_t iSizeX, const size_t iSizeY)
     m_iSizeY = iSizeY;
 }
 
-void CLauncher::RecordFrameStats(const double fFrameTimeMs, const double fLatenessMs)
+void CLauncher::RecordFrameStats(const double fFrameTimeMs, const double fOvershootMs)
 {
     m_FrameStatsFrameTimeMs[m_iFrameStatsWriteIndex] = fFrameTimeMs;
-    m_FrameStatsLatenessMs[m_iFrameStatsWriteIndex] = fLatenessMs;
+    m_FrameStatsOvershootMs[m_iFrameStatsWriteIndex] = fOvershootMs;
     m_iFrameStatsWriteIndex = (m_iFrameStatsWriteIndex + 1) % kiFrameStatsRingCapacity;
     m_iFrameStatsCount = std::min(m_iFrameStatsCount + 1, kiFrameStatsRingCapacity);
 }
@@ -311,82 +441,203 @@ void CLauncher::RecordFrameStats(const double fFrameTimeMs, const double fLatene
 void CLauncher::LogAndResetFrameStats(FOutputDevice& Ar)
 {
     const FrameStats::Stats FrameTime = FrameStats::Compute(m_FrameStatsFrameTimeMs.data(), m_iFrameStatsCount);
-    const FrameStats::Stats Lateness = FrameStats::Compute(m_FrameStatsLatenessMs.data(), m_iFrameStatsCount);
+    const FrameStats::Stats Overshoot = FrameStats::Compute(m_FrameStatsOvershootMs.data(), m_iFrameStatsCount);
 
     Ar.Logf(TEXT("FrameStats: samples=%u"), static_cast<unsigned int>(FrameTime.iCount));
     Ar.Logf(TEXT("FrameStats: frame time (ms) avg=%.3f p50=%.3f p99=%.3f max=%.3f stdev=%.3f"),
         FrameTime.fAvg, FrameTime.fP50, FrameTime.fP99, FrameTime.fMax, FrameTime.fStdDev);
-    Ar.Logf(TEXT("FrameStats: gate lateness (ms) avg=%.3f p99=%.3f max=%.3f"),
-        Lateness.fAvg, Lateness.fP99, Lateness.fMax);
+    Ar.Logf(TEXT("FrameStats: deadline overshoot (ms) avg=%.3f p99=%.3f max=%.3f"),
+        Overshoot.fAvg, Overshoot.fP99, Overshoot.fMax);
 
     m_iFrameStatsWriteIndex = 0;
     m_iFrameStatsCount = 0;
+}
+
+void CLauncher::PumpMessages(UEngine* const pEngine, const bool bMouseOverWindow, const bool bHasFocus)
+{
+    MSG Msg;
+    while (PeekMessage(&Msg, NULL, 0, 0, PM_REMOVE))
+    {
+        bool bSkipMessage = false;
+
+        switch (Msg.message)
+        {
+        case WM_QUIT:
+            GIsRequestingExit = 1;
+            break;
+
+        case WM_MOUSEMOVE:
+            if (m_pViewPort && m_bRawInput)
+            {
+                //Mouse-activity detection deliberately does NOT live here: WM_MOUSEMOVE
+                //also fires for synthetic cursor moves (WinDrv's capture-release position
+                //restore on menu open, ClipCursor clamps, our fullscreen SetCursorPos
+                //sync). Treating those as user activity flipped IsPadActive() false and
+                //fed the move below, briefly unhiding the cursor and stealing menu focus
+                //on gameplay->menu transitions. Physical motion is detected from raw
+                //WM_INPUT deltas instead (NotifyMouseActivity in the WM_INPUT branch).
+                //Gate on positive physical-mouse evidence (IsMouseActive), not merely
+                //pad inactivity: with the pad idle past the grace window, !IsPadActive()
+                //let synthetic moves through, warping the game cursor onto whatever the
+                //OS cursor was over (menu focus steal, conversation cursor flash).
+                const int iXPos = GET_X_LPARAM(Msg.lParam);
+                const int iYPos = GET_Y_LPARAM(Msg.lParam);
+                if (bMouseOverWindow && m_Gamepad.IsMouseActive()) //Because preferences window defers mousemove calls to us, somehow
+                {
+                    //Use WM_MOUSEMOVE to control menu cursor
+                    pEngine->MousePosition(m_pViewPort, 0, static_cast<float>(iXPos), static_cast<float>(iYPos));
+                }
+                bSkipMessage = true;
+            }
+            break;
+
+        case WM_KEYDOWN:
+        case WM_SYSKEYDOWN:
+            if (m_bBorderlessFullscreenWindow && Msg.wParam == VK_RETURN && (HIWORD(Msg.lParam) & KF_ALTDOWN)) //User hits alt+enter
+            {
+                ToggleBorderlessWindowedFullscreen();
+                bSkipMessage = true;
+            }
+            break;
+
+
+        case WM_INPUT:
+        {
+            //Use raw input to control camera
+            if (m_pViewPort && bHasFocus)
+            {
+                RAWINPUT raw;
+                UINT rawSize = sizeof(raw);
+                if (GetRawInputData(reinterpret_cast<HRAWINPUT>(Msg.lParam), RID_INPUT, &raw, &rawSize, sizeof(RAWINPUTHEADER)) == static_cast<UINT>(-1))
+                {
+                    break; //Packet unreadable (too large for the buffer, or already consumed); nothing to feed the engine
+                }
+
+                //We only register for mouse usage, but SDL's joystick RawInput
+                //driver can be turned on by hint, and then every packet lands
+                //here too -- reading raw.data.mouse out of a HID packet would
+                //be garbage.
+                if (raw.header.dwType != RIM_TYPEMOUSE)
+                {
+                    break;
+                }
+
+                //Raw deltas are physical-motion ground truth (synthetic SetCursorPos
+                //moves never generate WM_INPUT), so this is where mouse activity is
+                //detected for the pad-vs-mouse active-source signal.
+                m_Gamepad.NotifyMouseActivity(raw.data.mouse.lLastX, raw.data.mouse.lLastY);
+
+                const float fDeltaX = static_cast<float>(raw.data.mouse.lLastX);
+                const float fDeltaY = static_cast<float>(raw.data.mouse.lLastY);
+                if(fDeltaX != 0.0f)
+                {
+                    pEngine->InputEvent(m_pViewPort, EInputKey::IK_MouseX, EInputAction::IST_Axis, fDeltaX);
+                }
+                if(fDeltaY != 0.0f)
+                {
+                    pEngine->InputEvent(m_pViewPort, EInputKey::IK_MouseY, EInputAction::IST_Axis, -fDeltaY);
+                }
+
+                if (raw.data.mouse.ulButtons & RI_MOUSE_BUTTON_4_UP)
+                {
+                    pEngine->InputEvent(m_pViewPort, EInputKey::IK_Unknown05, EInputAction::IST_Release);
+                }
+                else if (raw.data.mouse.ulButtons & RI_MOUSE_BUTTON_4_DOWN)
+                {
+                    pEngine->InputEvent(m_pViewPort, EInputKey::IK_Unknown05, EInputAction::IST_Press);
+                }
+
+                if (raw.data.mouse.ulButtons & RI_MOUSE_BUTTON_5_UP)
+                {
+                    pEngine->InputEvent(m_pViewPort, EInputKey::IK_Unknown06, EInputAction::IST_Release);
+                }
+                else if (raw.data.mouse.ulButtons & RI_MOUSE_BUTTON_5_DOWN)
+                {
+                    pEngine->InputEvent(m_pViewPort, EInputKey::IK_Unknown06, EInputAction::IST_Press);
+                }
+
+                bSkipMessage = true;
+            }
+        }
+            break;
+        }
+
+        if(!bSkipMessage)
+        {
+            TranslateMessage(&Msg);
+            DispatchMessage(&Msg);
+        }
+    }
 }
 
 void CLauncher::MainLoop(UEngine* const pEngine)
 {
     assert(pEngine);
 
-    LARGE_INTEGER iOldTime;
-    if(!QueryPerformanceCounter(&iOldTime)) //Initial time
+    LARGE_INTEGER liNow;
+    if(!QueryPerformanceCounter(&liNow)) //Initial time
     {
         return;
     }
 
+    const long long iQpcFrequency = m_iPerfCounterFreq.QuadPart;
+    long long iLastTickQpc = liNow.QuadPart;
+    long long iPeriodQpc = 0;
+    long long iDeadlineQpc = liNow.QuadPart; //Frame 1 ticks immediately, with a near-zero delta
+
+    const CMmcssRegistration Mmcss;
+    const CFrameTimer FrameTimer;
+    GLog->Logf(L"Main loop: frame pacing via %s.", FrameTimer.GetPathName());
+
     while (GIsRunning && !GIsRequestingExit)
     {
-        LARGE_INTEGER iTime;
-        QueryPerformanceCounter(&iTime);
-        const float fDeltaTime = (iTime.QuadPart - iOldTime.QuadPart) / static_cast<float>(m_iPerfCounterFreq.QuadPart);
-
-        //Lock game update speed to fps limit
-        const bool bTickThisIteration =
-            (m_fFPSLimit == 0.0f || fDeltaTime >= 1.0f / m_fFPSLimit) &&
-            (pEngine->GetMaxTickRate() == 0.0f || fDeltaTime >= 1.0f / pEngine->GetMaxTickRate());
-        if(bTickThisIteration)
-        {
-            //Baseline frame-stats diagnostic (GetFrameStats exec): frame duration is
-            //this frame's fDeltaTime; lateness is how far it overshot the ideal period
-            //for the effective rate (smaller non-zero of m_fFPSLimit and
-            //GetMaxTickRate() - see spec's effective-rate rule; NOT a plain min(), since
-            //min(120, 0) would wrongly pick the unlimited rate).
-            {
-                float fEffectiveRate = 0.0f;
-                if (m_fFPSLimit > 0.0f && pEngine->GetMaxTickRate() > 0.0f)
-                {
-                    fEffectiveRate = std::min(m_fFPSLimit, pEngine->GetMaxTickRate());
-                }
-                else if (m_fFPSLimit > 0.0f)
-                {
-                    fEffectiveRate = m_fFPSLimit;
-                }
-                else if (pEngine->GetMaxTickRate() > 0.0f)
-                {
-                    fEffectiveRate = pEngine->GetMaxTickRate();
-                }
-
-                const float fIdealPeriod = (fEffectiveRate > 0.0f) ? (1.0f / fEffectiveRate) : 0.0f;
-                const float fLateness = (fIdealPeriod > 0.0f) ? (fDeltaTime - fIdealPeriod) : 0.0f;
-                RecordFrameStats(static_cast<double>(fDeltaTime) * 1000.0, static_cast<double>(fLateness) * 1000.0);
-            }
-
-            pEngine->Tick(fDeltaTime);
-            if(GWindowManager)
-            {
-                GWindowManager->Tick(fDeltaTime);
-            }
-            iOldTime = iTime;
-        }
-
-        if(pEngine->Client->Viewports.Num() == 0) //If user closes window, viewport disappears before we get WM_QUIT
-        {
-            m_pViewPort = nullptr;
-        }
-
-        POINT CursorPos;
+        //Pre-tick facts, gathered once per frame. They feed the message pump
+        //(including the pumps that run mid-wait, so a dispatched message sees facts
+        //at most one frame old), the modifier-release edge check and the pad poll.
+        //Everything that dereferences m_pViewPort waits until after Tick, below --
+        //Tick is what destroys the viewport when the user closes the window.
+        POINT CursorPos = {};
         GetCursorPos(&CursorPos);
         const bool bMouseOverWindow = WindowFromPoint(CursorPos) == m_hWnd;
         const bool bHasFocus = GetFocus() == m_hWnd;
+        //Clipping keys off foreground, not focus: GetFocus() is thread-queue focus
+        //and goes false when the same-thread WLog window is clicked, which must not
+        //drop the clip.
+        const HWND hForeground = GetForegroundWindow();
+        const bool bForeground = m_hWnd != NULL && (hForeground == m_hWnd || IsChild(m_hWnd, hForeground) != FALSE);
+        RECT rClientScreen = {};
+        if (m_hWnd)
+        {
+            RECT rClientArea;
+            GetClientRect(m_hWnd, &rClientArea);
+            std::array<POINT, 2> ClientPoints = { { {rClientArea.left, rClientArea.top}, {rClientArea.right, rClientArea.bottom} } };
+            MapWindowPoints(m_hWnd, NULL, ClientPoints.data(), static_cast<UINT>(ClientPoints.size()));
+            rClientScreen = { ClientPoints[0].x, ClientPoints[0].y, ClientPoints[1].x, ClientPoints[1].y };
+        }
+
+        //Wait out the rest of the frame period without spinning, staying responsive:
+        //any message wakes the wait, is pumped, and the wait re-arms for what is left
+        //of the period. An unlimited cap (period 0) skips the wait entirely.
+        while (iPeriodQpc > 0 && !GIsRequestingExit)
+        {
+            QueryPerformanceCounter(&liNow);
+            const DWORD dwRemainingMs = FramePacing::RemainingMs(liNow.QuadPart, iDeadlineQpc, iQpcFrequency);
+            if (dwRemainingMs == 0 || FrameTimer.Wait(dwRemainingMs) != CFrameTimer::EWake::Message)
+            {
+                break;
+            }
+            PumpMessages(pEngine, bMouseOverWindow, bHasFocus);
+        }
+
+        QueryPerformanceCounter(&liNow);
+        const float fDeltaTime = FramePacing::ClampedDelta(iLastTickQpc, liNow.QuadPart, iQpcFrequency);
+        const double fOvershootMs = FramePacing::OvershootMs(liNow.QuadPart, iDeadlineQpc, iQpcFrequency);
+
+        //One GetMaxTickRate() call per frame; the engine can change it between frames.
+        const float fMaxTickRate = pEngine->GetMaxTickRate();
+        iPeriodQpc = FramePacing::EffectivePeriodTicks(m_fFPSLimit, fMaxTickRate, iQpcFrequency);
+        iDeadlineQpc = FramePacing::NextDeadline(liNow.QuadPart, iPeriodQpc);
+        FrameTimer.Arm(FramePacing::TicksTo100ns(iPeriodQpc, iQpcFrequency));
 
         //Release stuck modifier keys when focus returns. Alt-tabbing away eats the
         //modifier's keyup (it's delivered to the newly focused window), so every
@@ -421,26 +672,32 @@ void CLauncher::MainLoop(UEngine* const pEngine)
         }
         m_bPrevHasFocus = bHasFocus;
 
-        //Poll at tick rate, not main-loop rate: the engine accumulates IST_Axis events
-        //between ticks (same as mouse WM_INPUT deltas below), so emitting the absolute
-        //stick value many times per tick produced per-tick turn = value * polls_per_tick.
-        //Scheduling jitter in polls_per_tick caused jerky right-stick look.
-        if(bTickThisIteration)
+        //Poll and the final pump sit immediately before Tick so pad and mouse input
+        //are equally fresh. Poll runs exactly once per tick: the engine accumulates
+        //IST_Axis events between ticks, so emitting the absolute stick value several
+        //times per tick scaled the resulting turn by the poll count (jerky look).
+        m_Gamepad.Poll(pEngine, m_pViewPort, bHasFocus);
+        PumpMessages(pEngine, bMouseOverWindow, bHasFocus);
+
+        pEngine->Tick(fDeltaTime);
+        if(GWindowManager)
         {
-            m_Gamepad.Poll(pEngine, m_pViewPort, bHasFocus);
+            GWindowManager->Tick(fDeltaTime);
         }
+        iLastTickQpc = liNow.QuadPart;
+        RecordFrameStats(static_cast<double>(fDeltaTime) * 1000.0, fOvershootMs);
+
+        //Post-tick re-validation: if the user closed the window, the viewport died
+        //inside Tick above, before any WM_QUIT reaches us. Client is null on a
+        //dedicated server.
+        if(!pEngine->Client || pEngine->Client->Viewports.Num() == 0)
+        {
+            m_pViewPort = nullptr;
+        }
+
         if(m_pViewPort)
         {
             assert(m_hWnd);
-
-            RECT rClientArea;
-            GetClientRect(m_hWnd, &rClientArea);
-            std::array<POINT, 2> ClientPoints = { { {rClientArea.left, rClientArea.top}, {rClientArea.right, rClientArea.bottom} } };
-            MapWindowPoints(m_hWnd, NULL, ClientPoints.data(), ClientPoints.size());
-            const RECT rClientScreen = { ClientPoints[0].x, ClientPoints[0].y, ClientPoints[1].x, ClientPoints[1].y };
-
-            RECT rr;
-            GetWindowRect(m_hWnd, &rr);
 
             //PeekMessage() doesn't get WM_SIZE
             //Default/desired FOV check is so we don't change FOV while zoomed in
@@ -455,7 +712,7 @@ void CLauncher::MainLoop(UEngine* const pEngine)
                     ApplyAutoFOV(iSizeX, iSizeY);
                 }
             }
-            
+
             //pEngine->Client->Viewports(0)->SetMouseCapture()'s cursor centering doesn't work with raw input.
             //Why doesn't it work? Because we block WM_MOUSEMOVE messages, which the game apparently uses to center the cursor.
             //SetCursorPos() still works, though, which I'd assume the game uses; ClipCursor() didn't exist until Win2000.
@@ -495,141 +752,59 @@ void CLauncher::MainLoop(UEngine* const pEngine)
 
             const bool bInMenu = pRoot->IsMouseGrabbed()!=0;
 
-            if (m_bRawInput && m_pViewPort && m_pViewPort->IsFullscreen())
-            {
-                if (bInMenu && !m_bPrevInMenu) //Fixes that in fullscreen mode, windows mouse cursor pos isn't matched to DX menu cursor
-                {
-                    float fX, fY;
-                    pRoot->GetRootCursorPos(&fX, &fY);
-                    POINT p{static_cast<int>(fX), static_cast<int>(fY)};
-                    ClientToScreen(m_hWnd, &p);
-                    SetCursorPos(p.x, p.y);
-                }
-                ClipCursor(&rClientScreen); //Fixed being able to move cursor outside of fullscreen game on dual monitor systems
-            }
+            CursorPolicy::Facts Frame;
+            Frame.bForeground = bForeground;
+            Frame.bFullscreen = m_pViewPort->IsFullscreen()!=0;
+            Frame.bRawInput = m_bRawInput!=0;
+            Frame.bInMenu = bInMenu;
+            Frame.bPrevInMenu = m_bPrevInMenu;
+            Frame.bPadActive = m_Gamepad.IsPadActive();
+            Frame.bMouseActive = m_Gamepad.IsMouseActive();
+            Frame.bMouseOverWindow = bMouseOverWindow;
+            Frame.bMouseInClientRect = PtInRect(&rClientScreen, CursorPos)!=0; //This makes sure resize cursor isn't hidden
+            Frame.bCaptured = GetCapture() == m_hWnd;
+            Frame.rClientScreen = rClientScreen;
+
+            const CursorPolicy::Desired Want = CursorPolicy::Decide(Frame);
             m_bPrevInMenu = bInMenu;
 
-            const bool bMouseInClientRect = PtInRect(&rClientScreen, CursorPos)!=0; //This makes sure resize cursor isn't hidden
-            const bool bCaptured = GetCapture() == m_hWnd;
-            const bool bHideForPad = m_Gamepad.IsPadActive();
-            if (bHideForPad || (bMouseInClientRect && (bMouseOverWindow || bCaptured))) //Want to show cursor when over preferences window when we don't have focus, but not when it's under the window if we do; force-hide while pad-active
+            if (Want.bSyncCursorToRootPos) //Fixes that in fullscreen mode, windows mouse cursor pos isn't matched to DX menu cursor
             {
-                while(ShowCursor(FALSE) > 0); //Get rid of double mouse cursors when game doesn't clip it
-            }
-            else
-            {
-                while(ShowCursor(TRUE) <= 0);
-            }
-        }
-
-        MSG Msg;
-        while (PeekMessage(&Msg, NULL, 0, 0, PM_REMOVE))
-        {
-            bool bSkipMessage = false;
-
-            switch (Msg.message)
-            {
-            case WM_QUIT:
-                GIsRequestingExit = 1;
-                break;
-
-            case WM_MOUSEMOVE:
-                if (m_pViewPort && m_bRawInput)
-                {
-                    //Mouse-activity detection deliberately does NOT live here: WM_MOUSEMOVE
-                    //also fires for synthetic cursor moves (WinDrv's capture-release position
-                    //restore on menu open, ClipCursor clamps, our fullscreen SetCursorPos
-                    //sync). Treating those as user activity flipped IsPadActive() false and
-                    //fed the move below, briefly unhiding the cursor and stealing menu focus
-                    //on gameplay->menu transitions. Physical motion is detected from raw
-                    //WM_INPUT deltas instead (NotifyMouseActivity in the WM_INPUT branch).
-                    //Gate on positive physical-mouse evidence (IsMouseActive), not merely
-                    //pad inactivity: with the pad idle past the grace window, !IsPadActive()
-                    //let synthetic moves through, warping the game cursor onto whatever the
-                    //OS cursor was over (menu focus steal, conversation cursor flash).
-                    const int iXPos = GET_X_LPARAM(Msg.lParam);
-                    const int iYPos = GET_Y_LPARAM(Msg.lParam);
-                    if (bMouseOverWindow && m_Gamepad.IsMouseActive()) //Because preferences window defers mousemove calls to us, somehow
-                    {
-                        //Use WM_MOUSEMOVE to control menu cursor
-                        pEngine->MousePosition(m_pViewPort, 0, static_cast<float>(iXPos), static_cast<float>(iYPos));
-                    }
-                    bSkipMessage = true;
-                }
-                break;
-
-            case WM_KEYDOWN:
-            case WM_SYSKEYDOWN:
-                if (m_bBorderlessFullscreenWindow && Msg.wParam == VK_RETURN && (HIWORD(Msg.lParam) & KF_ALTDOWN)) //User hits alt+enter
-                {
-                    ToggleBorderlessWindowedFullscreen();
-                    bSkipMessage = true;
-                }
-                break;
-
-
-            case WM_INPUT:
-            {
-                //Use raw input to control camera
-                if (m_pViewPort && bHasFocus)
-                {
-                    RAWINPUT raw;
-                    UINT rawSize = sizeof(raw);
-                    GetRawInputData(reinterpret_cast<HRAWINPUT>(Msg.lParam), RID_INPUT, &raw, &rawSize, sizeof(RAWINPUTHEADER));
-
-                    //We only register for mouse usage, but SDL's joystick RawInput
-                    //driver can be turned on by hint, and then every packet lands
-                    //here too -- reading raw.data.mouse out of a HID packet would
-                    //be garbage.
-                    if (raw.header.dwType != RIM_TYPEMOUSE)
-                    {
-                        break;
-                    }
-
-                    //Raw deltas are physical-motion ground truth (synthetic SetCursorPos
-                    //moves never generate WM_INPUT), so this is where mouse activity is
-                    //detected for the pad-vs-mouse active-source signal.
-                    m_Gamepad.NotifyMouseActivity(raw.data.mouse.lLastX, raw.data.mouse.lLastY);
-
-                    const float fDeltaX = static_cast<float>(raw.data.mouse.lLastX);
-                    const float fDeltaY = static_cast<float>(raw.data.mouse.lLastY);
-                    if(fDeltaX != 0.0f)
-                    {
-                        pEngine->InputEvent(m_pViewPort, EInputKey::IK_MouseX, EInputAction::IST_Axis, fDeltaX);
-                    }
-                    if(fDeltaY != 0.0f)
-                    {
-                        pEngine->InputEvent(m_pViewPort, EInputKey::IK_MouseY, EInputAction::IST_Axis, -fDeltaY);
-                    }
-
-                    if (raw.data.mouse.ulButtons & RI_MOUSE_BUTTON_4_UP)
-                    {
-                        pEngine->InputEvent(m_pViewPort, EInputKey::IK_Unknown05, EInputAction::IST_Release);
-                    }
-                    else if (raw.data.mouse.ulButtons & RI_MOUSE_BUTTON_4_DOWN)
-                    {
-                        pEngine->InputEvent(m_pViewPort, EInputKey::IK_Unknown05, EInputAction::IST_Press);
-                    }
-
-                    if (raw.data.mouse.ulButtons & RI_MOUSE_BUTTON_5_UP)
-                    {
-                        pEngine->InputEvent(m_pViewPort, EInputKey::IK_Unknown06, EInputAction::IST_Release);
-                    }
-                    else if (raw.data.mouse.ulButtons & RI_MOUSE_BUTTON_5_DOWN)
-                    {
-                        pEngine->InputEvent(m_pViewPort, EInputKey::IK_Unknown06, EInputAction::IST_Press);
-                    }
-
-                    bSkipMessage = true;
-                }
-            }
-                break;
+                float fX, fY;
+                pRoot->GetRootCursorPos(&fX, &fY);
+                POINT p{static_cast<int>(fX), static_cast<int>(fY)};
+                ClientToScreen(m_hWnd, &p);
+                SetCursorPos(p.x, p.y);
             }
 
-            if(!bSkipMessage)
+            //Diff the desired state against what the OS actually reports, so an
+            //externally cleared clip or a foreign ShowCursor heals within a frame while
+            //a steady state costs two cheap reads. Each transition applies exactly one
+            //ShowCursor call: it moves a display counter by +-1 per call, so the old
+            //per-frame while-loops drove that counter away from zero all session.
+            RECT rActualClip = {};
+            const bool bClipMatchesDesired = Want.bClip && GetClipCursor(&rActualClip) && EqualRect(&rActualClip, &Want.rClip)!=FALSE;
+            CURSORINFO CursorInfo = {};
+            CursorInfo.cbSize = sizeof(CursorInfo);
+            const bool bCursorShowing = GetCursorInfo(&CursorInfo) ? (CursorInfo.flags & CURSOR_SHOWING)!=0 : true;
+
+            const CursorPolicy::Actions Act = CursorPolicy::Diff(Want, bClipMatchesDesired, m_bClipHeld, bCursorShowing);
+            if (Act.bSetClip) //Fixed being able to move cursor outside of fullscreen game on dual monitor systems
             {
-                TranslateMessage(&Msg);
-                DispatchMessage(&Msg);
+                m_bClipHeld = ClipCursor(&Want.rClip)!=FALSE;
+            }
+            if (Act.bReleaseClip)
+            {
+                ClipCursor(NULL);
+                m_bClipHeld = false;
+            }
+            if (Act.bHideOneStep) //Get rid of double mouse cursors when game doesn't clip it
+            {
+                ShowCursor(FALSE);
+            }
+            if (Act.bShowOneStep)
+            {
+                ShowCursor(TRUE);
             }
         }
     }
