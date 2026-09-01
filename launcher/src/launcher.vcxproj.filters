@@ -63,6 +63,12 @@
     <ClCompile Include="FrameStats.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="FramePacing.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="CursorPolicy.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="ConfigOverride.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -117,6 +123,12 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="FrameStats.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="FramePacing.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="CursorPolicy.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="ConfigOverride.h">
