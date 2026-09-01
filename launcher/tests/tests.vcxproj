@@ -66,9 +66,12 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="smoke.cpp" />
+    <ClCompile Include="FrameStatsTests.cpp" />
+    <ClCompile Include="..\src\FrameStats.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="doctest.h" />
+    <ClInclude Include="..\src\FrameStats.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
 </Project>
