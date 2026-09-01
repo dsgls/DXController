@@ -12,6 +12,7 @@
 #include "CursorPolicy.h"
 #include "CrashRecord.h"
 #include "FramePacing.h"
+#include "LogPath.h"
 #include "Launcher.h"
 
 //Do not put before stdafx.h
@@ -282,6 +283,29 @@ INT WINAPI WinMain(HINSTANCE /*hInInstance*/, HINSTANCE /*hPrevInstance*/, LPSTR
 
     //If -localdata command line option present, don't use user documents for data; can't use appCmdLine() yet.
     std::unique_ptr<FFileManagerDeusExe> pFileManager(wcswcs(GetCommandLine(), L" -localdata") == nullptr ? new FFileManagerDeusExeUserDocs : new FFileManagerDeusExe);
+
+    //Rotate the previous run's log before appInit's first Serialize() call
+    //lazily opens (and overwrites) a fresh one. Must run here: before
+    //appInit, but after the file manager exists so the rename target takes
+    //the same redirect the log's own write will (FFileManagerDeusExeUserDocs
+    //rebases into Documents).
+    {
+        wchar_t szExeDir[MAX_PATH];
+        Misc::GetGameSystemDir(szExeDir);
+        const LogPath::Result LogPathResult = LogPath::Parse(GetCommandLine(), szExeDir, GPackage);
+        if (LogPathResult.bFound)
+        {
+            wchar_t szModernPath[MAX_PATH];
+            wchar_t szModernRotatedPath[MAX_PATH];
+            const bool bModernPath = pFileManager->ToModernFileName(szModernPath, LogPathResult.szPath, 'w');
+            const bool bModernRotated = pFileManager->ToModernFileName(szModernRotatedPath, LogPathResult.szRotatedPath, 'w');
+            //Failure (file in use, missing) is silently ignored - the engine overwrites as today.
+            MoveFileExW(
+                bModernPath ? szModernPath : LogPathResult.szPath,
+                bModernRotated ? szModernRotatedPath : LogPathResult.szRotatedPath,
+                MOVEFILE_REPLACE_EXISTING);
+        }
+    }
 
     appInit(GPackage, GetCommandLine(), &Malloc, &Log, &Error, &Warn, pFileManager.get(), FConfigCacheIni::Factory, 1);
 
