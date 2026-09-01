@@ -154,6 +154,13 @@ jobs:
           }
           Write-Host "launcher OK"
 
+      - name: Run launcher unit tests
+        shell: pwsh
+        run: |
+          # The solution build compiles tests.vcxproj but never runs it.
+          & launcher\tests\Release\tests.exe
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
       - name: Upload build artifact
         uses: actions/upload-artifact@v7
         with:

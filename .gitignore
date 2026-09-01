@@ -14,6 +14,9 @@ gamedir
 /launcher/Release/
 /launcher/Debug/
 /launcher/_work/
+/launcher/tests/Release/
+/launcher/tests/Debug/
+/launcher/tests/_work/
 /launcher/detours/
 /launcher/external/
 /launcher/.vs/
