@@ -82,6 +82,126 @@ and `DeusEx.exe` (built from `launcher/` via `launcher/build.sh`).
 
 To cut a release, push a `v*` tag.
 
+## Launcher architecture
+
+### Pure-unit layer and test scaffold
+
+Launcher logic that is pure computation — no syscalls, no engine headers,
+no PCH — lives as a `.h`/`.cpp` pair directly in `launcher/src/` (a plain
+`<windows.h>` include for types like `RECT`/`SYSTEMTIME`/`DWORD` is fine).
+The main loop and its handlers stay thin shims: gather OS/engine facts,
+call a pure function to decide, apply the result via Win32/engine calls.
+Current units: `FrameStats`, `FramePacing`, `CursorPolicy`, `LogTime`,
+`LogPath`, `CrashRecord`, `StartupHeader`.
+
+`launcher/tests/` builds these units against doctest (vendored header,
+`launcher/tests/doctest.h`) via `launcher/tests/tests.vcxproj`, a
+console-exe project in `launcher.sln` that never includes engine headers
+or links engine libs. `launcher/build.sh` builds and runs the test exe
+after the launcher build (via Windows interop from WSL) and fails the
+build on a test failure; CI (`.github/workflows/build.yml`) runs the test
+exe as a separate step after its own msbuild invocation, since the
+solution build alone would compile the tests without checking results.
+Every new pure-unit or test source file needs explicit `launcher.vcxproj`/
+`tests.vcxproj` (+ `.filters`) entries — no globbing — and must not set
+`PrecompiledHeader=Use`.
+
+### Main loop (`CLauncher::MainLoop`, `Launcher.cpp`)
+
+The loop paces itself with a message-aware wait rather than a busy-spin:
+a high-resolution waitable timer (`CreateWaitableTimerExW` with
+`CREATE_WAITABLE_TIMER_HIGH_RESOLUTION`, falling back to a
+non-high-res timer or, if timer creation fails outright, to
+`MsgWaitForMultipleObjects`'s own millisecond timeout) is waited on with
+`MsgWaitForMultipleObjects(..., QS_ALLINPUT)`; a message wake pumps
+`PeekMessage` and re-arms the wait, a timer wake proceeds to tick. This
+keeps the window responsive at any `FPSLimit`, including 1. The thread
+also registers MMCSS (`AvSetMmThreadCharacteristicsW(L"Games", ...)`,
+resolved via `LoadLibraryW`/`GetProcAddress` so a missing `avrt.dll`
+degrades to a no-op) for scheduling-jitter reduction.
+
+The effective tick period is the smaller *non-zero* rate among
+`FPSLimit` and `pEngine->GetMaxTickRate()` — not a plain `min()`, which
+would let a zero (unlimited) value win over a real cap. Zero on both
+sides means no wait, one pump per iteration. The next deadline is
+derived from the current frame's post-wait timestamp (non-accumulating),
+so an overrunning frame doesn't trigger a catch-up burst.
+
+Facts are gathered at two points in the loop, deliberately:
+
+- **Pre-tick** (`GetCursorPos`, `GetFocus`, client rect, etc.) — feeds
+  the message pump, the modifier-release check, and `Gamepad.Poll`
+  (which needs this frame's focus state). Gamepad poll and the final
+  input pump run immediately before `Tick`, so pad input has the same
+  one-frame freshness as mouse input.
+- **Post-tick** — `Tick()` can destroy the viewport (window closed
+  mid-tick), so `m_pViewPort` is re-validated against
+  `pEngine->Client->Viewports.Num()` right after `Tick` returns, and
+  everything that dereferences the viewport (player/`rootWindow`/
+  `bInMenu`, auto-FOV, cursor apply) reads its facts only after that
+  re-validation, not before. Collapsing the two fact blocks into one
+  reintroduces a use-after-free.
+
+A ring buffer records per-frame stats (frame duration, deadline
+overshoot); `GetFrameStats` (an exec command, alongside `GamepadGetInfo`
+etc.) logs count/avg/p50/p99/max and stdev, then resets the buffer.
+
+### Crash and cursor-state handling
+
+`CLauncher`'s constructor sets `GIsGuarded = 1` around the `MainLoop`
+call and wraps it in `try/catch(...)`: on catch it logs `GErrorHist`
+(via `Log`, not `Logf` — the history can already fill Core's format
+buffer), calls `GError->HandleError()` for the stock message box, then
+force-exits via `appRequestExit(1)` without falling through into normal
+constructor teardown (which would run against an object system
+`HandleError` already tore down). A `SetUnhandledExceptionFilter`
+handler installed in `WinMain` backstops faults that don't reach the
+guard chain: reentrancy gate first, then cursor release, then
+`GLogHook = NULL`, then log what's known, and module+offset resolution
+(`GetModuleHandleExW`/`GetModuleFileNameW`) *last* — it takes the loader
+lock and can deadlock if the fault happened under it.
+
+Two things are unverified pending the batched manual playtest: whether
+an SEH hardware fault actually propagates through the VC6 DLL guard
+chain to reach the filter with `GErrorHist` populated (the guard macros
+are plain VC6 `/GX`-era `catch(...)`/`throw;`), and the force-exit
+semantics of `appRequestExit(1)` (declaration-only in the vendored SDK
+headers, no visible definition to check against). Treat both as
+best-effort until that pass confirms or refutes them.
+
+A cursor guard object, constructed at `MainLoop` entry, owns the
+currently-applied clip rect and the net `ShowCursor` delta this code
+has applied; its destructor releases both (covering normal return and
+C++ unwind). Cursor state is re-verified once per frame against actual
+OS state (`GetClipCursor`/`GetCursorInfo`), not a blind cache, so an
+externally-cleared clip self-heals within a frame. The clip is also
+gated on `GetForegroundWindow() == m_hWnd` rather than `GetFocus()` —
+`GetFocus()` is thread-queue focus and can diverge from what the user
+perceives as the active window — so an alt-tabbed-and-hung game can
+never hold a desktop-global clip.
+
+**Quirk — `ShowCursor` is a per-process counter, not a boolean.** Each
+call moves the display counter by exactly ±1 and returns the new value;
+a per-frame `while(ShowCursor(FALSE) > 0);`-style loop run every frame
+(rather than once per visibility transition) runs the counter away from
+zero indefinitely. The launcher's cursor guard applies exactly one
+`ShowCursor` call per transition and tracks the net delta so its
+destructor can return the counter to where it found it.
+
+### Log format
+
+`FOutputDeviceFileFlush::Serialize` prepends a `[HH:MM:SS.mmm]` local-time
+prefix to every line before delegating to the base class — except
+`NAME_Title` events (the `WLog` window caption), which pass through
+unprefixed, and a re-entrant call from the base's own critical-error
+path, guarded against double-prefixing. At startup, before `appInit`,
+the previous log is rotated to `<package>.old.log` (the stock output
+device does not rotate on its own); right before `MainLoop` starts, a
+single delimited block logs the facts most useful for a bug report in
+one place — versions, exe/command line, OS build, renderer/viewport
+config, effective FPS cap, active pad identity, `WinDrvPatch` per-site
+outcomes, and the ini values that change behaviour.
+
 ## Source overlay model
 
 `DeusEx.u` is rebuildable, so additions live in `DeusEx/Classes/<File>.uc`
