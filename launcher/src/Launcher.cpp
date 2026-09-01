@@ -71,6 +71,66 @@ namespace
         BOOL(WINAPI* m_pfnRevert)(HANDLE) = nullptr;
     };
 
+    //Owns every ClipCursor/ShowCursor change the loop makes, so the process can
+    //never leave the desktop's cursor clipped to a dead window or hidden until
+    //reboot - Windows reclaims per-process cursor state on exit, but a fullscreen
+    //app that dies mid-clip can wedge the session's cursor first.
+    //
+    //ShowCursor moves a per-process display counter by +-1 per call, so the state
+    //that has to be undone is the NET delta this process applied, not a boolean.
+    //The state is static and the release is a static function because the
+    //unhandled-exception filter has to run it from a crashed context where no
+    //destructor will.
+    class CCursorGuard
+    {
+    public:
+        CCursorGuard() { assert(!s_bLive); s_bLive = true; }
+        ~CCursorGuard() { Release(); s_bLive = false; }
+
+        CCursorGuard(const CCursorGuard&) = delete;
+        CCursorGuard& operator=(const CCursorGuard&) = delete;
+
+        void SetClip(const RECT& rClip) { s_bClipHeld = ClipCursor(&rClip) != FALSE; }
+        void ReleaseClip() { ClipCursor(NULL); s_bClipHeld = false; }
+        void Show() { ShowCursor(TRUE); ++s_iShowDelta; }
+        void Hide() { ShowCursor(FALSE); --s_iShowDelta; }
+
+        //GetClipCursor cannot answer this: an unclipped cursor reports the whole
+        //virtual screen, so releasing needs our own last-applied state.
+        bool IsClipHeld() const { return s_bClipHeld; }
+
+        //Idempotent, and safe with no guard alive: state is cleared as it is undone.
+        //Best effort against a fault on another thread mid-apply - one stale step is
+        //better than leaving the cursor wedged.
+        static void Release()
+        {
+            if (s_bClipHeld)
+            {
+                ClipCursor(NULL);
+                s_bClipHeld = false;
+            }
+            while (s_iShowDelta < 0)
+            {
+                ShowCursor(TRUE);
+                ++s_iShowDelta;
+            }
+            while (s_iShowDelta > 0)
+            {
+                ShowCursor(FALSE);
+                --s_iShowDelta;
+            }
+        }
+
+    private:
+        static bool s_bLive;
+        static bool s_bClipHeld;
+        static int s_iShowDelta;
+    };
+
+    bool CCursorGuard::s_bLive = false;
+    bool CCursorGuard::s_bClipHeld = false;
+    int CCursorGuard::s_iShowDelta = 0;
+
     //Frame deadline timer plus the message-aware wait on it. Three paths, best
     //first: a high-resolution waitable timer (~0.5 ms, no global timer period), a
     //plain waitable timer with timeBeginPeriod(1), or no timer at all - the
@@ -404,16 +464,6 @@ CLauncher::CLauncher()
         }
         GIsRunning = 0;
 
-        if (GIsClient) //Restore the global cursor state the main loop mutated (ClipCursor/ShowCursor)
-        {
-            //Windows reclaims per-process cursor state on process exit, but a fullscreen
-            //DX app that exits while the cursor is clipped/hidden can leave the session's
-            //cursor wedged (clipped to the old rect, or hidden until reboot), so release it
-            //explicitly here.
-            ClipCursor(NULL); //Drop any clip rect set in the loop; never set elsewhere
-            while (ShowCursor(TRUE) < 0) {} //Undo any net ShowCursor(FALSE) so the cursor is visible
-        }
-
         GLogWindow->Log(NAME_Title, LocalizeGeneral("Exit"));
     }
 
@@ -589,6 +639,7 @@ void CLauncher::MainLoop(UEngine* const pEngine)
 
     const CMmcssRegistration Mmcss;
     const CFrameTimer FrameTimer;
+    CCursorGuard CursorGuard; //Releases clip and ShowCursor delta on return and on unwind
     GLog->Logf(L"Main loop: frame pacing via %s.", FrameTimer.GetPathName());
 
     while (GIsRunning && !GIsRequestingExit)
@@ -809,23 +860,22 @@ void CLauncher::MainLoop(UEngine* const pEngine)
             CursorInfo.cbSize = sizeof(CursorInfo);
             const bool bCursorShowing = GetCursorInfo(&CursorInfo) ? (CursorInfo.flags & CURSOR_SHOWING)!=0 : true;
 
-            const CursorPolicy::Actions Act = CursorPolicy::Diff(Want, bClipMatchesDesired, m_bClipHeld, bCursorShowing);
+            const CursorPolicy::Actions Act = CursorPolicy::Diff(Want, bClipMatchesDesired, CursorGuard.IsClipHeld(), bCursorShowing);
             if (Act.bSetClip) //Fixed being able to move cursor outside of fullscreen game on dual monitor systems
             {
-                m_bClipHeld = ClipCursor(&Want.rClip)!=FALSE;
+                CursorGuard.SetClip(Want.rClip);
             }
             if (Act.bReleaseClip)
             {
-                ClipCursor(NULL);
-                m_bClipHeld = false;
+                CursorGuard.ReleaseClip();
             }
             if (Act.bHideOneStep) //Get rid of double mouse cursors when game doesn't clip it
             {
-                ShowCursor(FALSE);
+                CursorGuard.Hide();
             }
             if (Act.bShowOneStep)
             {
-                ShowCursor(TRUE);
+                CursorGuard.Show();
             }
         }
     }

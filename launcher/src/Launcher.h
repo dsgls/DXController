@@ -29,7 +29,6 @@ private:
     bool m_bPrevInMenu = false;
     bool m_bPrevHasFocus = false;
     bool m_bInBorderlessFullscreenWindow = false;
-    bool m_bClipHeld = false; //Whether the loop currently holds a ClipCursor rect
     CGamepad m_Gamepad;
 
     //Frame-stats diagnostic ring buffer (GetFrameStats exec command). Frame
