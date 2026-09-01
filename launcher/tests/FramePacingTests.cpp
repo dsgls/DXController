@@ -65,6 +65,17 @@ TEST_CASE("FramePacing::TicksTo100ns converts a period to timer units")
     CHECK(FramePacing::TicksTo100ns(0, kiFreq) == 0);
 }
 
+TEST_CASE("FramePacing::ElapsedMs reports the raw frame span in milliseconds")
+{
+    CHECK(FramePacing::ElapsedMs(0, 100000, kiFreq) == doctest::Approx(10.0));
+}
+
+TEST_CASE("FramePacing::ElapsedMs does not clamp a long hitch")
+{
+    //A 5 s stall must stay 5000 ms; the 0.2 s clamp applies only to what Tick gets.
+    CHECK(FramePacing::ElapsedMs(0, 5 * kiFreq, kiFreq) == doctest::Approx(5000.0));
+}
+
 TEST_CASE("FramePacing::ClampedDelta converts a tick span to seconds")
 {
     CHECK(FramePacing::ClampedDelta(0, 100000, kiFreq) == doctest::Approx(0.01f));

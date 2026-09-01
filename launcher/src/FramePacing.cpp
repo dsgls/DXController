@@ -57,6 +57,15 @@ long long FramePacing::TicksTo100ns(const long long iTicks, const long long iQpc
     return iTicks * ki100nsPerSecond / iQpcFrequency;
 }
 
+double FramePacing::ElapsedMs(const long long iPrevQpc, const long long iNowQpc, const long long iQpcFrequency)
+{
+    if (iQpcFrequency <= 0)
+    {
+        return 0.0;
+    }
+    return static_cast<double>(iNowQpc - iPrevQpc) * 1000.0 / static_cast<double>(iQpcFrequency);
+}
+
 float FramePacing::ClampedDelta(const long long iPrevQpc, const long long iNowQpc, const long long iQpcFrequency)
 {
     if (iQpcFrequency <= 0)

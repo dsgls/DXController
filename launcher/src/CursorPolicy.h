@@ -16,8 +16,9 @@ namespace CursorPolicy
 {
     struct Facts
     {
-        //Foreground, NOT focus: GetFocus() is thread-queue focus and goes false
-        //when the same-thread WLog window is clicked, which must not drop the clip.
+        //Foreground, NOT focus: the clip and the hidden cursor follow the window
+        //the user is actually working in. GetFocus() is thread-queue focus, which
+        //tracks the launcher's own windows rather than the user's active one.
         bool bForeground = false;
         bool bFullscreen = false;
         bool bRawInput = false;

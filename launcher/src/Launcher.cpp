@@ -41,10 +41,12 @@ namespace
                 return;
             }
 
+            //Both entry points up front: registering without a way to revert would
+            //leave the task handle dangling when avrt.dll is freed below.
             const auto pfnSet = reinterpret_cast<HANDLE(WINAPI*)(LPCWSTR, LPDWORD)>(GetProcAddress(m_hAvrt, "AvSetMmThreadCharacteristicsW"));
             m_pfnRevert = reinterpret_cast<BOOL(WINAPI*)(HANDLE)>(GetProcAddress(m_hAvrt, "AvRevertMmThreadCharacteristics"));
             DWORD dwTaskIndex = 0; //Must be zero-initialized or the call fails
-            m_hTask = pfnSet ? pfnSet(L"Games", &dwTaskIndex) : NULL;
+            m_hTask = (pfnSet && m_pfnRevert) ? pfnSet(L"Games", &dwTaskIndex) : NULL;
             GLog->Log(m_hTask ? L"MMCSS: main loop registered as a \"Games\" task." : L"MMCSS: registration failed, running at default thread priority.");
         }
 
@@ -600,16 +602,19 @@ void CLauncher::MainLoop(UEngine* const pEngine)
         GetCursorPos(&CursorPos);
         const bool bMouseOverWindow = WindowFromPoint(CursorPos) == m_hWnd;
         const bool bHasFocus = GetFocus() == m_hWnd;
-        //Clipping keys off foreground, not focus: GetFocus() is thread-queue focus
-        //and goes false when the same-thread WLog window is clicked, which must not
-        //drop the clip.
+        //Clipping keys off foreground, not focus: the clip must follow the window
+        //the user is actually working in, so it is dropped the moment another
+        //top-level window (including our own log window) takes over. GetFocus() is
+        //thread-queue focus and answers a different question, which is why it keeps
+        //its separate roles below.
         const HWND hForeground = GetForegroundWindow();
         const bool bForeground = m_hWnd != NULL && (hForeground == m_hWnd || IsChild(m_hWnd, hForeground) != FALSE);
         RECT rClientScreen = {};
-        if (m_hWnd)
+        RECT rClientArea = {};
+        //Fails once the window is gone, which this block outlives by a frame; the
+        //zeroed rect is never consumed, since every consumer is inside if(m_pViewPort).
+        if (m_hWnd && GetClientRect(m_hWnd, &rClientArea))
         {
-            RECT rClientArea;
-            GetClientRect(m_hWnd, &rClientArea);
             std::array<POINT, 2> ClientPoints = { { {rClientArea.left, rClientArea.top}, {rClientArea.right, rClientArea.bottom} } };
             MapWindowPoints(m_hWnd, NULL, ClientPoints.data(), static_cast<UINT>(ClientPoints.size()));
             rClientScreen = { ClientPoints[0].x, ClientPoints[0].y, ClientPoints[1].x, ClientPoints[1].y };
@@ -629,9 +634,20 @@ void CLauncher::MainLoop(UEngine* const pEngine)
             PumpMessages(pEngine, bMouseOverWindow, bHasFocus);
         }
 
+        //A message dispatched inside the wait can have torn the viewport down, and
+        //the modifier check and Poll below both use it. Client is null on a
+        //dedicated server.
+        if(!pEngine->Client || pEngine->Client->Viewports.Num() == 0)
+        {
+            m_pViewPort = nullptr;
+        }
+
         QueryPerformanceCounter(&liNow);
         const float fDeltaTime = FramePacing::ClampedDelta(iLastTickQpc, liNow.QuadPart, iQpcFrequency);
-        const double fOvershootMs = FramePacing::OvershootMs(liNow.QuadPart, iDeadlineQpc, iQpcFrequency);
+        const double fFrameTimeMs = FramePacing::ElapsedMs(iLastTickQpc, liNow.QuadPart, iQpcFrequency);
+        //At an unlimited cap the deadline is "now", so measuring against it would
+        //just restate the frame time.
+        const double fOvershootMs = (iPeriodQpc > 0) ? FramePacing::OvershootMs(liNow.QuadPart, iDeadlineQpc, iQpcFrequency) : 0.0;
 
         //One GetMaxTickRate() call per frame; the engine can change it between frames.
         const float fMaxTickRate = pEngine->GetMaxTickRate();
@@ -679,16 +695,21 @@ void CLauncher::MainLoop(UEngine* const pEngine)
         m_Gamepad.Poll(pEngine, m_pViewPort, bHasFocus);
         PumpMessages(pEngine, bMouseOverWindow, bHasFocus);
 
+        if(GIsRequestingExit) //WM_QUIT reached us this frame; nothing left to tick
+        {
+            break;
+        }
+
         pEngine->Tick(fDeltaTime);
         if(GWindowManager)
         {
             GWindowManager->Tick(fDeltaTime);
         }
         iLastTickQpc = liNow.QuadPart;
-        RecordFrameStats(static_cast<double>(fDeltaTime) * 1000.0, fOvershootMs);
+        RecordFrameStats(fFrameTimeMs, fOvershootMs);
 
-        //Post-tick re-validation: if the user closed the window, the viewport died
-        //inside Tick above, before any WM_QUIT reaches us. Client is null on a
+        //Post-tick re-validation: the viewport also dies inside Tick when the user
+        //closes the window, before any WM_QUIT reaches us. Client is null on a
         //dedicated server.
         if(!pEngine->Client || pEngine->Client->Viewports.Num() == 0)
         {
@@ -780,8 +801,8 @@ void CLauncher::MainLoop(UEngine* const pEngine)
             //Diff the desired state against what the OS actually reports, so an
             //externally cleared clip or a foreign ShowCursor heals within a frame while
             //a steady state costs two cheap reads. Each transition applies exactly one
-            //ShowCursor call: it moves a display counter by +-1 per call, so the old
-            //per-frame while-loops drove that counter away from zero all session.
+            //ShowCursor call, because it moves a display counter by +-1 per call and
+            //re-asserting a state every frame would run that counter away.
             RECT rActualClip = {};
             const bool bClipMatchesDesired = Want.bClip && GetClipCursor(&rActualClip) && EqualRect(&rActualClip, &Want.rClip)!=FALSE;
             CURSORINFO CursorInfo = {};
