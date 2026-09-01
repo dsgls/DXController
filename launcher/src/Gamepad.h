@@ -132,6 +132,15 @@ public:
     // Standard, or Unknown. "None" when uninitialized or no pad is active.
     const wchar_t* GetInfo() const;
 
+    // Startup-header diagnostic (spec sec3.4): active-pad name and joystick
+    // GUID, alongside GetInfo()'s family token. pszOutName/pszOutGuid are
+    // always NUL-terminated; both are written as "None"/"none" when SDL is
+    // unavailable or no pad is active. Sizes: SDL device names run well
+    // under 64 wchars in practice, and an SDL_GUID's hex string is exactly
+    // 32 chars + NUL.
+    void GetActivePadNameAndGuid(wchar_t* const pszOutName, const size_t iNameCap,
+                                  wchar_t* const pszOutGuid, const size_t iGuidCap) const;
+
 private:
     //One opened SDL gamepad. iId is the SDL_JoystickID (SDL's instance id,
     //never 0 for a real device, so 0 doubles as "no active pad"). The

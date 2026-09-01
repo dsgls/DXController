@@ -13,7 +13,10 @@
 #include "CrashRecord.h"
 #include "FramePacing.h"
 #include "LogPath.h"
+#include "StartupHeader.h"
 #include "Launcher.h"
+
+#include <SDL3/SDL.h> //Guarded by CGamepad::IsSdlAvailable() everywhere below -- see Gamepad.cpp's InitSdl() comment on why an unguarded call can fault
 
 //Do not put before stdafx.h
 #pragma comment(linker,"/manifestdependency:\"type='win32' name='Microsoft.Windows.Common-Controls' version='6.0.0.0' processorArchitecture='*' publicKeyToken='6595b64144ccf1df' language='*'\"")
@@ -260,6 +263,48 @@ namespace
         GLog->Log(NAME_Critical, szLine);
 
         return EXCEPTION_CONTINUE_SEARCH; //Let Windows error reporting run as it would have
+    }
+
+    //Mirrors OSVERSIONINFOW's layout (winternl.h's RTL_OSVERSIONINFOW) without
+    //pulling that header in, since RtlGetVersion is resolved dynamically anyway.
+    struct SOsVersionInfoW
+    {
+        DWORD dwOSVersionInfoSize;
+        DWORD dwMajorVersion;
+        DWORD dwMinorVersion;
+        DWORD dwBuildNumber;
+        DWORD dwPlatformId;
+        WCHAR szCSDVersion[128];
+    };
+
+    //"<major>.<minor>.<build>" for the startup header. GetVersionExW lies
+    //under an app compatibility shim; RtlGetVersion does not. ntdll.dll is
+    //always already loaded, so GetModuleHandle (not LoadLibrary) suffices.
+    std::wstring GetOsBuildString()
+    {
+        const HMODULE hNtDll = GetModuleHandleW(L"ntdll.dll");
+        using RtlGetVersionFn = LONG(WINAPI*)(SOsVersionInfoW*);
+        const auto pfnRtlGetVersion = hNtDll ? reinterpret_cast<RtlGetVersionFn>(GetProcAddress(hNtDll, "RtlGetVersion")) : nullptr;
+
+        SOsVersionInfoW Info = {};
+        Info.dwOSVersionInfoSize = sizeof(Info);
+        if (!pfnRtlGetVersion || pfnRtlGetVersion(&Info) != 0 /*STATUS_SUCCESS*/)
+        {
+            return L"unknown";
+        }
+        wchar_t sz[64];
+        swprintf_s(sz, L"%lu.%lu.%lu", Info.dwMajorVersion, Info.dwMinorVersion, Info.dwBuildNumber);
+        return sz;
+    }
+
+    //"<major>.<minor>.<micro>" from SDL_GetVersion()'s encoded int
+    //(SDL_VERSIONNUM(X,Y,Z) = X*1000000 + Y*1000 + Z). Caller must not call
+    //this -- or anything else in <SDL3/SDL.h> -- unless CGamepad::IsSdlAvailable().
+    std::wstring FormatSdlVersion(const int iVersion)
+    {
+        wchar_t sz[32];
+        swprintf_s(sz, L"%d.%d.%d", iVersion / 1000000, (iVersion / 1000) % 1000, iVersion % 1000);
+        return sz;
     }
 }
 
@@ -540,6 +585,72 @@ CLauncher::CLauncher()
 
         //Initialize native hooks
         CNativeHooks NativeHooks(PROJECTNAME);
+
+        //Startup diagnostic block (design doc sec3.4) -- the latest point
+        //where every fact it reports exists (viewport, WinDrvPatch outcomes,
+        //gamepad). StartupHeader::Build is the pure assembly; everything here
+        //is plumbing that gathers facts and logs the resulting lines.
+        {
+            StartupHeader::Facts Facts;
+
+            Facts.szLauncherVersion = Misc::GetVersion();
+
+            wchar_t szExePath[MAX_PATH] = {};
+            GetModuleFileNameW(NULL, szExePath, static_cast<DWORD>(_countof(szExePath)));
+            Facts.szExePath = szExePath;
+            Facts.szCommandLine = GetCommandLineW();
+
+            Facts.szOsBuild = GetOsBuildString();
+
+            Facts.bSdlLoaded = CGamepad::IsSdlAvailable();
+            if (Facts.bSdlLoaded) //Never call into <SDL3/SDL.h> when SDL3.dll isn't loaded -- see the include comment above
+            {
+                Facts.szSdlVersion = FormatSdlVersion(SDL_GetVersion());
+            }
+            else
+            {
+                Facts.szSdlVersion = L"unavailable";
+            }
+
+            wchar_t szRenderDevice[256] = {};
+            GConfig->GetString(L"Engine.Engine", L"GameRenderDevice", szRenderDevice, static_cast<INT>(_countof(szRenderDevice)));
+            Facts.szRenderDevice = szRenderDevice;
+
+            if (m_pViewPort)
+            {
+                Facts.iViewportSizeX = static_cast<int>(m_pViewPort->SizeX);
+                Facts.iViewportSizeY = static_cast<int>(m_pViewPort->SizeY);
+                Facts.bFullscreen = m_pViewPort->IsFullscreen() != 0;
+            }
+            Facts.bBorderless = m_bInBorderlessFullscreenWindow;
+
+            Facts.fEffectiveFpsCap = FramePacing::EffectiveRate(m_fFPSLimit, pEngine->GetMaxTickRate());
+            Facts.fMaxTickRate = pEngine->GetMaxTickRate();
+
+            wchar_t szPadName[64] = {};
+            wchar_t szPadGuid[40] = {};
+            m_Gamepad.GetActivePadNameAndGuid(szPadName, _countof(szPadName), szPadGuid, _countof(szPadGuid));
+            Facts.szPadName = szPadName;
+            Facts.szPadGuid = szPadGuid;
+            Facts.szPadFamily = m_Gamepad.GetInfo();
+
+            for (const CWinDrvPatch::SSiteOutcome& Site : WinDrvPatch.GetSiteOutcomes())
+            {
+                Facts.PatchOutcomes.push_back({ Site.pszDescription, Site.pszOutcome });
+            }
+
+            Facts.bRawInput = m_bRawInput != 0;
+            Facts.bUseAutoFov = m_bAutoFov != 0;
+            Facts.bBorderlessFullscreenWindow = m_bBorderlessFullscreenWindow != 0;
+            Facts.bBorderlessFullscreenWindowAllMonitors = m_bBorderlessFullscreenWindowUseAllMonitors != 0;
+            Facts.bUseSingleCPU = m_bUseSingleCPU != 0;
+            Facts.iFpsLimitIni = static_cast<int>(m_fFPSLimit);
+
+            for (const std::wstring& Line : StartupHeader::Build(Facts))
+            {
+                GLog->Logf(L"%s", Line.c_str());
+            }
+        }
 
         //Main loop. GIsGuarded makes appError append the engine's guard-chain
         //history to GErrorHist and throw instead of showing its message box on the

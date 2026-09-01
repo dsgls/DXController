@@ -99,6 +99,7 @@
     <ClCompile Include="CrashRecord.cpp" />
     <ClCompile Include="LogTime.cpp" />
     <ClCompile Include="LogPath.cpp" />
+    <ClCompile Include="StartupHeader.cpp" />
     <ClCompile Include="FancyTreeView.cpp" />
     <ClCompile Include="FixApp.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Use</PrecompiledHeader>
@@ -150,6 +151,7 @@
     <ClInclude Include="CrashRecord.h" />
     <ClInclude Include="LogTime.h" />
     <ClInclude Include="LogPath.h" />
+    <ClInclude Include="StartupHeader.h" />
     <ClInclude Include="FancyTreeView.h" />
     <ClInclude Include="FixApp.h" />
     <ClInclude Include="FreeSpaceFix.h" />

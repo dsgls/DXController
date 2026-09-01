@@ -1096,6 +1096,37 @@ const wchar_t* CGamepad::GetInfo() const
     }
 }
 
+void CGamepad::GetActivePadNameAndGuid(wchar_t* const pszOutName, const size_t iNameCap,
+                                        wchar_t* const pszOutGuid, const size_t iGuidCap) const
+{
+    if (iNameCap > 0) pszOutName[0] = L'\0';
+    if (iGuidCap > 0) pszOutGuid[0] = L'\0';
+
+    SDL_Gamepad* const pPad = m_bInitialized ? GetActivePad() : nullptr;
+    if (pPad == nullptr)
+    {
+        if (iNameCap > 0) WideFromNarrow("None", pszOutName, static_cast<int>(iNameCap));
+        if (iGuidCap > 0) WideFromNarrow("none", pszOutGuid, static_cast<int>(iGuidCap));
+        return;
+    }
+
+    if (iNameCap > 0)
+    {
+        const char* const pszName = SDL_GetGamepadName(pPad);
+        WideFromNarrow(pszName ? pszName : "Unknown", pszOutName, static_cast<int>(iNameCap));
+        pszOutName[iNameCap - 1] = L'\0'; //MultiByteToWideChar does not guarantee termination on truncation
+    }
+
+    if (iGuidCap > 0)
+    {
+        const SDL_GUID Guid = SDL_GetJoystickGUIDForID(m_iActivePadId);
+        char szGuidUtf8[64] = {};
+        SDL_GUIDToString(Guid, szGuidUtf8, static_cast<int>(sizeof(szGuidUtf8)));
+        WideFromNarrow(szGuidUtf8, pszOutGuid, static_cast<int>(iGuidCap));
+        pszOutGuid[iGuidCap - 1] = L'\0';
+    }
+}
+
 void CGamepad::EmitButtonChanges(UEngine* const pEngine, UViewport* const pViewport, const std::uint32_t iNewButtons)
 {
     const std::uint32_t iChanged = iNewButtons ^ m_iPrevButtons;

@@ -71,6 +71,7 @@ CWinDrvPatch::CWinDrvPatch(const HWND hWndForDialog)
     if (hWinDrv == nullptr)
     {
         GLog->Log(L"WinDrvPatch: WinDrv.dll not loaded; controller release bug remains.");
+        m_SiteOutcomes.push_back({ L"WinDrv.dll", L"dll-absent" });
         return;
     }
 
@@ -79,8 +80,9 @@ CWinDrvPatch::CWinDrvPatch(const HWND hWndForDialog)
     GLog->Logf(L"WinDrvPatch: WinDrv.dll @ 0x%p (delta %d bytes).",
                pActualBase, static_cast<int>(iDelta));
 
-    for (const WinDrvPatchSite& Site : kSites)
+    for (size_t iSiteIndex = 0; iSiteIndex < _countof(kSites); ++iSiteIndex)
     {
+        const WinDrvPatchSite& Site = kSites[iSiteIndex];
         BYTE* const pSite = reinterpret_cast<BYTE*>(static_cast<INT_PTR>(Site.iPreferredVA) + iDelta);
         if (memcmp(pSite, Site.aExpectedBytes, Site.iFingerprintLen) != 0)
         {
@@ -116,6 +118,11 @@ CWinDrvPatch::CWinDrvPatch(const HWND hWndForDialog)
             {
                 GLog->Log(L"WinDrvPatch: user chose continue; skipping remaining patches.");
             }
+            m_SiteOutcomes.push_back({ Site.pszDescription, L"mismatch" });
+            for (size_t iRemaining = iSiteIndex + 1; iRemaining < _countof(kSites); ++iRemaining)
+            {
+                m_SiteOutcomes.push_back({ kSites[iRemaining].pszDescription, L"skipped" });
+            }
             return;
         }
 
@@ -126,6 +133,10 @@ CWinDrvPatch::CWinDrvPatch(const HWND hWndForDialog)
             const DWORD iErr = GetLastError();
             GLog->Logf(L"WinDrvPatch: VirtualProtect failed at 0x%p (GLE=%lu); stopping.",
                        pTarget, iErr);
+            for (size_t iRemaining = iSiteIndex; iRemaining < _countof(kSites); ++iRemaining)
+            {
+                m_SiteOutcomes.push_back({ kSites[iRemaining].pszDescription, L"skipped" });
+            }
             return;
         }
 
@@ -142,5 +153,6 @@ CWinDrvPatch::CWinDrvPatch(const HWND hWndForDialog)
 
         FlushInstructionCache(GetCurrentProcess(), pTarget, Site.iPatchLen);
         GLog->Logf(L"WinDrvPatch: patched %s at 0x%p.", Site.pszDescription, pTarget);
+        m_SiteOutcomes.push_back({ Site.pszDescription, L"patched" });
     }
 }
