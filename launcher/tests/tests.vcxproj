@@ -69,15 +69,18 @@
     <ClCompile Include="FrameStatsTests.cpp" />
     <ClCompile Include="FramePacingTests.cpp" />
     <ClCompile Include="CursorPolicyTests.cpp" />
+    <ClCompile Include="CrashRecordTests.cpp" />
     <ClCompile Include="..\src\FrameStats.cpp" />
     <ClCompile Include="..\src\FramePacing.cpp" />
     <ClCompile Include="..\src\CursorPolicy.cpp" />
+    <ClCompile Include="..\src\CrashRecord.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="doctest.h" />
     <ClInclude Include="..\src\FrameStats.h" />
     <ClInclude Include="..\src\FramePacing.h" />
     <ClInclude Include="..\src\CursorPolicy.h" />
+    <ClInclude Include="..\src\CrashRecord.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
 </Project>

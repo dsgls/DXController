@@ -69,6 +69,9 @@
     <ClCompile Include="CursorPolicy.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="CrashRecord.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="ConfigOverride.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -129,6 +132,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="CursorPolicy.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="CrashRecord.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="ConfigOverride.h">

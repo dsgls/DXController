@@ -96,6 +96,7 @@
     <ClCompile Include="FrameStats.cpp" />
     <ClCompile Include="FramePacing.cpp" />
     <ClCompile Include="CursorPolicy.cpp" />
+    <ClCompile Include="CrashRecord.cpp" />
     <ClCompile Include="FancyTreeView.cpp" />
     <ClCompile Include="FixApp.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Use</PrecompiledHeader>
@@ -144,6 +145,7 @@
     <ClInclude Include="FrameStats.h" />
     <ClInclude Include="FramePacing.h" />
     <ClInclude Include="CursorPolicy.h" />
+    <ClInclude Include="CrashRecord.h" />
     <ClInclude Include="FancyTreeView.h" />
     <ClInclude Include="FixApp.h" />
     <ClInclude Include="FreeSpaceFix.h" />
