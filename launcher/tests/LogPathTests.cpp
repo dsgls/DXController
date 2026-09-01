@@ -71,7 +71,7 @@ TEST_CASE("LogPath appends .old.log even when the override has no extension")
     CHECK(std::wstring(Res.szRotatedPath) == L"D:\\Logs\\noext.old.log");
 }
 
-TEST_CASE("LogPath: the first occurrence wins regardless of which kind it is")
+TEST_CASE("LogPath: LOG= wins over ABSLOG= from either position, as the engine does")
 {
     const LogPath::Result First = LogPath::Parse(L"DeusEx.exe LOG=first.log ABSLOG=D:\\second.log", kszExeDir, kszPackage);
     CHECK(First.bFound);
@@ -79,7 +79,36 @@ TEST_CASE("LogPath: the first occurrence wins regardless of which kind it is")
 
     const LogPath::Result Second = LogPath::Parse(L"DeusEx.exe ABSLOG=D:\\second.log LOG=first.log", kszExeDir, kszPackage);
     CHECK(Second.bFound);
-    CHECK(std::wstring(Second.szPath) == L"D:\\second.log");
+    CHECK(std::wstring(Second.szPath) == L"C:\\Games\\DeusEx\\System\\first.log");
+}
+
+TEST_CASE("LogPath accepts the documented -LOG= and -ABSLOG= switch forms")
+{
+    const LogPath::Result Rel = LogPath::Parse(L"DeusEx.exe -LOG=custom.log", kszExeDir, kszPackage);
+    CHECK(Rel.bFound);
+    CHECK(std::wstring(Rel.szPath) == L"C:\\Games\\DeusEx\\System\\custom.log");
+
+    const LogPath::Result Abs = LogPath::Parse(L"DeusEx.exe -ABSLOG=D:\\Logs\\game.log", kszExeDir, kszPackage);
+    CHECK(Abs.bFound);
+    CHECK(std::wstring(Abs.szPath) == L"D:\\Logs\\game.log");
+}
+
+TEST_CASE("LogPath accepts a forward-slash switch prefix")
+{
+    const LogPath::Result Res = LogPath::Parse(L"DeusEx.exe /log=custom.log", kszExeDir, kszPackage);
+    CHECK(Res.bFound);
+    CHECK(std::wstring(Res.szPath) == L"C:\\Games\\DeusEx\\System\\custom.log");
+}
+
+TEST_CASE("LogPath matches the token case-insensitively")
+{
+    const LogPath::Result Lower = LogPath::Parse(L"DeusEx.exe log=custom.log", kszExeDir, kszPackage);
+    CHECK(Lower.bFound);
+    CHECK(std::wstring(Lower.szPath) == L"C:\\Games\\DeusEx\\System\\custom.log");
+
+    const LogPath::Result Mixed = LogPath::Parse(L"DeusEx.exe -AbsLog=D:\\Logs\\game.log", kszExeDir, kszPackage);
+    CHECK(Mixed.bFound);
+    CHECK(std::wstring(Mixed.szPath) == L"D:\\Logs\\game.log");
 }
 
 TEST_CASE("LogPath strips a quoted argv[0] so LOG= inside it cannot false-positive")
@@ -101,6 +130,11 @@ TEST_CASE("LogPath does not false-positive on a flag that merely ends in LOG=")
     const LogPath::Result Res = LogPath::Parse(L"DeusEx.exe SOMELOG=trap.log", kszExeDir, kszPackage);
     CHECK(Res.bFound);
     CHECK(std::wstring(Res.szPath) == L"C:\\Games\\DeusEx\\System\\DeusEx.log");
+
+    //The lead-in rule is "not alphanumeric", so a digit blocks the match too.
+    const LogPath::Result Digit = LogPath::Parse(L"DeusEx.exe 2log=trap.log", kszExeDir, kszPackage);
+    CHECK(Digit.bFound);
+    CHECK(std::wstring(Digit.szPath) == L"C:\\Games\\DeusEx\\System\\DeusEx.log");
 }
 
 TEST_CASE("LogPath yields no rotation for an unterminated quote around argv[0]")

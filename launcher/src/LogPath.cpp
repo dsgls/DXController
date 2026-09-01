@@ -72,19 +72,50 @@ namespace
         return p;
     }
 
-    //Matches pszToken at a token-start position. Returns a pointer just past
-    //the token on success, else nullptr.
+    bool IsAlnum(const wchar_t ch)
+    {
+        return (ch >= L'A' && ch <= L'Z') || (ch >= L'a' && ch <= L'z') || (ch >= L'0' && ch <= L'9');
+    }
+
+    wchar_t ToUpperAscii(const wchar_t ch)
+    {
+        return (ch >= L'a' && ch <= L'z') ? static_cast<wchar_t>(ch - L'a' + L'A') : ch;
+    }
+
+    //Case-insensitive match of pszToken at pAt. Returns a pointer just past the
+    //token on success, else nullptr.
     const wchar_t* MatchToken(const wchar_t* const pAt, const wchar_t* const pszToken)
     {
         const size_t iTokenLen = Length(pszToken);
         for (size_t i = 0; i < iTokenLen; ++i)
         {
-            if (pAt[i] != pszToken[i])
+            if (ToUpperAscii(pAt[i]) != ToUpperAscii(pszToken[i]))
             {
                 return nullptr;
             }
         }
         return pAt + iTokenLen;
+    }
+
+    //Finds pszToken the way the engine's appStrfind does: case-insensitive, and
+    //only where the preceding character is non-alphanumeric (or there is none).
+    //That is what makes "-LOG=", "/log=" and a bare "LOG=" all match while
+    //"SOMELOG=" does not. Returns a pointer to the value, else nullptr.
+    const wchar_t* FindToken(const wchar_t* const pArgs, const wchar_t* const pszToken)
+    {
+        bool bPrevAlnum = false;
+        for (const wchar_t* p = pArgs; *p; ++p)
+        {
+            if (!bPrevAlnum)
+            {
+                if (const wchar_t* const pAfter = MatchToken(p, pszToken))
+                {
+                    return pAfter;
+                }
+            }
+            bPrevAlnum = IsAlnum(*p);
+        }
+        return nullptr;
     }
 
     //Reads a LOG=/ABSLOG= value: quoted (up to the closing quote) or
@@ -180,31 +211,16 @@ LogPath::Result LogPath::Parse(const wchar_t* const pszCommandLine, const wchar_
         return Res; //Exotic argv[0] quoting
     }
 
-    //Scan for the first LOG= or ABSLOG= token, only at a token-start position
-    //(start of the args region, or immediately after whitespace) - so a
-    //value elsewhere in the command line (e.g. "SOMELOG=x") can't
-    //false-positive.
-    const wchar_t* pValue = nullptr;
+    //Engine precedence (FOutputDeviceFile.h): LOG= is looked up first and wins
+    //wherever it appears; ABSLOG= is consulted only when there is no LOG=.
+    //"ABSLOG=" cannot be mistaken for "LOG=" because the 'S' in front of it is
+    //alphanumeric, which the lead-in rule rejects.
     bool bAbsolute = false;
-    bool bAtTokenStart = true;
-    for (const wchar_t* p = pArgs; *p; ++p)
+    const wchar_t* pValue = FindToken(pArgs, L"LOG=");
+    if (!pValue)
     {
-        if (bAtTokenStart)
-        {
-            if (const wchar_t* const pAfterAbs = MatchToken(p, L"ABSLOG="))
-            {
-                pValue = pAfterAbs;
-                bAbsolute = true;
-                break;
-            }
-            if (const wchar_t* const pAfterLog = MatchToken(p, L"LOG="))
-            {
-                pValue = pAfterLog;
-                bAbsolute = false;
-                break;
-            }
-        }
-        bAtTokenStart = IsSpace(*p);
+        pValue = FindToken(pArgs, L"ABSLOG=");
+        bAbsolute = pValue != nullptr;
     }
 
     if (pValue)
