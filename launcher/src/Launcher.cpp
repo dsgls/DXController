@@ -300,6 +300,29 @@ void CLauncher::ApplyAutoFOV(const size_t iSizeX, const size_t iSizeY)
     m_iSizeY = iSizeY;
 }
 
+void CLauncher::RecordFrameStats(const double fFrameTimeMs, const double fLatenessMs)
+{
+    m_FrameStatsFrameTimeMs[m_iFrameStatsWriteIndex] = fFrameTimeMs;
+    m_FrameStatsLatenessMs[m_iFrameStatsWriteIndex] = fLatenessMs;
+    m_iFrameStatsWriteIndex = (m_iFrameStatsWriteIndex + 1) % kiFrameStatsRingCapacity;
+    m_iFrameStatsCount = std::min(m_iFrameStatsCount + 1, kiFrameStatsRingCapacity);
+}
+
+void CLauncher::LogAndResetFrameStats(FOutputDevice& Ar)
+{
+    const FrameStats::Stats FrameTime = FrameStats::Compute(m_FrameStatsFrameTimeMs.data(), m_iFrameStatsCount);
+    const FrameStats::Stats Lateness = FrameStats::Compute(m_FrameStatsLatenessMs.data(), m_iFrameStatsCount);
+
+    Ar.Logf(TEXT("FrameStats: samples=%u"), static_cast<unsigned int>(FrameTime.iCount));
+    Ar.Logf(TEXT("FrameStats: frame time (ms) avg=%.3f p50=%.3f p99=%.3f max=%.3f stdev=%.3f"),
+        FrameTime.fAvg, FrameTime.fP50, FrameTime.fP99, FrameTime.fMax, FrameTime.fStdDev);
+    Ar.Logf(TEXT("FrameStats: gate lateness (ms) avg=%.3f p99=%.3f max=%.3f"),
+        Lateness.fAvg, Lateness.fP99, Lateness.fMax);
+
+    m_iFrameStatsWriteIndex = 0;
+    m_iFrameStatsCount = 0;
+}
+
 void CLauncher::MainLoop(UEngine* const pEngine)
 {
     assert(pEngine);
@@ -322,6 +345,31 @@ void CLauncher::MainLoop(UEngine* const pEngine)
             (pEngine->GetMaxTickRate() == 0.0f || fDeltaTime >= 1.0f / pEngine->GetMaxTickRate());
         if(bTickThisIteration)
         {
+            //Baseline frame-stats diagnostic (GetFrameStats exec): frame duration is
+            //this frame's fDeltaTime; lateness is how far it overshot the ideal period
+            //for the effective rate (smaller non-zero of m_fFPSLimit and
+            //GetMaxTickRate() - see spec's effective-rate rule; NOT a plain min(), since
+            //min(120, 0) would wrongly pick the unlimited rate).
+            {
+                float fEffectiveRate = 0.0f;
+                if (m_fFPSLimit > 0.0f && pEngine->GetMaxTickRate() > 0.0f)
+                {
+                    fEffectiveRate = std::min(m_fFPSLimit, pEngine->GetMaxTickRate());
+                }
+                else if (m_fFPSLimit > 0.0f)
+                {
+                    fEffectiveRate = m_fFPSLimit;
+                }
+                else if (pEngine->GetMaxTickRate() > 0.0f)
+                {
+                    fEffectiveRate = pEngine->GetMaxTickRate();
+                }
+
+                const float fIdealPeriod = (fEffectiveRate > 0.0f) ? (1.0f / fEffectiveRate) : 0.0f;
+                const float fLateness = (fIdealPeriod > 0.0f) ? (fDeltaTime - fIdealPeriod) : 0.0f;
+                RecordFrameStats(static_cast<double>(fDeltaTime) * 1000.0, static_cast<double>(fLateness) * 1000.0);
+            }
+
             pEngine->Tick(fDeltaTime);
             if(GWindowManager)
             {
@@ -660,6 +708,11 @@ UBOOL CLauncher::Exec(const TCHAR * Cmd, FOutputDevice & Ar)
     else if (ParseCommand(&Cmd, TEXT("GamepadGetInfo")))
     {
         Ar.Logf(TEXT("%s"), m_Gamepad.GetInfo());
+        return TRUE;
+    }
+    else if (ParseCommand(&Cmd, TEXT("GetFrameStats")))
+    {
+        LogAndResetFrameStats(Ar);
         return TRUE;
     }
     else

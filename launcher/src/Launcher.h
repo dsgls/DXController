@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Gamepad.h"
+#include "FrameStats.h"
 
 class CLauncher : private FExecHook
 {
@@ -14,6 +15,8 @@ private:
     void MainLoop(UEngine * const pEngine);
     void LoadSettings();
     void ToggleBorderlessWindowedFullscreen();
+    void RecordFrameStats(const double fFrameTimeMs, const double fLatenessMs);
+    void LogAndResetFrameStats(FOutputDevice& Ar);
 
     HWND m_hWnd = NULL;
 
@@ -26,6 +29,16 @@ private:
     bool m_bPrevHasFocus = false;
     bool m_bInBorderlessFullscreenWindow = false;
     CGamepad m_Gamepad;
+
+    //Frame-stats diagnostic ring buffer (GetFrameStats exec command). Baseline
+    //instrumentation on the CURRENT loop: frame duration is tick-to-tick time,
+    //lateness is how far fDeltaTime overshot the ideal period when the gate
+    //opened. Reset (count back to 0) whenever GetFrameStats is run.
+    static constexpr size_t kiFrameStatsRingCapacity = 1024;
+    std::array<double, kiFrameStatsRingCapacity> m_FrameStatsFrameTimeMs = {};
+    std::array<double, kiFrameStatsRingCapacity> m_FrameStatsLatenessMs = {};
+    size_t m_iFrameStatsWriteIndex = 0;
+    size_t m_iFrameStatsCount = 0; //Valid entries, caps at kiFrameStatsRingCapacity
 
     //Settings
     float m_fFPSLimit = 120.0f; //Because GetMaxTickRate() is float
