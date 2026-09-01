@@ -25,7 +25,6 @@ namespace CursorPolicy
         bool bInMenu = false;
         bool bPrevInMenu = false;
         bool bPadActive = false;
-        bool bMouseActive = false; //Carried with the frame facts; no current rule consults it
         bool bMouseOverWindow = false;
         bool bMouseInClientRect = false;
         bool bCaptured = false;

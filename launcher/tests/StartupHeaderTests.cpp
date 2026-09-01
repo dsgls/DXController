@@ -111,10 +111,14 @@ TEST_CASE("StartupHeader emits one line per WinDrvPatch site outcome, in order")
     F.PatchOutcomes.push_back({ L"joy-loop press-branch bitmap index (Bug 1)", L"patched" });
     F.PatchOutcomes.push_back({ L"joy-loop release-branch bitmap index (Bug 1)", L"patched" });
     F.PatchOutcomes.push_back({ L"trailer outer-loop bound (Bug 2)", L"mismatch" });
+    F.PatchOutcomes.push_back({ L"a site whose VirtualProtect failed", L"failed" });
+    F.PatchOutcomes.push_back({ L"a site never attempted", L"skipped" });
     const auto Lines = StartupHeader::Build(F);
     CHECK(std::find(Lines.begin(), Lines.end(), L"WinDrvPatch: joy-loop press-branch bitmap index (Bug 1) - patched") != Lines.end());
     CHECK(std::find(Lines.begin(), Lines.end(), L"WinDrvPatch: joy-loop release-branch bitmap index (Bug 1) - patched") != Lines.end());
     CHECK(std::find(Lines.begin(), Lines.end(), L"WinDrvPatch: trailer outer-loop bound (Bug 2) - mismatch") != Lines.end());
+    CHECK(std::find(Lines.begin(), Lines.end(), L"WinDrvPatch: a site whose VirtualProtect failed - failed") != Lines.end());
+    CHECK(std::find(Lines.begin(), Lines.end(), L"WinDrvPatch: a site never attempted - skipped") != Lines.end());
 }
 
 TEST_CASE("StartupHeader emits no WinDrvPatch lines when the outcome list is empty")

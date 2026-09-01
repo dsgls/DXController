@@ -133,7 +133,10 @@ CWinDrvPatch::CWinDrvPatch(const HWND hWndForDialog)
             const DWORD iErr = GetLastError();
             GLog->Logf(L"WinDrvPatch: VirtualProtect failed at 0x%p (GLE=%lu); stopping.",
                        pTarget, iErr);
-            for (size_t iRemaining = iSiteIndex; iRemaining < _countof(kSites); ++iRemaining)
+            //"failed" only for the site that actually failed; the sites after it
+            //were never attempted, which is a different thing in a bug report.
+            m_SiteOutcomes.push_back({ Site.pszDescription, L"failed" });
+            for (size_t iRemaining = iSiteIndex + 1; iRemaining < _countof(kSites); ++iRemaining)
             {
                 m_SiteOutcomes.push_back({ kSites[iRemaining].pszDescription, L"skipped" });
             }

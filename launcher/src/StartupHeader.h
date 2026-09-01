@@ -12,7 +12,8 @@
 namespace StartupHeader
 {
     //One CWinDrvPatch site: its description (matches the at-patch-time log
-    //line) and its outcome ("patched" / "mismatch" / "skipped" / "dll-absent").
+    //line) and its outcome ("patched" / "mismatch" / "failed" / "skipped" /
+    //"dll-absent").
     struct SPatchSiteOutcome
     {
         std::wstring szDescription;

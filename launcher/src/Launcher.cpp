@@ -202,7 +202,21 @@ namespace
         {
             const HANDLE hTimer = m_hTimer;
             const DWORD dwHandleCount = m_hTimer ? 1 : 0;
-            const DWORD dwResult = MsgWaitForMultipleObjects(dwHandleCount, dwHandleCount ? &hTimer : NULL, FALSE, dwTimeoutMs, QS_ALLINPUT);
+            DWORD dwResult = MsgWaitForMultipleObjects(dwHandleCount, dwHandleCount ? &hTimer : NULL, FALSE, dwTimeoutMs, QS_ALLINPUT);
+            if (dwResult == WAIT_FAILED)
+            {
+                //A wait that fails (a bad timer handle, say) must not be read as a
+                //deadline wake: that returns immediately every frame and restores
+                //the busy loop this exists to remove. Retry without the timer, and
+                //if even that fails degrade to coarse Sleep pacing.
+                dwResult = MsgWaitForMultipleObjects(0, NULL, FALSE, dwTimeoutMs, QS_ALLINPUT);
+                if (dwResult == WAIT_FAILED)
+                {
+                    Sleep(dwTimeoutMs);
+                    return EWake::Deadline;
+                }
+                return (dwResult == WAIT_OBJECT_0) ? EWake::Message : EWake::Deadline;
+            }
             return (dwResult == WAIT_OBJECT_0 + dwHandleCount) ? EWake::Message : EWake::Deadline;
         }
 
@@ -1050,7 +1064,6 @@ void CLauncher::MainLoop(UEngine* const pEngine)
             Frame.bInMenu = bInMenu;
             Frame.bPrevInMenu = m_bPrevInMenu;
             Frame.bPadActive = m_Gamepad.IsPadActive();
-            Frame.bMouseActive = m_Gamepad.IsMouseActive();
             Frame.bMouseOverWindow = bMouseOverWindow;
             Frame.bMouseInClientRect = PtInRect(&rClientScreen, CursorPos)!=0; //This makes sure resize cursor isn't hidden
             Frame.bCaptured = GetCapture() == m_hWnd;
