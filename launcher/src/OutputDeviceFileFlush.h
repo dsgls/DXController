@@ -2,6 +2,28 @@
 
 #include "LogTime.h"
 
+namespace
+{
+    //Sets a UBOOL flag for the scope's lifetime and always clears it on the
+    //way out, including via a thrown exception - a raw set/clear pair around
+    //FOutputDeviceFile::Serialize would leave the flag stuck if that call
+    //throws (a live path: a secondary file I/O failure while logging a crash
+    //throws through GError while GIsGuarded is set), silently dropping
+    //timestamps from every line for the rest of the process.
+    class FScopedReentryFlag
+    {
+    public:
+        explicit FScopedReentryFlag(UBOOL& bFlag) : m_bFlag(bFlag) { m_bFlag = 1; }
+        ~FScopedReentryFlag() { m_bFlag = 0; }
+
+        FScopedReentryFlag(const FScopedReentryFlag&) = delete;
+        FScopedReentryFlag& operator=(const FScopedReentryFlag&) = delete;
+
+    private:
+        UBOOL& m_bFlag;
+    };
+}
+
 //Log output device that flushes the underlying file after every line, and
 //prepends a "[HH:MM:SS.mmm] " timestamp to every line (lines read
 //"Log: [12:34:56.789] message").
@@ -55,9 +77,10 @@ public:
             szPrefixed[iLength++] = *p;
         szPrefixed[iLength] = L'\0';
 
-        bReentered = 1;
-        FOutputDeviceFile::Serialize(szPrefixed, Event);
-        bReentered = 0;
+        {
+            FScopedReentryFlag Guard(bReentered);
+            FOutputDeviceFile::Serialize(szPrefixed, Event);
+        }
 
         if (LogAr)
             LogAr->Flush();
