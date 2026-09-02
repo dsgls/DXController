@@ -190,6 +190,7 @@
   <ItemGroup>
     <None Include="deusex.bmp" />
     <None Include="DeusEx.ico" />
+    <!-- Likely the source image deusex.bmp was exported from; kept for reference. -->
     <None Include="deusex.png" />
   </ItemGroup>
   <ItemGroup>
