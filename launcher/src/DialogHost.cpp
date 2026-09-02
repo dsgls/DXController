@@ -24,6 +24,8 @@ CDialogHost* CDialogHost::FindSelf(const HWND hwndDlg)
 
 bool CDialogHost::HandleCommonMessage(const HWND hwndDlg, const UINT uMsg, const WPARAM wParam, CDialogHost* const pThis, INT_PTR& iResult)
 {
+    iResult = FALSE;
+
     switch (uMsg)
     {
     case WM_TIMER:

@@ -25,7 +25,7 @@
       <LanguageStandard>Default</LanguageStandard>
     </ClCompile>
     <Link>
-      <AdditionalDependencies>uxtheme.lib;version.lib;Shlwapi.lib;Comctl32.lib;SDL3.lib;delayimp.lib;../games/DeusEx/engine/lib/engine.lib;../games/DeusEx/core/lib/core.lib;../games/DeusEx/extension/lib/extension.lib;../games/DeusEx/window/lib/window.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>uxtheme.lib;Shlwapi.lib;Comctl32.lib;SDL3.lib;delayimp.lib;../games/DeusEx/engine/lib/engine.lib;../games/DeusEx/core/lib/core.lib;../games/DeusEx/extension/lib/extension.lib;../games/DeusEx/window/lib/window.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <AdditionalLibraryDirectories>../external/SDL3/lib/x86;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <BaseAddress>
       </BaseAddress>

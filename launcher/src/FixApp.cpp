@@ -286,7 +286,7 @@ void CFixApp::ApplySettings() const
     float fFOV;
     if(IsDlgButtonChecked(m_hWnd, RADIO_FOVAUTO))
     {
-        fFOV = bHaveResolution ? Misc::CalcFOV(iResX, iResY) : 0.0f; //CalcFOV divides by iResY
+        fFOV = bHaveResolution ? Misc::CalcFOV(iResX, iResY) : 0.0f; //Don't compute a FOV from a nonsense 0x0 resolution
         GConfig->SetBool(PROJECTNAME, L"UseAutoFOV", TRUE);
     }
     else
