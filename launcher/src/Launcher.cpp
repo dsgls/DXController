@@ -1163,7 +1163,7 @@ UBOOL CLauncher::Exec(const TCHAR * Cmd, FOutputDevice & Ar)
     else if (ParseCommand(&Cmd, TEXT("GamepadReload")))
     {
         m_Gamepad.Reload(m_pEngine, m_pViewPort);
-        Ar.Logf(TEXT("Gamepad: settings reloaded from [DXController.ControllerSettings] and [DXController.GamepadButtonMap]"));
+        Ar.Logf(TEXT("Gamepad: settings reloaded from [DXController.ControllerSettings], [DXController.GamepadButtonMap] and [DXController.GamepadAxisMap]; pad sensors re-applied"));
         return TRUE;
     }
     else if (ParseCommand(&Cmd, TEXT("GamepadSampleCurve")))
