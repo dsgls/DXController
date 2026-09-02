@@ -82,6 +82,30 @@ for pkg in DXController DeusEx; do
     done
 done
 
+# A DeusEx overlay file removed from the repo would otherwise linger in the
+# build dir with its old edits (the stock tree is never reconstructed here)
+# and silently keep compiling into DeusEx.u. A manifest of what was synced
+# lets the next run catch that: restore the stock copy when the sister
+# export is available, else fail so it can't go unnoticed.
+DEUSEX_DST="$BUILD_DIR/DeusEx/Classes"
+MANIFEST="$DEUSEX_DST/.dxc-overlay-files"
+STOCK_SRC="$REPO_DIR/../deusex-scripts/DeusEx/Classes"
+if (( ! DRY_RUN )); then
+    if [[ -f "$MANIFEST" ]]; then
+        while IFS= read -r name; do
+            [[ -n "$name" && ! -f "$REPO_DIR/DeusEx/Classes/$name" ]] || continue
+            if [[ -f "$STOCK_SRC/$name" ]]; then
+                cp "$STOCK_SRC/$name" "$DEUSEX_DST/$name"
+                echo "sync-and-build: restored $name to stock (no longer in the repo overlay)"
+            else
+                echo "sync-and-build: ERROR: $name was overlaid by a previous build but is gone from DeusEx/Classes/; restore the stock copy into $DEUSEX_DST before building" >&2
+                exit 1
+            fi
+        done < "$MANIFEST"
+    fi
+    ls "$REPO_DIR/DeusEx/Classes"/*.uc 2>/dev/null | xargs -rn1 basename > "$MANIFEST"
+fi
+
 # Generate the texture set and convert to the 8-bit PCX the package import
 # expects, writing into DXController/Textures/. The #exec lines in
 # DXControllerTextures.uc reference FILE=Textures\<name>.pcx (relative to
