@@ -16,7 +16,7 @@ All development of this mod has been done with an Xbox One controller. It
 should work with every other controller supported by SDL (which is basically
 all of them), but all the on-screen button hints use Xbox controller icons.
 
-[Trigger warning: LLM assisted with parts of this project](#LLM usage in this project)
+[Trigger warning: LLM assisted with parts of this project](#llm-usage-in-this-project)
 
 ## Requirements
 
@@ -288,7 +288,7 @@ is not one of those projects.
 
 The other reason for writing this is that some people have a strong, visceral
 reaction to anything even tangentially related to LLMs. They do not accept
-that it is possible to write useful software if an lLM came anywhere near
+that it is possible to write useful software if an LLM came anywhere near
 it, no matter how it was used. I disagree with this, but I respect their
 opinion, and much as I would tell a vegan if there were meat in a sandwich,
 here I am telling those with inflexible opinions on LLMs that their time
