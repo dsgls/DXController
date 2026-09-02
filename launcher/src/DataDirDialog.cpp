@@ -298,8 +298,10 @@ INT_PTR CALLBACK CDataDirDialog::DataDirDialogProc(HWND hwndDlg,UINT uMsg,WPARAM
             {
 
             case IDOK:
-                EndDialog(hwndDlg, 1);
+                //PopulateConfig reads the tree control, so it runs while the
+                //dialog is still up.
                 pThis->PopulateConfig();
+                EndDialog(hwndDlg, 1);
                 return TRUE;
 
             case IDCANCEL:
