@@ -116,9 +116,15 @@ non-high-res timer or, if timer creation fails outright, to
 `MsgWaitForMultipleObjects(..., QS_ALLINPUT)`; a message wake pumps
 `PeekMessage` and re-arms the wait, a timer wake proceeds to tick. This
 keeps the window responsive at any `FPSLimit`, including 1. The thread
-also registers MMCSS (`AvSetMmThreadCharacteristicsW(L"Games", ...)`,
-resolved via `LoadLibraryW`/`GetProcAddress` so a missing `avrt.dll`
-degrades to a no-op) for scheduling-jitter reduction.
+is deliberately **not** MMCSS-registered. MMCSS budgets threads that
+wait each cycle; at `FPSLimit=0` the loop never waits and is
+periodically demoted to near-idle priority. Bisect-confirmed effects of
+registering: stuttering menu animation, and permanent lockups inside
+the NVIDIA driver's texture-creation critical section (the demoted
+thread loses the unfair-lock race against driver worker threads
+indefinitely; the hung window then stalls every
+`SendMessage(HWND_BROADCAST)` sender on the desktop, up to and
+including the shell).
 
 The effective tick period is the smaller *non-zero* rate among
 `FPSLimit` and `pEngine->GetMaxTickRate()` — not a plain `min()`, which

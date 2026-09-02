@@ -32,50 +32,6 @@ extern "C" {wchar_t GPackage[64] = L"Launch"; } //Will be set to exe name later
 
 namespace
 {
-    //Asks MMCSS to schedule the main loop as a game thread. Resolved dynamically so
-    //a missing or stubbed avrt.dll (older Wine) degrades to a no-op.
-    class CMmcssRegistration
-    {
-    public:
-        CMmcssRegistration()
-        {
-            m_hAvrt = LoadLibraryW(L"avrt.dll");
-            if (!m_hAvrt)
-            {
-                GLog->Log(L"MMCSS: avrt.dll unavailable, running at default thread priority.");
-                return;
-            }
-
-            //Both entry points up front: registering without a way to revert would
-            //leave the task handle dangling when avrt.dll is freed below.
-            const auto pfnSet = reinterpret_cast<HANDLE(WINAPI*)(LPCWSTR, LPDWORD)>(GetProcAddress(m_hAvrt, "AvSetMmThreadCharacteristicsW"));
-            m_pfnRevert = reinterpret_cast<BOOL(WINAPI*)(HANDLE)>(GetProcAddress(m_hAvrt, "AvRevertMmThreadCharacteristics"));
-            DWORD dwTaskIndex = 0; //Must be zero-initialized or the call fails
-            m_hTask = (pfnSet && m_pfnRevert) ? pfnSet(L"Games", &dwTaskIndex) : NULL;
-            GLog->Log(m_hTask ? L"MMCSS: main loop registered as a \"Games\" task." : L"MMCSS: registration failed, running at default thread priority.");
-        }
-
-        ~CMmcssRegistration()
-        {
-            if (m_hTask && m_pfnRevert)
-            {
-                m_pfnRevert(m_hTask);
-            }
-            if (m_hAvrt)
-            {
-                FreeLibrary(m_hAvrt);
-            }
-        }
-
-        CMmcssRegistration(const CMmcssRegistration&) = delete;
-        CMmcssRegistration& operator=(const CMmcssRegistration&) = delete;
-
-    private:
-        HMODULE m_hAvrt = NULL;
-        HANDLE m_hTask = NULL;
-        BOOL(WINAPI* m_pfnRevert)(HANDLE) = nullptr;
-    };
-
     //Owns every ClipCursor/ShowCursor change the loop makes, so the process can
     //never leave the desktop's cursor clipped to a dead window or hidden until
     //reboot - Windows reclaims per-process cursor state on exit, but a fullscreen
@@ -870,7 +826,14 @@ void CLauncher::MainLoop(UEngine* const pEngine)
     long long iPeriodQpc = 0;
     long long iDeadlineQpc = liNow.QuadPart; //Frame 1 ticks immediately, with a near-zero delta
 
-    const CMmcssRegistration Mmcss;
+    //Deliberately NOT MMCSS-registered. MMCSS budgets threads that wait each
+    //cycle; at FPSLimit=0 this loop never waits, blows the budget, and gets
+    //periodically demoted to near-idle priority. Observed (bisect-confirmed):
+    //stuttering menu animation, and permanent lockups inside the NVIDIA
+    //driver's texture-creation critical section - the demoted thread loses
+    //the unfair-lock race against driver worker threads indefinitely, and the
+    //hung window then stalls every SendMessage(HWND_BROADCAST) sender on the
+    //desktop.
     const CFrameTimer FrameTimer;
     CCursorGuard CursorGuard; //Releases clip and ShowCursor delta on return and on unwind
     GLog->Logf(L"Main loop: frame pacing via %s.", FrameTimer.GetPathName());
