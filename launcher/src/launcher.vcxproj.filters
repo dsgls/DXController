@@ -42,6 +42,9 @@
     <ClCompile Include="DialogPadNav.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="DialogHost.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="datadirdialog.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -132,6 +135,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="DialogPadNav.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="DialogHost.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="resource.h">

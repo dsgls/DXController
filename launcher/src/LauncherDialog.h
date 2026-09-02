@@ -1,12 +1,10 @@
 #pragma once
 
-class CDialogPadNav;
+#include "DialogHost.h"
 
-class CLauncherDialog
+class CLauncherDialog : public CDialogHost
 {
 public:
-    explicit CLauncherDialog();
-    virtual ~CLauncherDialog();
     bool Show(const HWND hWndParent) const;
 	HMONITOR GetChildWindowMonitor() const { return m_hMonitor; }
 
@@ -19,7 +17,6 @@ private:
     HWND m_hWndIniFile2; //!< User.ini
     HWND m_hWndWebsite;
     HMONITOR m_hMonitor = NULL;
-    std::unique_ptr<CDialogPadNav> m_pPadNav;
 };
 
 

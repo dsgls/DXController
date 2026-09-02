@@ -1,12 +1,10 @@
 #pragma once
 
-class CDialogPadNav;
+#include "DialogHost.h"
 
-class CFixApp
+class CFixApp : public CDialogHost
 {
 public:
-    explicit CFixApp();
-    virtual ~CFixApp();
     bool Show(const HWND hWndParent) const;
 
     static const char sm_iDefaultFPSLimit = 120;
@@ -41,5 +39,4 @@ private:
     HWND m_hWndTxtFOV;
     std::vector<std::wstring> m_Renderers;
     std::deque<Resolution> m_Resolutions; //Don't want push_back to change address
-    std::unique_ptr<CDialogPadNav> m_pPadNav;
 };

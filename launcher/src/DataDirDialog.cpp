@@ -12,16 +12,6 @@ decltype(CDataDirDialog::sm_SupportedExtensions) CDataDirDialog::sm_SupportedExt
     L"*.int", L"*.u", L"*.utx", L"*.umx", L"*.dx", L"*.unr", L"*.uax",
 };
 
-CDataDirDialog::CDataDirDialog()
-{
-
-}
-
-CDataDirDialog::~CDataDirDialog()
-{
-
-};
-
 bool CDataDirDialog::Show(const HWND hWndParent) const
 {
     return DialogBoxParam(GetModuleHandle(0), MAKEINTRESOURCE(IDD_DATADIRS), hWndParent, DataDirDialogProc, reinterpret_cast<LPARAM>(this)) == 1;
@@ -268,17 +258,21 @@ HTREEITEM CDataDirDialog::AddItemToList(const wchar_t* const pszPath)
 
 INT_PTR CALLBACK CDataDirDialog::DataDirDialogProc(HWND hwndDlg,UINT uMsg,WPARAM wParam,LPARAM lParam)
 {
-    CDataDirDialog* pThis = reinterpret_cast<CDataDirDialog*>(GetProp(hwndDlg,L"this"));
+    CDataDirDialog* pThis = Self<CDataDirDialog>(hwndDlg);
+
+    INT_PTR iResult;
+    if (HandleCommonMessage(hwndDlg, uMsg, wParam, pThis, iResult))
+    {
+        return iResult;
+    }
 
     switch (uMsg)
     {
 
     case WM_INITDIALOG:
         {
-            SetProp(hwndDlg,L"this",reinterpret_cast<HANDLE>(lParam));
-            pThis =  reinterpret_cast<CDataDirDialog*>(lParam);
+            pThis = Attach<CDataDirDialog>(hwndDlg, lParam);
             pThis->m_hWnd = hwndDlg;
-            SendMessage(hwndDlg, WM_SETICON, ICON_BIG,reinterpret_cast<LPARAM>(LoadIcon(reinterpret_cast<HINSTANCE>(GetWindowLong(hwndDlg,GWL_HINSTANCE)), MAKEINTRESOURCE(IDI_ICON))));
 
             pThis->m_TreeView.Init(GetDlgItem(hwndDlg, IDC_DIRTREE), GetDlgItem(pThis->m_hWnd, IDC_UP), GetDlgItem(pThis->m_hWnd, IDC_DOWN));
 
@@ -342,24 +336,6 @@ INT_PTR CALLBACK CDataDirDialog::DataDirDialogProc(HWND hwndDlg,UINT uMsg,WPARAM
         break;
     }
 
-    case WM_TIMER:
-        if (wParam == CDialogPadNav::sm_iTimerId && pThis && pThis->m_pPadNav)
-        {
-            pThis->m_pPadNav->OnTimer();
-            return TRUE;
-        }
-        break;
-
-    case WM_DESTROY:
-        if (pThis)
-        {
-            pThis->m_pPadNav.reset();
-        }
-        break;
-
-    case WM_CLOSE:
-        EndDialog(hwndDlg,0);
-        return TRUE;
     }
 
     return FALSE;

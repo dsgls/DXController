@@ -1,15 +1,12 @@
 #pragma once
 
 #include <unordered_set>
+#include "DialogHost.h"
 #include "FancyTreeView.h"
 
-class CDialogPadNav;
-
-class CDataDirDialog
+class CDataDirDialog : public CDialogHost
 {
 public:
-    explicit CDataDirDialog();
-    virtual ~CDataDirDialog();
     bool Show(const HWND hWndParent) const;
 
 private:
@@ -37,7 +34,6 @@ private:
 
     HWND m_hWnd;
     CFancyTreeView m_TreeView;
-    std::unique_ptr<CDialogPadNav> m_pPadNav;
 
     // This is used so the top-level dirs (Shifter, HDTP) are first added to the list. However, their contents are added in the order they're on disk.
     // This prevents the order of sub-items from shifting depending on in which order they were added.

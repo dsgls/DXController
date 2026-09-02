@@ -196,6 +196,19 @@ zero indefinitely. The launcher's cursor guard applies exactly one
 `ShowCursor` call per transition and tracks the net delta so its
 destructor can return the counter to where it found it.
 
+### Native dialogs
+
+The launcher's three modal dialogs (`CLauncherDialog`, `CFixApp`,
+`CDataDirDialog`) derive from `CDialogHost`, which owns the plumbing a
+Win32 dialog proc otherwise repeats: the `"this"` window property that
+lets the static proc find its object, the title-bar icon, the gamepad
+navigator (`m_pPadNav`), and the `WM_TIMER`/`WM_DESTROY`/`WM_CLOSE`
+handling. A proc calls `Self<T>()` for its object, then
+`HandleCommonMessage()` before its own `switch`, and `Attach<T>()` in
+`WM_INITDIALOG`. `CDialogHost`'s destructor is declared in the header
+and defaulted in the `.cpp` — `CDialogPadNav` is only forward-declared
+in the header, so the `unique_ptr` deleter cannot be instantiated there.
+
 ### Log format
 
 `FOutputDeviceFileFlush::Serialize` prepends a `[HH:MM:SS.mmm]` local-time

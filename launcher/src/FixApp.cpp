@@ -7,16 +7,6 @@
 #include "SubTitleFix.h"
 #include "resource.h"
 
-CFixApp::CFixApp()
-{
-
-}
-
-CFixApp::~CFixApp()
-{
-
-}
-
 bool CFixApp::Show(const HWND hWndParent) const
 {
     return DialogBoxParam(GetModuleHandle(0),MAKEINTRESOURCE(IDD_DIALOG2),hWndParent,FixAppDialogProc,reinterpret_cast<LPARAM>(this)) == 1;
@@ -316,15 +306,20 @@ void CFixApp::ApplySettings() const
 
 INT_PTR CALLBACK CFixApp::FixAppDialogProc(HWND hwndDlg,UINT uMsg,WPARAM wParam,LPARAM lParam)
 {   
-    CFixApp* pThis = reinterpret_cast<CFixApp*>(GetProp(hwndDlg,L"this"));
+    CFixApp* pThis = Self<CFixApp>(hwndDlg);
+
+    INT_PTR iResult;
+    if (HandleCommonMessage(hwndDlg, uMsg, wParam, pThis, iResult))
+    {
+        return iResult;
+    }
 
     switch (uMsg)
     {
     case WM_INITDIALOG:
         {
             //Get all object oriented like
-            SetProp(hwndDlg,L"this",reinterpret_cast<HANDLE>(lParam));
-            pThis =  reinterpret_cast<CFixApp*>(lParam);
+            pThis = Attach<CFixApp>(hwndDlg, lParam);
             pThis->m_hWnd = hwndDlg;
             pThis->m_hWndCBGUIScales = GetDlgItem(hwndDlg, COMBO_GUISCALING);
             pThis->m_hWndCBRenderers = GetDlgItem(hwndDlg, COMBO_RENDERER);
@@ -334,7 +329,6 @@ INT_PTR CALLBACK CFixApp::FixAppDialogProc(HWND hwndDlg,UINT uMsg,WPARAM wParam,
             pThis->m_hWndTxtResX = GetDlgItem(hwndDlg, TXT_RESX);
             pThis->m_hWndTxtResY = GetDlgItem(hwndDlg, TXT_RESY);
             pThis->m_hWndTxtFOV = GetDlgItem(hwndDlg, TXT_FOV);
-            SendMessage(hwndDlg, WM_SETICON, ICON_BIG, reinterpret_cast<LPARAM>(LoadIcon(reinterpret_cast<HINSTANCE>(GetWindowLong(hwndDlg, GWL_HINSTANCE)), MAKEINTRESOURCE(IDI_ICON))));
 
             pThis->PopulateDialog();
             pThis->ReadSettings();
@@ -392,25 +386,6 @@ INT_PTR CALLBACK CFixApp::FixAppDialogProc(HWND hwndDlg,UINT uMsg,WPARAM wParam,
             break;
         }
         break;
-
-    case WM_TIMER:
-        if (wParam == CDialogPadNav::sm_iTimerId && pThis && pThis->m_pPadNav)
-        {
-            pThis->m_pPadNav->OnTimer();
-            return TRUE;
-        }
-        break;
-
-    case WM_DESTROY:
-        if (pThis)
-        {
-            pThis->m_pPadNav.reset();
-        }
-        break;
-
-    case WM_CLOSE:
-        EndDialog(hwndDlg,0);
-        return TRUE;
 
     }
 
