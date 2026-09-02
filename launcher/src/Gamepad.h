@@ -3,6 +3,8 @@
 #include <cstdint>
 #include <vector>
 
+#include "StickResponse.h"
+
 class UEngine;
 class UViewport;
 struct SDL_Gamepad;
@@ -10,7 +12,8 @@ struct SDL_Gamepad;
 class CGamepad
 {
 public:
-    enum class EStickCurveType { Linear, Power, Expo, Sigmoid };
+    using EStickCurveType = StickResponse::ECurveType;
+    using SStickCurve     = StickResponse::SCurve;
 
     enum class EStick { Left, Right };
 
@@ -22,16 +25,6 @@ public:
         AccelX, AccelY, AccelZ,
         TouchpadX, TouchpadY,
         JoyAxis
-    };
-
-    struct SStickCurve
-    {
-        EStickCurveType eType;
-        float fPower;
-        float fExpo;
-        float fSigSteepness;
-        float fSigMidpoint;
-        float fSigStrength;
     };
 
     CGamepad();

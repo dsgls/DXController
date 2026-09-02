@@ -74,6 +74,7 @@
     <ClCompile Include="LogTimeTests.cpp" />
     <ClCompile Include="LogPathTests.cpp" />
     <ClCompile Include="StartupHeaderTests.cpp" />
+    <ClCompile Include="StickResponseTests.cpp" />
     <ClCompile Include="..\src\FrameStats.cpp" />
     <ClCompile Include="..\src\FramePacing.cpp" />
     <ClCompile Include="..\src\CursorPolicy.cpp" />
@@ -81,6 +82,7 @@
     <ClCompile Include="..\src\LogTime.cpp" />
     <ClCompile Include="..\src\LogPath.cpp" />
     <ClCompile Include="..\src\StartupHeader.cpp" />
+    <ClCompile Include="..\src\StickResponse.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="doctest.h" />
@@ -91,6 +93,7 @@
     <ClInclude Include="..\src\LogTime.h" />
     <ClInclude Include="..\src\LogPath.h" />
     <ClInclude Include="..\src\StartupHeader.h" />
+    <ClInclude Include="..\src\StickResponse.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
 </Project>

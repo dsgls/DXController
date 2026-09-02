@@ -92,7 +92,7 @@ no PCH — lives as a `.h`/`.cpp` pair directly in `launcher/src/` (a plain
 The main loop and its handlers stay thin shims: gather OS/engine facts,
 call a pure function to decide, apply the result via Win32/engine calls.
 Current units: `FrameStats`, `FramePacing`, `CursorPolicy`, `LogTime`,
-`LogPath`, `CrashRecord`, `StartupHeader`.
+`LogPath`, `CrashRecord`, `StartupHeader`, `StickResponse`.
 
 `launcher/tests/` builds these units against doctest (vendored header,
 `launcher/tests/doctest.h`) via `launcher/tests/tests.vcxproj`, a

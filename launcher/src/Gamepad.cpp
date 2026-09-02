@@ -239,56 +239,6 @@ namespace
         return L"Linear";
     }
 
-    //Pure: shape a normalized magnitude u (>= 0) into a shaped magnitude.
-    //Endpoints pinned: returns 0 at u <= 0, ~1 at u = 1. Linear short-circuits.
-    //May return > 1 for u > 1 (diagonal overflow); caller clamps final axes.
-    float ShapeStickMagnitude(const float fU, const CGamepad::SStickCurve& Curve)
-    {
-        if (fU <= 0.0f)
-        {
-            return 0.0f;
-        }
-        switch (Curve.eType)
-        {
-        case CGamepad::EStickCurveType::Power:
-            return std::pow(fU, Curve.fPower);
-
-        case CGamepad::EStickCurveType::Expo:
-        {
-            const float e = Curve.fExpo;
-            return (1.0f - e) * fU + e * fU * fU * fU;
-        }
-
-        case CGamepad::EStickCurveType::Sigmoid:
-        {
-            const float k  = Curve.fSigSteepness;
-            const float c  = Curve.fSigMidpoint;
-            const float w  = Curve.fSigStrength;
-            const float lo = 1.0f / (1.0f + std::exp(  k * c));
-            const float hi = 1.0f / (1.0f + std::exp(-k * (1.0f - c)));
-            const float s  = (1.0f / (1.0f + std::exp(-k * (fU - c))) - lo) / (hi - lo);
-            return (1.0f - w) * fU + w * s;
-        }
-
-        case CGamepad::EStickCurveType::Linear:
-        default:
-            return fU;
-        }
-    }
-
-    //SDL can report -32768, one past the positive end of the range. Clamp to
-    //-32767 so both axes are symmetric and negation can't overflow.
-    int ClampStickAxis(const int iRaw)
-    {
-        return (iRaw <= -32767) ? -32767 : iRaw;
-    }
-
-    //SDL Y axes are positive-down; the pipeline wants positive-up.
-    int NegateStickY(const int iRaw)
-    {
-        return -ClampStickAxis(iRaw);
-    }
-
     bool IsStickAxis(const Uint8 iAxis)
     {
         return iAxis == SDL_GAMEPAD_AXIS_LEFTX  || iAxis == SDL_GAMEPAD_AXIS_LEFTY ||
@@ -1021,7 +971,6 @@ void CGamepad::SampleCurve(const EStick eStick, int iCount, FOutputDevice& Ar) c
     const SStickCurve& Curve   = (eStick == EStick::Left) ? m_LeftStickCurve    : m_RightStickCurve;
     const int          iDz     = (eStick == EStick::Left) ? m_iLeftStickDeadzone : m_iRightStickDeadzone;
     const float        fScale  = (eStick == EStick::Left) ? 1.0f                 : m_fRightStickScale;
-    const float        fCDz    = static_cast<float>(iDz) / 32767.0f;
     const float        fDenom  = static_cast<float>(iCount - 1);
 
     //"%.4f," is 7 chars per value; 256 * 7 + 1 = 1793.
@@ -1029,21 +978,12 @@ void CGamepad::SampleCurve(const EStick eStick, int iCount, FOutputDevice& Ar) c
     int     iWritten = 0;
     for (int i = 0; i < iCount; ++i)
     {
+        //The same magnitude pipeline EmitStickAxes runs, so the preview cannot
+        //drift from the real response.
         const float fU = static_cast<float>(i) / fDenom;
-        float fY;
-        if (fU <= fCDz)
-        {
-            fY = 0.0f;
-        }
-        else
-        {
-            //Same pipeline as EmitStickAxes: shape, then apply the output
-            //scale, so the preview shows the real ceiling.
-            const float fR = (fU - fCDz) / (1.0f - fCDz);
-            fY = ShapeStickMagnitude(fR, Curve) * fScale;
-        }
+        float fY = StickResponse::ShapeNormalized(fU, iDz, Curve, fScale);
 
-        //ShapeStickMagnitude is pinned to 0 and 1 across all four curves on
+        //ShapeMagnitude is pinned to 0 and 1 across all four curves on
         //inputs in [0, 1]; clamp defensively against accumulated float error.
         if (fY < 0.0f) fY = 0.0f;
         if (fY > 1.0f) fY = 1.0f;
@@ -1172,10 +1112,7 @@ void CGamepad::ReleaseHeldButtons(UEngine* const pEngine, UViewport* const pView
     m_iPrevButtons = 0;
 }
 
-//Stock Unreal WinDrv configures DirectInput joystick axes to -1000..1000 via
-//DIPROP_RANGE; User.ini Speed= values are tuned for that magnitude. Emit in the
-//same convention so existing bindings work without retuning.
-static constexpr float kAxisRange = 1000.0f;
+static constexpr float kAxisRange = StickResponse::kAxisRange;
 
 void CGamepad::EmitStickAxes(UEngine* const pEngine, UViewport* const pViewport,
                              const int iRawX, const int iRawY, const int iDeadzone,
@@ -1189,33 +1126,9 @@ void CGamepad::EmitStickAxes(UEngine* const pEngine, UViewport* const pViewport,
     const float fPrevX = fOutX;
     const float fPrevY = fOutY;
 
-    //Work entirely in normalized magnitude [0, 1]; scale to axis units once at
-    //the end. fRawMag can exceed 32767 on a diagonal (~46340 at full 45 deg);
-    //the curve extrapolates monotonically and the per-axis clamp catches it.
-    const float fXf     = static_cast<float>(iRawX);
-    const float fYf     = static_cast<float>(iRawY);
-    const float fRawMag = std::sqrt(fXf * fXf + fYf * fYf);
-    const float fU      = fRawMag / 32767.0f;
-    const float fCDz    = static_cast<float>(iDeadzone) / 32767.0f;
-
-    if (fU <= fCDz || fRawMag <= 0.0f)
-    {
-        fOutX = 0.0f;
-        fOutY = 0.0f;
-    }
-    else
-    {
-        //Radial deadzone: remap (cDz, 1] to (0, 1] linearly. Curve shapes that
-        //post-deadzone magnitude; fScale then caps the output ceiling. Direction
-        //preserved: a single combined scale = out_axis_mag / raw_mag applied to
-        //raw X/Y yields direction * out_axis_mag with no intermediate sqrt.
-        const float fR         = (fU - fCDz) / (1.0f - fCDz);
-        const float fS         = ShapeStickMagnitude(fR, Curve);
-        const float fOutMag    = fS * fScale * kAxisRange;
-        const float fAxisScale = fOutMag / fRawMag;
-        fOutX = std::min(kAxisRange, std::max(-kAxisRange, fXf * fAxisScale));
-        fOutY = std::min(kAxisRange, std::max(-kAxisRange, fYf * fAxisScale));
-    }
+    const StickResponse::SAxes Out = StickResponse::Shape(iRawX, iRawY, iDeadzone, Curve, fScale);
+    fOutX = Out.fX;
+    fOutY = Out.fY;
 
     if (fOutX != 0.0f)
     {
@@ -1238,22 +1151,7 @@ void CGamepad::EmitStickAxes(UEngine* const pEngine, UViewport* const pViewport,
 float CGamepad::EmitTriggerAxis(UEngine* const pEngine, UViewport* const pViewport,
                                 const int iRaw, const float fPrev, const EInputKey eKey)
 {
-    //The ini key keeps its XInput-era 0..255 meaning so existing settings stay
-    //valid; SDL reports triggers as 0..32767, so scale the threshold up rather
-    //than the value down.
-    const int iT = m_iTriggerThreshold * 32767 / 255;
-
-    float fOut;
-    if (iRaw <= iT)
-    {
-        fOut = 0.0f;
-    }
-    else
-    {
-        //Linear remap (iT, 32767] -> (0, kAxisRange]; same convention as sticks.
-        fOut = static_cast<float>(iRaw - iT) * kAxisRange / static_cast<float>(32767 - iT);
-        fOut = std::min(kAxisRange, fOut);
-    }
+    const float fOut = StickResponse::Trigger(iRaw, m_iTriggerThreshold);
 
     if (fOut != 0.0f)
     {
@@ -1627,10 +1525,10 @@ void CGamepad::Poll(UEngine* const pEngine, UViewport* const pViewport, const bo
     }
     iButtons |= SupplementalButtonMask(pPad);
 
-    const int iLeftX      = ClampStickAxis(SDL_GetGamepadAxis(pPad, SDL_GAMEPAD_AXIS_LEFTX));
-    const int iLeftY      = NegateStickY(SDL_GetGamepadAxis(pPad, SDL_GAMEPAD_AXIS_LEFTY));
-    const int iRightX     = ClampStickAxis(SDL_GetGamepadAxis(pPad, SDL_GAMEPAD_AXIS_RIGHTX));
-    const int iRightY     = NegateStickY(SDL_GetGamepadAxis(pPad, SDL_GAMEPAD_AXIS_RIGHTY));
+    const int iLeftX      = StickResponse::ClampAxis(SDL_GetGamepadAxis(pPad, SDL_GAMEPAD_AXIS_LEFTX));
+    const int iLeftY      = StickResponse::NegateY(SDL_GetGamepadAxis(pPad, SDL_GAMEPAD_AXIS_LEFTY));
+    const int iRightX     = StickResponse::ClampAxis(SDL_GetGamepadAxis(pPad, SDL_GAMEPAD_AXIS_RIGHTX));
+    const int iRightY     = StickResponse::NegateY(SDL_GetGamepadAxis(pPad, SDL_GAMEPAD_AXIS_RIGHTY));
     const int iLeftTrig   = SDL_GetGamepadAxis(pPad, SDL_GAMEPAD_AXIS_LEFT_TRIGGER);
     const int iRightTrig  = SDL_GetGamepadAxis(pPad, SDL_GAMEPAD_AXIS_RIGHT_TRIGGER);
 
@@ -1663,7 +1561,7 @@ void CGamepad::Poll(UEngine* const pEngine, UViewport* const pViewport, const bo
     //curve pipeline shapes magnitude (radially symmetric), so negating raw is
     //equivalent to negating the result, and it keeps fPrevRightStickY's
     //non-zero -> zero edge detection consistent with what EmitStickAxes just
-    //emitted. iRightY is already clamped to [-32767, 32767] (NegateStickY),
+    //emitted. iRightY is already clamped to [-32767, 32767] (NegateY),
     //so this negation cannot overflow.
     const int iRightYForEmit = m_bInvertLookY ? -iRightY : iRightY;
     EmitStickAxes(pEngine, pViewport,

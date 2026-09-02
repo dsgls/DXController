@@ -81,6 +81,9 @@
     <ClCompile Include="StartupHeader.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="StickResponse.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="ConfigOverride.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -153,6 +156,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="StartupHeader.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="StickResponse.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="ConfigOverride.h">
