@@ -566,9 +566,13 @@ UEngine* CLauncher::InitEngineAndViewport(const HMONITOR hMonitor, std::unique_p
 
     //Init engine
     UClass* const pEngineClass = LoadClass<UGameEngine>(nullptr, L"ini:Engine.Engine.GameEngine", nullptr, LOAD_NoFail, nullptr);
-    assert(pEngineClass);
+    if (!pEngineClass)
+    {
+        //LOAD_NoFail means the engine fatals inside LoadClass before returning
+        //null, so this is defence-in-depth against that contract changing.
+        GError->Log(L"Engine class failed to load.");
+    }
     UEngine* const pEngine = ConstructObject<UEngine>(pEngineClass);
-    assert(pEngine);
     if (!pEngine)
     {
         GError->Log(L"Engine initialization failed.");
@@ -1006,11 +1010,13 @@ void CLauncher::MainLoop(UEngine* const pEngine)
 
         if(m_pViewPort)
         {
-            assert(m_hWnd);
+            //Actor and its rootWindow are engine/script state that can be absent
+            //between levels, so both are checked rather than asserted.
+            const APlayerPawnExt* const pPlayer = static_cast<APlayerPawnExt*>(m_pViewPort->Actor);
 
             //PeekMessage() doesn't get WM_SIZE
             //Default/desired FOV check is so we don't change FOV while zoomed in
-            if (m_bAutoFov && m_pViewPort->Actor->DesiredFOV == m_pViewPort->Actor->DefaultFOV)
+            if (m_bAutoFov && pPlayer && pPlayer->DesiredFOV == pPlayer->DefaultFOV)
             {
                 const size_t iSizeX = static_cast<size_t>(m_pViewPort->SizeX);
                 const size_t iSizeY = static_cast<size_t>(m_pViewPort->SizeY);
@@ -1022,10 +1028,13 @@ void CLauncher::MainLoop(UEngine* const pEngine)
                 }
             }
 
-            const APlayerPawnExt* const pPlayer = static_cast<APlayerPawnExt*>(m_pViewPort->Actor);
-            assert(pPlayer);
-            XRootWindow* const pRoot = static_cast<XRootWindow*>(pPlayer->rootWindow);
-            assert(pRoot);
+            XRootWindow* const pRoot = pPlayer ? static_cast<XRootWindow*>(pPlayer->rootWindow) : nullptr;
+            if(!pRoot || !m_hWnd)
+            {
+                //No window or no root window: nothing to decide cursor state
+                //against. Silent because it would repeat every frame.
+                continue;
+            }
 
             const bool bInMenu = pRoot->IsMouseGrabbed()!=0;
 

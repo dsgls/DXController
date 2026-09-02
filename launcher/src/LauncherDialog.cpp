@@ -110,6 +110,12 @@ INT_PTR CALLBACK CLauncherDialog::LauncherDialogProc(HWND hwndDlg,UINT uMsg,WPAR
     {
         const NMHDR* const pNMH = reinterpret_cast<NMHDR*>(lParam);
         assert(pNMH);
+        if(!pThis)
+        {
+            //Self() is null until WM_INITDIALOG binds the object, and a control
+            //can notify before that; the link handles are not known yet either.
+            break;
+        }
         switch(pNMH->code)
         {
         case NM_CLICK:

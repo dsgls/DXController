@@ -105,18 +105,25 @@ void CDataDirDialog::FindDefaultItems()
     //Store directories from default.ini in map so we ignore then
 
     TMultiMap<FString, FString>* pSection = GConfig->GetSectionPrivate(L"Core.System", FALSE, TRUE, L"default.ini");
-    assert(pSection);
-
-    TArray<FString> Defaults;
-    pSection->MultiFind(sm_pszPaths, Defaults);
-    for(int i = 0; i < Defaults.Num(); i++)
+    if(!pSection)
     {
-        //Convert format like "..\Music\*.umx" to "..\Music"
-        wchar_t szBuf[MAX_PATH];
-        wcscpy_s(szBuf, *Defaults(i));
-        PathRemoveFileSpec(szBuf);
+        //Not created (Force is FALSE), so a missing default.ini or section lands
+        //here. The list then shows the stock directories as ordinary entries.
+        GLog->Log(L"Data directories: default.ini has no [Core.System] section.");
+    }
+    else
+    {
+        TArray<FString> Defaults;
+        pSection->MultiFind(sm_pszPaths, Defaults);
+        for(int i = 0; i < Defaults.Num(); i++)
+        {
+            //Convert format like "..\Music\*.umx" to "..\Music"
+            wchar_t szBuf[MAX_PATH];
+            wcscpy_s(szBuf, *Defaults(i));
+            PathRemoveFileSpec(szBuf);
 
-        m_DefaultDataDirs.insert(szBuf);
+            m_DefaultDataDirs.insert(szBuf);
+        }
     }
 
     const wchar_t* const pszCDPath = GConfig->GetStr(L"Engine.Engine", L"CdPath");
@@ -181,6 +188,8 @@ void CDataDirDialog::PopulateConfig() const
 {
     assert(GSys);
 
+    //Both sections are requested with Force, which creates them if absent, so
+    //unlike the default.ini reads below these cannot come back null.
     TMultiMap<FString, FString>* const pSection = GConfig->GetSectionPrivate(L"Core.System", TRUE, FALSE);
     assert(pSection);
     TMultiMap<FString, FString>* const pSectionInt = GConfig->GetSectionPrivate(PROJECTNAME, TRUE, FALSE); //Int files have their own section as we use our own override mechanism
@@ -211,13 +220,20 @@ void CDataDirDialog::PopulateConfig() const
     
     //Re-add default items
     TMultiMap<FString, FString>* const pDefSection = GConfig->GetSectionPrivate(L"Core.System", FALSE, FALSE, L"default.ini");
-    assert(pDefSection);
-
-    TArray<FString> Defaults;
-    pDefSection->MultiFind(sm_pszPaths, Defaults);
-    for(int i = 0; i < Defaults.Num(); i++)
+    if(!pDefSection)
     {
-        pSection->Add(sm_pszPaths, *Defaults(i));
+        //Same missing-default.ini case as FindDefaultItems(); the user's own
+        //entries were already written above, only the stock ones are lost.
+        GLog->Log(L"Data directories: default.ini has no [Core.System] section, stock paths not restored.");
+    }
+    else
+    {
+        TArray<FString> Defaults;
+        pDefSection->MultiFind(sm_pszPaths, Defaults);
+        for(int i = 0; i < Defaults.Num(); i++)
+        {
+            pSection->Add(sm_pszPaths, *Defaults(i));
+        }
     }
 
     GSys->LoadConfig();

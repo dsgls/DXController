@@ -55,14 +55,17 @@ float Misc::CalcFOV(const size_t iResX, const size_t iResY)
 
 void Misc::CenterWindowOnMonitor(const HWND hWnd, const HMONITOR hMonitor)
 {
-    assert(hWnd);
-    assert(hMonitor);
-
+    //hWnd is the engine's viewport window and hMonitor comes from the launcher
+    //dialog, so neither is ours to assume. Both structs stay uninitialized when
+    //their query fails, which would move the window to garbage coordinates.
     MONITORINFO mi;
     mi.cbSize = sizeof(mi);
-    GetMonitorInfo(hMonitor, &mi);
     RECT r;
-    GetWindowRect(hWnd, &r);
+    if(!hWnd || !hMonitor || !GetMonitorInfo(hMonitor, &mi) || !GetWindowRect(hWnd, &r))
+    {
+        GLog->Log(L"Unable to center window on monitor.");
+        return;
+    }
 
     const int iW = r.right - r.left;
     const int iH = r.bottom - r.top;
@@ -82,7 +85,13 @@ void Misc::CenterWindowOnMonitor(const HWND hWnd, const HMONITOR hMonitor)
 
 void Misc::SetBorderlessFullscreen(const HWND hWnd, const BorderlessFullscreenMode Mode)
 {
-    assert(hWnd);
+    if(!hWnd)
+    {
+        //Reachable: the toggle runs off m_hWnd, which stays null when the engine
+        //never handed the launcher a viewport window.
+        GLog->Log(L"Unable to toggle borderless fullscreen: no window.");
+        return;
+    }
 
     LONG_PTR Style = GetWindowLongPtr(hWnd, GWL_STYLE);
 
@@ -91,30 +100,29 @@ void Misc::SetBorderlessFullscreen(const HWND hWnd, const BorderlessFullscreenMo
         Style &= ~(WS_CAPTION | WS_THICKFRAME);
         SetWindowLongPtr(hWnd, GWL_STYLE, Style);
 
-        int iX;
-        int iY;
-        int iW;
-        int iH;
+        //The whole virtual screen, also the fallback for CURRENT_MONITOR:
+        //MonitorFromWindow's flag 0 is MONITOR_DEFAULTTONULL, so an off-screen
+        //window yields no monitor and leaves the MONITORINFO uninitialized.
+        int iX = GetSystemMetrics(SM_XVIRTUALSCREEN);
+        int iY = GetSystemMetrics(SM_YVIRTUALSCREEN);
+        int iW = GetSystemMetrics(SM_CXVIRTUALSCREEN);
+        int iH = GetSystemMetrics(SM_CYVIRTUALSCREEN);
 
         if (Mode == BorderlessFullscreenMode::CURRENT_MONITOR)
         {
-            const HMONITOR hM = MonitorFromWindow(hWnd, 0);
-
             MONITORINFO mi;
             mi.cbSize = sizeof(mi);
-            GetMonitorInfo(hM, &mi);
-
-            iX = mi.rcMonitor.left;
-            iY = mi.rcMonitor.top;
-            iW = mi.rcMonitor.right - mi.rcMonitor.left;
-            iH = mi.rcMonitor.bottom - mi.rcMonitor.top;
-        }
-        else
-        {
-            iX = GetSystemMetrics(SM_XVIRTUALSCREEN);
-            iY = GetSystemMetrics(SM_YVIRTUALSCREEN);
-            iW = GetSystemMetrics(SM_CXVIRTUALSCREEN);
-            iH = GetSystemMetrics(SM_CYVIRTUALSCREEN);
+            if (GetMonitorInfo(MonitorFromWindow(hWnd, 0), &mi))
+            {
+                iX = mi.rcMonitor.left;
+                iY = mi.rcMonitor.top;
+                iW = mi.rcMonitor.right - mi.rcMonitor.left;
+                iH = mi.rcMonitor.bottom - mi.rcMonitor.top;
+            }
+            else
+            {
+                GLog->Log(L"Borderless fullscreen: window is on no monitor, using the whole virtual screen.");
+            }
         }
 
         SetWindowPos(hWnd, NULL, iX, iY, iW, iH, SWP_FRAMECHANGED);
