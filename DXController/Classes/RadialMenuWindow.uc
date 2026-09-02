@@ -8,8 +8,8 @@
 //
 // State machine:
 //   - bOpen = false : window invisible, ticks idle.
-//   - Open(WM_Weapon)   : show the weapon wheel (fades in over FadeInFrames).
-//   - Open(WM_Aug)      : show the aug wheel (fades in over FadeInFrames).
+//   - Open(WM_Weapon)   : show the weapon wheel.
+//   - Open(WM_Aug)      : show the aug wheel.
 //   - UpdateStick(x, y) : called every right-stick axis event while open.
 //   - Close(bApply)     : dispatch selection at button-release time, hide
 //                         immediately. bOpen becomes false right away.
@@ -33,7 +33,6 @@ const NumberRadius     = 90.0;    // distance from centre to each slot-number la
 const PlateDiameter    = 360.0;   // backplate draw size, pixels (encloses the icon ring)
 const PlateTexSize     = 1024.0;  // WheelPlate source texture edge length
 const WedgeTexSize     = 1024.0;  // Wedge0..9 source texture edge length (matches the plate)
-const FadeInFrames     = 8;       // drawn frames of fade-in (~130ms at 60fps)
 
 // Per-slot highlight wedge textures, indexed by slot 0..9. Populated
 // from defaultproperties (the `wedgeTex(i)=Texture'...'` literal makes
@@ -60,17 +59,6 @@ var float HighlightIntensity;
 // when the user releases LB/RB before re-centring the right stick.
 var float viewLockUntil;
 
-// Fade-in state. The fade is counted in DRAWN FRAMES, not seconds:
-// the belt-assign wheel opens over the (paused) inventory screen,
-// where Level.TimeSeconds is frozen — a time-based fade would never
-// progress and the wheel would stay invisible. fadeFrameCount resets
-// in Open(); curFade is recomputed at the top of every DrawWindow
-// (0..1). Only meaningful while backgroundDrawStyle is translucent —
-// masked draws cannot alpha-fade, so with HUD translucency off the
-// wheel snaps open fully formed.
-var int   fadeFrameCount;
-var float curFade;
-
 // Sticky version of highlightedSlot used by Close's grace fallback.
 // Updated in UpdateStick whenever the stick is on a real segment;
 // retains its value when the stick re-enters the deadzone so the
@@ -87,7 +75,6 @@ function Open(int newMode, optional Inventory item, optional bool bStickyMode, o
     if (bOpen)
         return;
     bOpen = true;
-    fadeFrameCount = 0;
     mode = newMode;
     stickX = 0.0;
     stickY = 0.0;
@@ -399,19 +386,6 @@ event DrawWindow(GC gc)
     if (root == None)
         return;
 
-    // Fade-in progress, counted in drawn frames (pause-immune; see the
-    // fadeFrameCount comment). Masked mode cannot fade (masked draws
-    // ignore alpha), so it snaps straight to 1.
-    if (backgroundDrawStyle == DSTY_Translucent)
-    {
-        if (fadeFrameCount < FadeInFrames)
-            fadeFrameCount++;
-        curFade = FClamp(float(fadeFrameCount) / float(FadeInFrames),
-                         0.0, 1.0);
-    }
-    else
-        curFade = 1.0;
-
     cx = width  * 0.5;
     cy = height * 0.5;
 
@@ -460,38 +434,15 @@ event DrawWindow(GC gc)
 // black — a translucent draw adds the key colour, so it must be black).
 // Drawn with the inherited backgroundDrawStyle, tinted with the HUD
 // theme's background colour — additive translucent by default, masked
-// opaque when the player turns HUD translucency off. While translucent
-// it fades in by scaling the tint (additive brightness IS opacity).
+// opaque when the player turns HUD translucency off.
 function DrawBackplate(GC gc, float cx, float cy)
 {
     gc.SetStyle(backgroundDrawStyle);
-    gc.SetTileColor(class'DXCUITheme'.static.ScaleColor(colBackground, curFade));
+    gc.SetTileColor(colBackground);
     gc.DrawStretchedTexture(cx - PlateDiameter * 0.5, cy - PlateDiameter * 0.5,
                             PlateDiameter, PlateDiameter,
                             0, 0, PlateTexSize, PlateTexSize,
                             Texture'DXController.WheelPlate');
-}
-
-// During the fade-in window, elements that are normally masked (icons,
-// numbers, text, empty marks) draw translucent with a fade-scaled tint
-// instead — masked draws ignore alpha and cannot fade. Once curFade
-// reaches 1 they return to their normal masked style. Bright texels
-// transition smoothly; an icon's dark texels still snap at the switch
-// (additive can't reproduce masked dark-over-background), which is
-// acceptable at 8 frames.
-function SetMaskableStyle(GC gc)
-{
-    if (curFade < 1.0)
-        gc.SetStyle(DSTY_Translucent);
-    else
-        gc.SetStyle(DSTY_Masked);
-}
-
-function Color FadeColor(Color c)
-{
-    if (curFade >= 1.0)
-        return c;
-    return class'DXCUITheme'.static.ScaleColor(c, curFade);
 }
 
 function DrawSlot(GC gc, int slotIdx, float cx, float cy, Inventory inv)
@@ -595,7 +546,7 @@ function DrawHighlightSlice(GC gc, float cx, float cy, int slotIdx)
         return;
 
     tinted = class'DXCUITheme'.static.ScaleColor(colBorder,
-                                            HighlightIntensity * curFade);
+                                                 HighlightIntensity);
 
     gc.SetStyle(DSTY_Translucent);
     gc.SetTileColor(tinted);
@@ -622,8 +573,8 @@ function DrawIconCentered(GC gc, float sx, float sy, Texture tex,
     drawW = srcW * scale;
     drawH = srcH * scale;
 
-    SetMaskableStyle(gc);
-    gc.SetTileColor(FadeColor(tileColor));
+    gc.SetStyle(DSTY_Masked);
+    gc.SetTileColor(tileColor);
     gc.DrawStretchedTexture(sx - drawW * 0.5, sy - drawH * 0.5,
                             drawW, drawH,
                             0, 0, srcW, srcH,
@@ -653,8 +604,8 @@ function DrawSlotNumber(GC gc, float cx, float cy, int slotIdx, string label)
     boxW = 24;
     boxH = 14;
 
-    SetMaskableStyle(gc);
-    gc.SetTextColor(FadeColor(dim));
+    gc.SetStyle(DSTY_Masked);
+    gc.SetTextColor(dim);
     gc.SetFont(Font'DeusExUI.FontMenuSmall');
     gc.SetAlignments(HALIGN_Center, VALIGN_Center);
     gc.DrawText(sx - boxW * 0.5, sy - boxH * 0.5, boxW, boxH, label);
@@ -676,8 +627,8 @@ function DrawEmptyMark(GC gc, float sx, float sy)
     bx      = sx - boxSize * 0.5;
     by      = sy - boxSize * 0.5;
 
-    SetMaskableStyle(gc);
-    gc.SetTileColor(FadeColor(dim));
+    gc.SetStyle(DSTY_Masked);
+    gc.SetTileColor(dim);
     gc.DrawBox(bx, by, boxSize, boxSize, 0, 0, 1, Texture'Solid');
 
     armLen   = 14.0;
@@ -774,8 +725,8 @@ function DrawCentreReadout(GC gc, float cx, float cy, Color tintText)
     panelX = cx - panelW * 0.5;
     panelY = cy - panelH * 0.5;
 
-    SetMaskableStyle(gc);
-    gc.SetTextColor(FadeColor(tintText));
+    gc.SetStyle(DSTY_Masked);
+    gc.SetTextColor(tintText);
     gc.SetFont(Font'DeusExUI.FontMenuSmall');
     gc.SetAlignments(HALIGN_Center, VALIGN_Top);
     gc.DrawText(panelX, panelY + 4, panelW, 16, nameLine);
