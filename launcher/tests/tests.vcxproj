@@ -78,6 +78,7 @@
     <ClCompile Include="ButtonMapResolveTests.cpp" />
     <ClCompile Include="AxisMapParseTests.cpp" />
     <ClCompile Include="PadActivityTests.cpp" />
+    <ClCompile Include="FixAppNavTableTests.cpp" />
     <ClCompile Include="PadNavGraphTests.cpp" />
     <ClCompile Include="PadRepeatTests.cpp" />
     <ClCompile Include="..\src\FrameStats.cpp" />
@@ -107,6 +108,7 @@
     <ClInclude Include="..\src\ButtonMapResolve.h" />
     <ClInclude Include="..\src\AxisMapParse.h" />
     <ClInclude Include="..\src\PadActivity.h" />
+    <ClInclude Include="..\src\FixAppNavTable.h" />
     <ClInclude Include="..\src\PadNavGraph.h" />
     <ClInclude Include="..\src\PadRepeat.h" />
   </ItemGroup>

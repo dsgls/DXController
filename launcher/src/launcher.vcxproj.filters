@@ -185,6 +185,9 @@
     <ClInclude Include="PadActivity.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="FixAppNavTable.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="PadNavGraph.h">
       <Filter>Header Files</Filter>
     </ClInclude>
