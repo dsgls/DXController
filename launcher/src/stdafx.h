@@ -41,3 +41,10 @@
 #include <DeusEx.h>
 
 #pragma warning(pop)
+
+//Version string, generated from git tags at build time. The header holds
+//narrow literals because res.rc needs them; WIDEN takes two levels because its
+//argument is itself a macro.
+#include "version_generated.h"
+#define WIDEN2(x) L##x
+#define WIDEN(x) WIDEN2(x)

@@ -36,30 +36,6 @@ void Misc::GetGameSystemDir(wchar_t(&pszBuf)[MAX_PATH])
     PathRemoveFileSpec(pszBuf);
 }
 
-static std::unique_ptr<wchar_t[]> pszVersion;
-const wchar_t* Misc::GetVersion()
-{
-    if(!pszVersion)
-    {
-        //Get version from resource
-        wchar_t szFileName[MAX_PATH];
-        GetModuleFileName(0, szFileName, _countof(szFileName));
-        DWORD dwHandle; //Doesn't do anything but still needed
-        const DWORD dwSize = GetFileVersionInfoSize(szFileName, &dwHandle);
-        std::unique_ptr<char[]> DataPtr(new char[dwSize]);
-        GetFileVersionInfo(szFileName, 0, dwSize, DataPtr.get());
-        void* pVersion = nullptr;
-
-        UINT iLen;
-        VerQueryValue(DataPtr.get(), L"\\StringFileInfo\\040904b0\\ProductVersion", &pVersion, &iLen);
-        assert(pVersion);
-        pszVersion.reset(new wchar_t[iLen]);
-        wcscpy_s(pszVersion.get(), iLen, static_cast<wchar_t*>(pVersion));
-    }
-
-    return pszVersion.get();
-}
-
 float Misc::GetDefaultFOV()
 {
     float fFOV = 75.0;

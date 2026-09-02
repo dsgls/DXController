@@ -61,7 +61,7 @@ INT_PTR CALLBACK CLauncherDialog::LauncherDialogProc(HWND hwndDlg,UINT uMsg,WPAR
             pThis->m_hWndWebsite = GetDlgItem(hwndDlg, IDC_WEBSITE);
 
             wchar_t buffer[128];
-            swprintf_s(buffer, L"Version %s", Misc::GetVersion());
+            swprintf_s(buffer, L"Version %s", WIDEN(LAUNCHER_PRODUCTVERSION_STR));
             SetDlgItemText(hwndDlg,IDC_VERSION,buffer);
 
             //Show ini files

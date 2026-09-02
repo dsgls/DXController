@@ -330,7 +330,7 @@ INT WINAPI WinMain(HINSTANCE /*hInInstance*/, HINSTANCE /*hPrevInstance*/, LPSTR
     //normal return and C++ unwind paths.
     SetUnhandledExceptionFilter(UnhandledExceptionLogger);
 
-    GLog->Logf(L"Deus Exe: version %s.", Misc::GetVersion());
+    GLog->Logf(L"Deus Exe: version %s.", WIDEN(LAUNCHER_PRODUCTVERSION_STR));
 
     pFileManager->AfterCoreInit();
 
@@ -563,7 +563,7 @@ CLauncher::CLauncher()
         {
             StartupHeader::Facts Facts;
 
-            Facts.szLauncherVersion = Misc::GetVersion();
+            Facts.szLauncherVersion = WIDEN(LAUNCHER_PRODUCTVERSION_STR);
 
             wchar_t szExePath[MAX_PATH] = {};
             GetModuleFileNameW(NULL, szExePath, static_cast<DWORD>(_countof(szExePath)));

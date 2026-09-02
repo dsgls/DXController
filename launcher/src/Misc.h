@@ -8,8 +8,6 @@ namespace Misc
 
     void GetGameSystemDir(wchar_t(&pszBuf)[MAX_PATH]);
 
-    const wchar_t* GetVersion();
-
     float GetDefaultFOV();
 
     float CalcFOV(const size_t iResX, const size_t iResY);

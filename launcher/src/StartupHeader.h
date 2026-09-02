@@ -22,7 +22,7 @@ namespace StartupHeader
 
     struct Facts
     {
-        std::wstring szLauncherVersion; //Misc::GetVersion()
+        std::wstring szLauncherVersion; //LAUNCHER_PRODUCTVERSION_STR
         std::wstring szExePath;         //GetModuleFileNameW
         std::wstring szCommandLine;     //GetCommandLineW
 
