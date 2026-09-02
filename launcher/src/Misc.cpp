@@ -1,7 +1,7 @@
 #include "stdafx.h"
 #include "Misc.h"
 
-bool Misc::SetDEP(const DWORD dwFlags = PROCESS_DEP_ENABLE)
+bool Misc::SetDEP(const DWORD dwFlags)
 {
         const HMODULE hMod = GetModuleHandleW(L"Kernel32.dll");
         if(!hMod)

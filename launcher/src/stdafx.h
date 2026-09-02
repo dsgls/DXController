@@ -11,7 +11,6 @@
 #include <CommCtrl.h>
 #include <ShlObj.h>
 #include <Uxtheme.h>
-//#include <hidusage.h> //Not included in Platform SDK
 
 //C/C++
 #include <algorithm>
