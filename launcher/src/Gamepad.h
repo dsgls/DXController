@@ -4,6 +4,7 @@
 #include <vector>
 
 #include "AxisMapParse.h"
+#include "PadActivity.h"
 #include "StickResponse.h"
 
 class UEngine;
@@ -214,10 +215,7 @@ private:
     float m_fPrevRightTrigger;
     float m_fLeftStickRawMag;   //Most recent raw (pre-deadzone, pre-curve) left-stick magnitude, normalized to [0, 1]. Read by GetRawStickMags().
     float m_fRightStickRawMag;  //Same for right stick.
-    ULONGLONG m_iLastPadActivityMs;
-    ULONGLONG m_iLastMouseActivityMs;
-    int       m_iRawMouseAccum;        //Manhattan sum of raw deltas in the current window
-    ULONGLONG m_iRawMouseAccumStartMs; //window start; 0 = no window open
+    PadActivity::SState m_Activity;
 
     //Helpers
 

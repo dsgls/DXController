@@ -156,11 +156,7 @@ CGamepad::CGamepad()
  m_fPrevLeftTrigger(0.0f),
  m_fPrevRightTrigger(0.0f),
  m_fLeftStickRawMag(0.0f),
- m_fRightStickRawMag(0.0f),
- m_iLastPadActivityMs(0),
- m_iLastMouseActivityMs(0),
- m_iRawMouseAccum(0),
- m_iRawMouseAccumStartMs(0)
+ m_fRightStickRawMag(0.0f)
 {
     //No SDL calls here: this runs during CLauncher's member-init phase,
     //before any engine package is loaded, and SDL_Init must not run until
@@ -1348,47 +1344,21 @@ void CGamepad::Poll(UEngine* const pEngine, UViewport* const pViewport, const bo
         m_fPrevLeftTrigger != 0.0f || m_fPrevRightTrigger != 0.0f;
     if (bPadActiveThisPoll)
     {
-        m_iLastPadActivityMs = GetTickCount64();
+        PadActivity::NotePadActivity(m_Activity, GetTickCount64());
     }
 }
 
 bool CGamepad::IsPadActive() const
 {
-    const ULONGLONG iNowMs    = GetTickCount64();
-    const ULONGLONG iGraceMs  = static_cast<ULONGLONG>(m_iPadActiveGraceMs);
-    const bool bPadRecent     = m_iLastPadActivityMs   != 0 && (iNowMs - m_iLastPadActivityMs)   < iGraceMs;
-    const bool bMouseRecent   = m_iLastMouseActivityMs != 0 && (iNowMs - m_iLastMouseActivityMs) < iGraceMs;
-    return bPadRecent && !bMouseRecent;
+    return PadActivity::IsPadActive(m_Activity, GetTickCount64(), m_iPadActiveGraceMs);
 }
 
 bool CGamepad::IsMouseActive() const
 {
-    const ULONGLONG iNowMs   = GetTickCount64();
-    const ULONGLONG iGraceMs = static_cast<ULONGLONG>(m_iPadActiveGraceMs);
-    return m_iLastMouseActivityMs != 0 && (iNowMs - m_iLastMouseActivityMs) < iGraceMs;
+    return PadActivity::IsMouseActive(m_Activity, GetTickCount64(), m_iPadActiveGraceMs);
 }
 
 void CGamepad::NotifyMouseActivity(const int iDeltaX, const int iDeltaY)
 {
-    const int iManhattan = (iDeltaX < 0 ? -iDeltaX : iDeltaX) + (iDeltaY < 0 ? -iDeltaY : iDeltaY);
-    if (iManhattan == 0)
-    {
-        return; //button-only WM_INPUT packet
-    }
-
-    //Accumulate over a short window: a single raw packet from a slow hand
-    //movement carries only 1-2 counts, well under the threshold that one
-    //coalesced WM_MOUSEMOVE used to clear in a frame.
-    constexpr ULONGLONG kAccumWindowMs = 250;
-    const ULONGLONG iNowMs = GetTickCount64();
-    if (m_iRawMouseAccumStartMs == 0 || iNowMs - m_iRawMouseAccumStartMs > kAccumWindowMs)
-    {
-        m_iRawMouseAccum        = 0;
-        m_iRawMouseAccumStartMs = iNowMs;
-    }
-    m_iRawMouseAccum += iManhattan;
-    if (m_iRawMouseAccum > m_iMouseActivityPx)
-    {
-        m_iLastMouseActivityMs = iNowMs;
-    }
+    PadActivity::NotifyMouseActivity(m_Activity, iDeltaX, iDeltaY, m_iMouseActivityPx, GetTickCount64());
 }
