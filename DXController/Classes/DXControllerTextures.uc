@@ -3,8 +3,9 @@
 // texture into DXController.u via #exec; no runtime code. The logical-id ->
 // texture map lives in ControllerButtonHint (this file is the import layer).
 //
-//   Masked (palette index 0 = magenta key -> transparent):
-//     18 button glyphs (Group=XboxSeries) + WheelPlate (Group=Wheel)
+//   Masked (palette index 0 = key -> transparent):
+//     18 button glyphs (Group=XboxSeries, magenta key) + WheelPlate
+//     (Group=Wheel, black key — its translucent draw adds the key colour)
 //   Non-masked greyscale (black adds nothing under additive DSTY_Translucent):
 //     Wedge0..Wedge9 (Group=Wheel) — the wheel's slice-highlight stamps
 //     MenuAutoSaveBackground_1, _2 (Group=MenuAutoSaveBackground) — autosave-settings menu background tiles
@@ -13,11 +14,16 @@
 // Textures\<name>.pcx. sync-and-build.sh / CI generate those PCX into
 // DXController/Textures/ before the compile (assets/gen-wheel.py +
 // assets/png-to-pcx.py). FLAGS=2 = PF_Masked (keys palette index 0, the
-// magenta key png-to-pcx.py writes) — this is the masked-import token the
+// key colour png-to-pcx.py writes) — this is the masked-import token the
 // stock scripts use (220 #exec lines in ../deusex-scripts use FLAGS=2;
-// none use MASKED=1). MIPS=Off everywhere: mandatory for masked textures
-// (mip blending corrupts the colour key) and fine for the wedges (drawn
-// near native size); the wedges omit FLAGS so they import non-masked.
+// none use MASKED=1). The 1024px wheel textures (WheelPlate + wedges)
+// import MIPS=On: render devices walk down the mip chain when a texture
+// exceeds the device cap, and stock D3DDrv caps at 256x256 and appErrors
+// when no mip fits ("oversize texture without sufficient mipmaps").
+// Masked + mips is safe — the importer's mip filter excludes the key
+// (palette index 0) from the blend. Everything else is <=256 and drawn
+// near native size, so it stays MIPS=Off; the wedges omit FLAGS so they
+// import non-masked.
 //=============================================================================
 class DXControllerTextures extends Object;
 
@@ -42,7 +48,7 @@ class DXControllerTextures extends Object;
 #exec TEXTURE IMPORT NAME=rt         FILE=Textures\rt.pcx         GROUP=XboxSeries MIPS=Off FLAGS=2
 
 // --- Wheel plate (masked, Group=Wheel) ---
-#exec TEXTURE IMPORT NAME=WheelPlate FILE=Textures\WheelPlate.pcx GROUP=Wheel MIPS=Off FLAGS=2
+#exec TEXTURE IMPORT NAME=WheelPlate FILE=Textures\WheelPlate.pcx GROUP=Wheel MIPS=On  FLAGS=2
 
 // --- Modulation veil (NON-masked flat grey 32, Group=UI) ---
 // Drawn DSTY_Modulated to darken the scene to x0.25 (texel/128).
@@ -51,16 +57,16 @@ class DXControllerTextures extends Object;
 #exec TEXTURE IMPORT NAME=Veil FILE=Textures\Veil.pcx GROUP=UI MIPS=Off
 
 // --- Slice-highlight wedges (NON-masked greyscale, Group=Wheel) ---
-#exec TEXTURE IMPORT NAME=Wedge0 FILE=Textures\wedge0.pcx GROUP=Wheel MIPS=Off
-#exec TEXTURE IMPORT NAME=Wedge1 FILE=Textures\wedge1.pcx GROUP=Wheel MIPS=Off
-#exec TEXTURE IMPORT NAME=Wedge2 FILE=Textures\wedge2.pcx GROUP=Wheel MIPS=Off
-#exec TEXTURE IMPORT NAME=Wedge3 FILE=Textures\wedge3.pcx GROUP=Wheel MIPS=Off
-#exec TEXTURE IMPORT NAME=Wedge4 FILE=Textures\wedge4.pcx GROUP=Wheel MIPS=Off
-#exec TEXTURE IMPORT NAME=Wedge5 FILE=Textures\wedge5.pcx GROUP=Wheel MIPS=Off
-#exec TEXTURE IMPORT NAME=Wedge6 FILE=Textures\wedge6.pcx GROUP=Wheel MIPS=Off
-#exec TEXTURE IMPORT NAME=Wedge7 FILE=Textures\wedge7.pcx GROUP=Wheel MIPS=Off
-#exec TEXTURE IMPORT NAME=Wedge8 FILE=Textures\wedge8.pcx GROUP=Wheel MIPS=Off
-#exec TEXTURE IMPORT NAME=Wedge9 FILE=Textures\wedge9.pcx GROUP=Wheel MIPS=Off
+#exec TEXTURE IMPORT NAME=Wedge0 FILE=Textures\wedge0.pcx GROUP=Wheel MIPS=On
+#exec TEXTURE IMPORT NAME=Wedge1 FILE=Textures\wedge1.pcx GROUP=Wheel MIPS=On
+#exec TEXTURE IMPORT NAME=Wedge2 FILE=Textures\wedge2.pcx GROUP=Wheel MIPS=On
+#exec TEXTURE IMPORT NAME=Wedge3 FILE=Textures\wedge3.pcx GROUP=Wheel MIPS=On
+#exec TEXTURE IMPORT NAME=Wedge4 FILE=Textures\wedge4.pcx GROUP=Wheel MIPS=On
+#exec TEXTURE IMPORT NAME=Wedge5 FILE=Textures\wedge5.pcx GROUP=Wheel MIPS=On
+#exec TEXTURE IMPORT NAME=Wedge6 FILE=Textures\wedge6.pcx GROUP=Wheel MIPS=On
+#exec TEXTURE IMPORT NAME=Wedge7 FILE=Textures\wedge7.pcx GROUP=Wheel MIPS=On
+#exec TEXTURE IMPORT NAME=Wedge8 FILE=Textures\wedge8.pcx GROUP=Wheel MIPS=On
+#exec TEXTURE IMPORT NAME=Wedge9 FILE=Textures\wedge9.pcx GROUP=Wheel MIPS=On
 
 // --- Controller-settings menu-background tiles (NON-masked greyscale,
 //     Group=MenuControllerBackground) ---
