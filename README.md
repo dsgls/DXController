@@ -12,15 +12,15 @@ navigation for every menu, conversation, and in-world device (keypads,
 ATMs, computers, security terminals), so the game is playable end to
 end without a mouse or keyboard.
 
+All development of this mod has been done with an Xbox One controller. It
+should work with every other controller supported by SDL (which is basically
+all of them), but all the on-screen button hints use Xbox controller icons.
+
+[Trigger warning: LLM assisted with parts of this project](#LLM usage in this project)
+
 ## Requirements
 
 - *Deus Ex: Game of the Year Edition* — the standard GOG or Steam release.
-- **A modern renderer** — with the game's default renderer, opening the
-  weapon/augmentation wheel typically crashes the game or renders the
-  wheels incorrectly. Install
-  [Kentie's D3D10 renderer](https://www.kentie.net/article/d3d10drv/)
-  (recommended). See [Linux and Steam Deck](#linux-and-steam-deck) for
-  alternatives if it doesn't work on your setup.
 
 ## Download
 
@@ -49,9 +49,6 @@ The release `.zip` contains everything you need:
    the release `.zip` into the game's `System` folder (e.g.
    `C:\GOG Games\Deus Ex GOTY\System\`), overwriting the existing
    `DeusEx.exe` and `DeusEx.u`.
-2. Install a modern renderer (see [Requirements](#requirements)) —
-   [Kentie's D3D10 renderer](https://www.kentie.net/article/d3d10drv/)
-   is recommended.
 
 If you have any other mods installed, start with a fresh game install
 and install only DXController. Compatibility with other mods has not
@@ -65,12 +62,11 @@ In the game, go to Settings -> Controller and configure at least your
 controller's deadzone. The mod does not apply the comically large deadzone
 used by most games, so if your controller sticks are not in good condition
 you will need to increase them. The same screen has a right-stick
-sensitivity setting (default 1.00) — lower it if turning at full stick
-deflection is too fast, and an "Invert look Y-axis" toggle that flips the
-right stick's up/down direction for gameplay look and the security camera.
-The launcher applies the inversion to the right-stick Y axis it emits, so if
-you rebind that axis away from `aLookUp` in `User.ini` the inversion follows
-whatever you bound it to.
+sensitivity setting — lower it if turning at full stick deflection is too
+fast, and an "Invert look Y-axis" toggle that flips the right stick's up/down
+direction for gameplay look and the security camera. The launcher applies the
+inversion to the right-stick Y axis it emits, so if you rebind that axis away
+from `aLookUp` in `User.ini` the inversion follows whatever you bound it to.
 
 The mod also autosaves periodically during play. Writing each save can cause
 a brief stutter — if it bothers you, make autosaves less frequent or turn
@@ -78,14 +74,9 @@ them off entirely in Settings → Autosave.
 
 ## Linux and Steam Deck
 
-The mod works on Linux under Proton, and the D3D renderers run fine
-there. A Steam Deck user reported that the D3D10 renderer did not work
-for them, but the
-[D3D11 renderer](https://www.kentie.net/article/d3d11drv/) did; they
-also needed to set the Proton compatibility option to "Proton
-Experimental". The
-[enhanced OpenGL renderer](https://www.cwdohnal.com/utglr/) is another
-fallback if neither D3D renderer works.
+The mod works on Linux and the Steam Deck under Proton. Some users have
+reported that they needed to set the Proton compatibility option to
+"Proton Experimental".
 
 ## Controls
 
@@ -134,6 +125,20 @@ In the inventory screen the controller-specific actions are:
 When moving an item, it glows green where it fits and red where it would
 overlap another item; A only places it on a green spot.
 
+## Renderer
+
+While not required for the mod, I highly recommend installing a modern
+renderer. They work better with todays machines, and they improve the
+look of the graphics.
+
+I have tested these renderers and can recommend them:
+[D3D10 renderer](https://www.kentie.net/article/d3d11drv/)
+[D3D11 renderer](https://www.kentie.net/article/d3d11drv/)
+[enhanced OpenGL renderer](https://www.cwdohnal.com/utglr/)
+
+The D3D10 renderer is better than the D3D11 renderer, so pick it unless
+you have a good reason not to.
+
 ## Extra buttons and analog sources
 
 Controllers with buttons beyond the standard layout — DualSense Edge
@@ -142,6 +147,12 @@ share, 8BitDo/Flydigi/HORI back buttons — get bindable slots
 automatically: `paddle1`-`paddle4`, `misc1`, and `touchpad` map to
 `Joy11`-`Joy16`. Bind them like any other gamepad button, in
 `[Extension.InputExt]` in `User.ini`, e.g. `Joy16=Button bFire`.
+
+WARNING: Unlike the rest of the mod, I have **not tested** any of the
+features described in this section, because I only have a regular Xbox
+One controller. I added this due to user requests, I think it should
+work but can't guarantee anything. If you do try it, let me know how
+it goes.
 
 Two `DeusEx.ini` sections give finer control, read at launcher startup
 and on `GamepadReload` (Settings → Controller triggers a reload after
@@ -257,6 +268,31 @@ brief "Auto Saving..." note in the bottom-left corner.
 
 See [`development.md`](development.md) for the repo layout, build
 instructions, and architecture notes.
+
+## LLM usage in this project
+
+An LLM was used to assist in the creation of this mod. I have been programming
+for a couple of decades now, and I used that background to make every technical
+and design decision in this project. I find the slop generators quite useful
+for the menial implementation tasks when I've already prepared a detailed
+specification, but they can't be trusted to make any real decisions or
+you'll end up with code that nobody understands. I have also personally
+done extensive playtesting with the mod. This is not some low-effort vibecoded
+project where someone just asked claude to make a thing and called it a day.
+
+It's sad that I have to write this section, but I can't deny that there is
+a ridiculous amount of slopware being pushed out these days. These projects
+look very professional, but as soon as you try them you find obvious bugs
+that make you question whether anyone even tried to use the thing. Well, this
+is not one of those projects.
+
+The other reason for writing this is that some people have a strong, visceral
+reaction to anything even tangentially related to LLMs. They do not accept
+that it is possible to write useful software if an lLM came anywhere near
+it, no matter how it was used. I disagree with this, but I respect their
+opinion, and much as I would tell a vegan if there were meat in a sandwich,
+here I am telling those with inflexible opinions on LLMs that their time
+is better spent elsewhere.
 
 ## License
 

@@ -165,7 +165,7 @@ CGamepad::CGamepad()
  m_iPadActiveGraceMs(500),
  m_LeftStickCurve{  EStickCurveType::Power,   2.0f, 0.60f, 6.0f, 0.60f, 0.60f },
  m_RightStickCurve{ EStickCurveType::Sigmoid, 2.0f, 0.60f, 8.0f, 0.70f, 0.90f },
- m_fRightStickScale(0.6f),
+ m_fRightStickScale(0.4f),
  m_bInvertLookY(0),
  m_iActivePadId(0),
  m_iPrevButtons(0),
