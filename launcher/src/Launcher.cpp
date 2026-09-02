@@ -739,6 +739,57 @@ void CLauncher::LogAndResetFrameStats(FOutputDevice& Ar)
     m_iFrameStatsCount = 0;
 }
 
+//Logs active-input-device transitions, edge-detected on the same
+//IsPadActive/IsMouseActive values the caller feeds to CursorPolicy this frame
+//(never on a private re-evaluation, so the log always matches what the
+//integration actually did). Identity changes (controller <-> keyboard+mouse)
+//log unconditionally; idle edges fire on every 500 ms input pause and stay
+//behind bGamepadDebugLog. Pad-to-pad switches are logged by SetActivePad,
+//inside the actual m_iActivePadId mutation.
+void CLauncher::LogActiveInputDevice(const bool bPadActive, const bool bMouseActive)
+{
+    //IsPadActive is pad-recent AND NOT mouse-recent, so both-true is impossible.
+    const EActiveDevice eNow = bPadActive   ? EActiveDevice::Controller
+                             : bMouseActive ? EActiveDevice::KeyboardMouse
+                                            : EActiveDevice::None;
+    if (eNow == m_eInputDeviceState)
+    {
+        return;
+    }
+    m_eInputDeviceState = eNow;
+
+    if (eNow == EActiveDevice::None)
+    {
+        if (m_bGamepadDebugLog)
+        {
+            GLog->Log(L"Input: active device idle (activity grace expired).");
+        }
+        return;
+    }
+
+    if (eNow == m_eLastActiveDevice)
+    {
+        if (m_bGamepadDebugLog)
+        {
+            GLog->Log(L"Input: active device resumed after idle.");
+        }
+        return;
+    }
+    m_eLastActiveDevice = eNow;
+
+    if (eNow == EActiveDevice::Controller)
+    {
+        wchar_t szPadName[64] = {};
+        wchar_t szPadGuid[40] = {};
+        m_Gamepad.GetActivePadNameAndGuid(szPadName, ARRAY_COUNT(szPadName), szPadGuid, ARRAY_COUNT(szPadGuid));
+        GLog->Logf(L"Input: active device now controller '%s' (guid %s).", szPadName, szPadGuid);
+    }
+    else
+    {
+        GLog->Log(L"Input: active device now keyboard+mouse.");
+    }
+}
+
 void CLauncher::PumpMessages(UEngine* const pEngine, const bool bMouseOverWindow, const bool bHasFocus)
 {
     MSG Msg;
@@ -965,18 +1016,29 @@ void CLauncher::MainLoop(UEngine* const pEngine)
         //thought was down is harmless (same thing WinDrv's trailer emits routinely).
         if(m_pViewPort && bHasFocus && !m_bPrevHasFocus)
         {
-            static const struct { int iVirtualKey; EInputKey eKey; } kModifiers[] = {
-                { VK_MENU,    IK_Alt   },
-                { VK_SHIFT,   IK_Shift },
-                { VK_CONTROL, IK_Ctrl  },
+            static const struct { int iVirtualKey; EInputKey eKey; const wchar_t* pszName; } kModifiers[] = {
+                { VK_MENU,    IK_Alt,   L"Alt"   },
+                { VK_SHIFT,   IK_Shift, L"Shift" },
+                { VK_CONTROL, IK_Ctrl,  L"Ctrl"  },
             };
+            wchar_t szReleased[32] = {};
             for (const auto& Mod : kModifiers)
             {
                 if ((GetAsyncKeyState(Mod.iVirtualKey) & 0x8000) == 0)
                 {
                     pEngine->InputEvent(m_pViewPort, Mod.eKey, EInputAction::IST_Release);
+                    if (szReleased[0] != L'\0')
+                    {
+                        wcscat_s(szReleased, L"+");
+                    }
+                    wcscat_s(szReleased, Mod.pszName);
                 }
             }
+            //One line per focus regain: marks the edge in the log and says which
+            //modifier releases were injected, so a stuck-modifier report shows
+            //whether this heal fired and what it healed.
+            GLog->Logf(L"Input: focus regained; injected release for %s.",
+                       szReleased[0] != L'\0' ? szReleased : L"no modifiers (all physically held)");
         }
         m_bPrevHasFocus = bHasFocus;
 
@@ -1038,13 +1100,22 @@ void CLauncher::MainLoop(UEngine* const pEngine)
 
             const bool bInMenu = pRoot->IsMouseGrabbed()!=0;
 
+            //Sampled once and shared between the device-change log and the
+            //cursor-policy facts, so the log reflects exactly the state the
+            //policy consumed. IsMouseActive is also what the menu-cursor gate
+            //in PumpMessages reads (live there, so its log line can trail the
+            //first affected mousemove by up to a frame).
+            const bool bPadActive = m_Gamepad.IsPadActive();
+            const bool bMouseActive = m_Gamepad.IsMouseActive();
+            LogActiveInputDevice(bPadActive, bMouseActive);
+
             CursorPolicy::Facts Frame;
             Frame.bForeground = bForeground;
             Frame.bFullscreen = m_pViewPort->IsFullscreen()!=0;
             Frame.bRawInput = m_bRawInput!=0;
             Frame.bInMenu = bInMenu;
             Frame.bPrevInMenu = m_bPrevInMenu;
-            Frame.bPadActive = m_Gamepad.IsPadActive();
+            Frame.bPadActive = bPadActive;
             Frame.bMouseOverWindow = bMouseOverWindow;
             Frame.bMouseInClientRect = PtInRect(&rClientScreen, CursorPos)!=0; //This makes sure resize cursor isn't hidden
             Frame.bCaptured = GetCapture() == m_hWnd;
@@ -1112,6 +1183,10 @@ void CLauncher::LoadSettings()
     GConfig->GetBool(PROJECTNAME, L"BorderlessFullscreenWindow", m_bBorderlessFullscreenWindow);
     GConfig->GetBool(PROJECTNAME, L"BorderlessFullscreenWindowAllMonitors", m_bBorderlessFullscreenWindowUseAllMonitors);
     GConfig->GetBool(PROJECTNAME, L"UseSingleCPU", m_bUseSingleCPU);
+
+    //Same flag UnrealScript's DXControllerDebug reads; the launcher only uses
+    //it to gate the idle edges in LogActiveInputDevice.
+    GConfig->GetBool(L"DXController.DXControllerDebug", L"bGamepadDebugLog", m_bGamepadDebugLog);
 }
 
 void CLauncher::ToggleBorderlessWindowedFullscreen()

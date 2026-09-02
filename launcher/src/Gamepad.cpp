@@ -80,6 +80,26 @@ namespace
         MultiByteToWideChar(CP_UTF8, 0, pszNarrow, -1, pszOut, iOutSize);
     }
 
+    //Identity string for the detection/hotplug/handoff log lines, built from
+    //the open handle (SOpenPad::sDesc caches it for disconnect time).
+    std::wstring DescribePad(const std::uint32_t iId, SDL_Gamepad* const pPad)
+    {
+        const char* const pszName = SDL_GetGamepadName(pPad);
+        wchar_t szName[128] = {};
+        WideFromNarrow(pszName ? pszName : "Unknown", szName, static_cast<int>(ARRAY_COUNT(szName)));
+        szName[ARRAY_COUNT(szName) - 1] = L'\0';
+
+        const SDL_GUID Guid = SDL_GetJoystickGUIDForID(iId);
+        char szGuidUtf8[40] = {};
+        SDL_GUIDToString(Guid, szGuidUtf8, static_cast<int>(sizeof(szGuidUtf8)));
+        wchar_t szGuid[40] = {};
+        WideFromNarrow(szGuidUtf8, szGuid, static_cast<int>(ARRAY_COUNT(szGuid)));
+
+        wchar_t szDesc[224] = {};
+        swprintf_s(szDesc, L"'%s' (guid %s, id %u)", szName, szGuid, static_cast<unsigned int>(iId));
+        return szDesc;
+    }
+
     //Parses a [DXController.GamepadButtonMap] value: "None"/empty (unmapped),
     //an EInputKey name without the "IK_" prefix (resolved via
     //pViewport->Input->FindKeyName() -- the same table [Extension.InputExt]
@@ -267,15 +287,34 @@ bool CGamepad::Init(UViewport* const pViewport)
             SDL_Gamepad* const pPad = SDL_OpenGamepad(pIds[i]);
             if (pPad)
             {
-                m_OpenPads.push_back({ pIds[i], pPad, false, false, false });
+                m_OpenPads.push_back({ pIds[i], pPad, false, false, false, DescribePad(pIds[i], pPad) });
+                GLog->Logf(L"Gamepad: detected controller %s", m_OpenPads.back().sDesc.c_str());
                 ApplyPadSensors(m_OpenPads.back());
                 if (m_iActivePadId == 0)
                 {
                     m_iActivePadId = pIds[i];
                 }
             }
+            else
+            {
+                GLog->Logf(L"Gamepad: failed to open controller id %u: %hs",
+                           static_cast<unsigned int>(pIds[i]), SDL_GetError());
+            }
         }
         SDL_free(pIds);
+    }
+    else
+    {
+        GLog->Logf(L"Gamepad: SDL_GetGamepads failed: %hs", SDL_GetError());
+    }
+
+    if (m_iActivePadId != 0)
+    {
+        GLog->Logf(L"Gamepad: active controller: %s", OpenPadDesc(m_iActivePadId));
+    }
+    else
+    {
+        GLog->Log(L"Gamepad: no controllers detected.");
     }
 
     return true;
@@ -1132,6 +1171,18 @@ SDL_Gamepad* CGamepad::GetActivePad() const
     return nullptr;
 }
 
+const wchar_t* CGamepad::OpenPadDesc(const std::uint32_t iPadId) const
+{
+    for (const SOpenPad& Pad : m_OpenPads)
+    {
+        if (Pad.iId == iPadId)
+        {
+            return Pad.sDesc.c_str();
+        }
+    }
+    return L"(not open)";
+}
+
 void CGamepad::ClosePad(const std::uint32_t iPadId)
 {
     for (size_t i = 0; i < m_OpenPads.size(); ++i)
@@ -1169,6 +1220,7 @@ void CGamepad::SetActivePad(UEngine* const pEngine, UViewport* const pViewport, 
     //a mid-hold change of hands can't leave a stuck button or axis behind.
     ReleaseAll(pEngine, pViewport);
     m_iActivePadId = iPadId;
+    GLog->Logf(L"Gamepad: active controller changed to %s", OpenPadDesc(iPadId));
 }
 
 void CGamepad::ProcessEvents(UEngine* const pEngine, UViewport* const pViewport)
@@ -1196,23 +1248,39 @@ void CGamepad::ProcessEvents(UEngine* const pEngine, UViewport* const pViewport)
             SDL_Gamepad* const pPad = SDL_OpenGamepad(Event.gdevice.which);
             if (pPad)
             {
-                m_OpenPads.push_back({ Event.gdevice.which, pPad, false, false, false });
+                m_OpenPads.push_back({ Event.gdevice.which, pPad, false, false, false, DescribePad(Event.gdevice.which, pPad) });
+                GLog->Logf(L"Gamepad: controller connected: %s", m_OpenPads.back().sDesc.c_str());
                 ApplyPadSensors(m_OpenPads.back());
                 if (m_iActivePadId == 0)
                 {
                     m_iActivePadId = Event.gdevice.which;
+                    GLog->Logf(L"Gamepad: active controller: %s", m_OpenPads.back().sDesc.c_str());
                 }
+            }
+            else
+            {
+                GLog->Logf(L"Gamepad: failed to open controller id %u: %hs",
+                           static_cast<unsigned int>(Event.gdevice.which), SDL_GetError());
             }
             break;
         }
 
         case SDL_EVENT_GAMEPAD_REMOVED:
         {
+            GLog->Logf(L"Gamepad: controller disconnected: %s", OpenPadDesc(Event.gdevice.which));
             ClosePad(Event.gdevice.which);
             if (Event.gdevice.which == m_iActivePadId)
             {
                 ReleaseAll(pEngine, pViewport);
                 m_iActivePadId = m_OpenPads.empty() ? 0 : m_OpenPads.front().iId;
+                if (m_iActivePadId != 0)
+                {
+                    GLog->Logf(L"Gamepad: active controller now %s", OpenPadDesc(m_iActivePadId));
+                }
+                else
+                {
+                    GLog->Log(L"Gamepad: no controllers left.");
+                }
             }
             break;
         }

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <string>
 #include <vector>
 
 #include "AxisMapParse.h"
@@ -142,6 +143,9 @@ private:
         bool          bLoggedMissingGyro;
         bool          bLoggedMissingAccel;
         bool          bLoggedMissingJoyAxis;
+        std::wstring  sDesc; //"'Name' (guid ..., id N)", captured at open time --
+                             //after SDL_EVENT_GAMEPAD_REMOVED the id no longer
+                             //resolves to a name, so disconnect logs need this.
     };
 
     //One resolved [DXController.GamepadAxisMap] line. fDeadzone is in the
@@ -260,6 +264,9 @@ private:
 
     //The open pad matching m_iActivePadId, or null when none is active.
     SDL_Gamepad* GetActivePad() const;
+
+    //sDesc of an open pad, for log lines. L"(not open)" when iId isn't open.
+    const wchar_t* OpenPadDesc(std::uint32_t iId) const;
 
     void ClosePad(std::uint32_t iPadId);
 

@@ -31,6 +31,7 @@ private:
     void PumpMessages(UEngine* const pEngine, const bool bMouseOverWindow, const bool bHasFocus);
     void RecordFrameStats(const double fFrameTimeMs, const double fOvershootMs);
     void LogAndResetFrameStats(FOutputDevice& Ar);
+    void LogActiveInputDevice(const bool bPadActive, const bool bMouseActive);
 
     HWND m_hWnd = NULL;
 
@@ -41,6 +42,14 @@ private:
     UEngine* m_pEngine = nullptr; //Set once in the constructor; used by Exec() (GamepadReload) which has no other route to it
     bool m_bPrevInMenu = false;
     bool m_bPrevHasFocus = false;
+
+    //Active-input-device change log (LogActiveInputDevice). The tri-state is
+    //derived from the same IsPadActive/IsMouseActive values the frame's
+    //CursorPolicy facts consume; m_eLastActiveDevice remembers the last
+    //non-idle device so only real handovers log unconditionally.
+    enum class EActiveDevice { None, KeyboardMouse, Controller };
+    EActiveDevice m_eInputDeviceState = EActiveDevice::None;
+    EActiveDevice m_eLastActiveDevice = EActiveDevice::None;
     bool m_bInBorderlessFullscreenWindow = false;
     CGamepad m_Gamepad;
 
@@ -60,6 +69,7 @@ private:
     UBOOL m_bBorderlessFullscreenWindow = TRUE;
     UBOOL m_bBorderlessFullscreenWindowUseAllMonitors = FALSE;
     UBOOL m_bUseSingleCPU = FALSE;
+    UBOOL m_bGamepadDebugLog = FALSE; //Script-side [DXController.DXControllerDebug] flag; gates the idle edges in LogActiveInputDevice
 
 //From FExec
 private:
