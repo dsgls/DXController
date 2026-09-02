@@ -88,16 +88,17 @@ public:
     // Re-reads the [DXController.ControllerSettings] section, then
     // [DXController.GamepadButtonMap] (see LoadButtonMap()) and
     // [DXController.GamepadAxisMap] (see LoadAxisMap()), into the
-    // in-memory state, and re-applies the demand-driven sensor enables. Safe to call between Poll() invocations; the next Poll
-    // uses the new settings/map. Held-stick cached values are deliberately
-    // preserved so live tuning doesn't produce a spurious release/zero frame
-    // -- but everything the *button* and *axis* maps hold is released/flushed
-    // first: per-source edge tracking can't survive a map change that moves a
-    // held source to a different EInputKey slot without emitting a
-    // release/zero for the old slot first. pEngine/pViewport
-    // are the same as Poll()'s; either may be null (e.g. called before the
-    // engine/viewport exist), in which case the release step is skipped and
-    // only the in-memory settings/map are refreshed.
+    // in-memory state, and re-applies the demand-driven sensor enables. Safe
+    // to call between Poll() invocations; the next Poll uses the new
+    // settings/map. Held-stick cached values are deliberately preserved so
+    // live tuning doesn't produce a spurious release/zero frame -- but
+    // everything the *button* and *axis* maps hold is released/flushed first:
+    // per-source edge tracking can't survive a map change that moves a held
+    // source to a different EInputKey slot without emitting a release/zero for
+    // the old slot first. pEngine/pViewport are the same as Poll()'s; either
+    // may be null (e.g. called before the engine/viewport exist), in which
+    // case the release step is skipped and only the in-memory settings/map
+    // are refreshed.
     void Reload(UEngine* pEngine, UViewport* pViewport);
 
     // Samples the current stick curve at iCount evenly spaced points across
@@ -219,7 +220,7 @@ private:
 
     //Helpers
 
-    //Reads all 18 keys from [DXController.ControllerSettings] into the
+    //Reads every key from [DXController.ControllerSettings] into the
     //corresponding members and clamps the curve parameters into their
     //valid ranges. Called from the constructor and from Reload().
     void LoadSettings();
