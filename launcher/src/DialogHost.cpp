@@ -40,6 +40,8 @@ bool CDialogHost::HandleCommonMessage(const HWND hwndDlg, const UINT uMsg, const
         {
             pThis->m_pPadNav.reset();
         }
+        //Property lists outlive the window if never removed.
+        RemoveProp(hwndDlg, kpszSelfProp);
         break;
 
     case WM_CLOSE:
