@@ -6,7 +6,9 @@ Generate launcher/src/version_generated.h from git tags.
 Resolution order:
   1. $env:LAUNCHER_VERSION (verbatim display string; parse leading vX.Y[.Z] for ints).
   2. git describe --tags --long --dirty (parse vX.Y.Z-N-gSHA[-dirty]).
-  3. Fallback: 0,0,0,0 and "dev-untagged".
+  3. git rev-parse --short HEAD: "dev+g<sha>[.dirty]" (dirty from git status --porcelain,
+     since we're not using describe's own --dirty here).
+  4. Fallback: 0,0,0,0 and "dev-untagged" (no git, or not a repo).
 
 Write-if-different so unchanged content doesn't churn the resource recompile.
 #>
@@ -69,7 +71,38 @@ if ($env:LAUNCHER_VERSION) {
                 $displayStr = "$baseStr+$commitsAhead.$sha$dirty"
             }
         } else {
-            Write-Warning "gen-version: git describe output '$described' did not match the expected format (vX.Y[.Z]-N-gSHA[-dirty]); falling back to dev-untagged. Set `$env:LAUNCHER_VERSION to override."
+            Write-Warning "gen-version: git describe output '$described' did not match the expected format (vX.Y[.Z]-N-gSHA[-dirty]); falling back to dev+g<sha>. Set `$env:LAUNCHER_VERSION to override."
+        }
+    }
+
+    # No usable tag (git describe failed, or its output didn't match): fall back to a
+    # revision-derived version instead of the uninformative bare "dev-untagged", using
+    # the same g<sha>/.dirty spelling as the tagged-build format above.
+    if ($ints[3] -eq 0 -and $displayStr -eq 'dev-untagged') {
+        $sha = $null
+        try {
+            $sha = (& git rev-parse --short HEAD 2>$null) | Out-String
+            $sha = $sha.Trim()
+        } catch {
+            $sha = $null
+        }
+        if ($sha -and $LASTEXITCODE -eq 0) {
+            # `git status --porcelain` rather than `git describe --dirty`'s own check,
+            # since this path runs when describe didn't produce a usable result at all.
+            # Observed in this repo's colocated jj working copy: this reports dirty on
+            # every build, same as git describe --dirty does here (see the T1 notes) -
+            # jj doesn't move the colocated git HEAD/index to match @ on every snapshot,
+            # so git always sees a diff against its last-known commit. Harmless: it just
+            # means dev builds from a jj checkout always carry .dirty, tag builds are
+            # unaffected (they go through $env:LAUNCHER_VERSION in CI).
+            $dirty = ''
+            try {
+                $status = (& git status --porcelain 2>$null) | Out-String
+                if ($status.Trim().Length -gt 0) { $dirty = '.dirty' }
+            } catch {
+                # Treat an unreadable status as clean; the sha alone is still useful.
+            }
+            $displayStr = "dev+g$sha$dirty"
         }
     }
 }
