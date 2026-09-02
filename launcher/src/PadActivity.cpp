@@ -3,6 +3,16 @@
 namespace PadActivity
 {
 
+int ClampGraceMs(const int iGraceMs)
+{
+    return (iGraceMs < 0) ? 0 : iGraceMs;
+}
+
+int ClampMouseActivityPx(const int iThresholdPx)
+{
+    return (iThresholdPx < 0) ? 0 : iThresholdPx;
+}
+
 void NotePadActivity(SState& State, const unsigned long long iNowMs)
 {
     State.iLastPadActivityMs = iNowMs;

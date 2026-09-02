@@ -90,19 +90,23 @@ TEST_CASE("A zero-delta packet is ignored entirely")
     CHECK(S.iRawMouseAccum == 4); //the button-only packet neither added nor reset
 }
 
-TEST_CASE("A negative PadActiveGraceMs never expires (pinned pre-fix behavior)")
+TEST_CASE("A clamped negative PadActiveGraceMs expires immediately")
 {
-    //The unsigned cast turns -1 into an effectively infinite window: activity
-    //from any point in the past still reads as current.
+    //Unclamped, the unsigned cast turned -1 into an effectively infinite
+    //window: activity from any point in the past still read as current.
     PadActivity::SState S;
     PadActivity::NotePadActivity(S, 1);
-    CHECK(PadActivity::IsPadActive(S, kT0, -1));
     CHECK(PadActivity::IsPadActive(S, 0xFFFFFFFFULL, -1));
+    CHECK_FALSE(PadActivity::IsPadActive(S, kT0, PadActivity::ClampGraceMs(-1)));
 }
 
-TEST_CASE("A negative MouseActivityPx makes every raw packet count (pinned pre-fix behavior)")
+TEST_CASE("The ini clamps keep both activity knobs non-negative")
 {
-    PadActivity::SState S;
-    PadActivity::NotifyMouseActivity(S, 1, 0, -1, kT0);
-    CHECK(PadActivity::IsMouseActive(S, kT0, kGraceMs));
+    CHECK(PadActivity::ClampGraceMs(500) == 500);
+    CHECK(PadActivity::ClampGraceMs(0)   == 0);
+    CHECK(PadActivity::ClampGraceMs(-1)  == 0);
+
+    CHECK(PadActivity::ClampMouseActivityPx(4)  == 4);
+    CHECK(PadActivity::ClampMouseActivityPx(0)  == 0);
+    CHECK(PadActivity::ClampMouseActivityPx(-1) == 0);
 }

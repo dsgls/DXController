@@ -51,6 +51,11 @@ float ShapeNormalized(const float fU, const int iDeadzoneRaw, const SCurve& Curv
     return ShapeMagnitude(fR, Curve) * fScale;
 }
 
+int ClampDeadzone(const int iDeadzoneRaw)
+{
+    return std::min(32766, std::max(0, iDeadzoneRaw));
+}
+
 int ClampAxis(const int iRaw)
 {
     return (iRaw <= -32767) ? -32767 : iRaw;

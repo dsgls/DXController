@@ -154,17 +154,23 @@ TEST_CASE("Trigger actuates one count past the scaled threshold")
     CHECK(StickResponse::Trigger(32767, 30) == Near(1000.0));
 }
 
-TEST_CASE("Unclamped ini deadzones misbehave (pinned pre-fix behavior)")
+TEST_CASE("ClampDeadzone bounds hand-edited ini deadzones")
 {
-    //A negative deadzone lifts the whole remap: a raw sample of 1 -- a stick
-    //at rest -- already emits nearly half scale.
-    CHECK(StickResponse::Shape(1, 0, -30000, kLinear, 1.0f).fX == Near(477.97));
+    CHECK(StickResponse::ClampDeadzone(3500)   == 3500);
+    CHECK(StickResponse::ClampDeadzone(0)      == 0);
+    CHECK(StickResponse::ClampDeadzone(20000)  == 20000); //absurd but legal
+    CHECK(StickResponse::ClampDeadzone(32766)  == 32766);
+    CHECK(StickResponse::ClampDeadzone(32767)  == 32766); //(1 - cDz) would be zero
+    CHECK(StickResponse::ClampDeadzone(99999)  == 32766);
+    CHECK(StickResponse::ClampDeadzone(-1)     == 0);
+    CHECK(StickResponse::ClampDeadzone(-30000) == 0);
+}
 
-    //At 32767 the (1 - cDz) denominator is zero. Everything on or inside the
-    //unit circle is dead; a diagonal past it divides by zero and snaps
-    //straight to full scale.
-    CHECK(StickResponse::Shape(32767, 0, 32767, kLinear, 1.0f).fX == Near(0.0));
-    const StickResponse::SAxes Out = StickResponse::Shape(32767, 32767, 32767, kLinear, 1.0f);
-    CHECK(Out.fX == Near(1000.0));
-    CHECK(Out.fY == Near(1000.0));
+TEST_CASE("A clamped negative deadzone no longer emits at rest")
+{
+    //Unclamped, -30000 lifted the whole remap and turned a raw sample of 1
+    //into nearly half scale.
+    CHECK(StickResponse::Shape(1, 0, -30000, kLinear, 1.0f).fX == Near(477.97));
+    CHECK(StickResponse::Shape(1, 0, StickResponse::ClampDeadzone(-30000), kLinear, 1.0f).fX
+          == Near(1000.0 / 32767.0));
 }

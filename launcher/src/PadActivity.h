@@ -18,6 +18,12 @@ namespace PadActivity
         unsigned long long iRawMouseAccumStartMs = 0; //window start; 0 = no window open
     };
 
+    //Clamps for the hand-editable ini values these functions take. A negative
+    //grace window survives the unsigned cast below as an effectively infinite
+    //one; a negative pixel threshold makes every raw packet qualify.
+    int ClampGraceMs(const int iGraceMs);
+    int ClampMouseActivityPx(const int iThresholdPx);
+
     void NotePadActivity(SState& State, const unsigned long long iNowMs);
 
     //Raw hardware mouse deltas. Raw input is the physical-motion ground truth:

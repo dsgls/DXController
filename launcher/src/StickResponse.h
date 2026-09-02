@@ -49,6 +49,12 @@ namespace StickResponse
     //Sint16 magnitude. Result is normalized (1.0 = full axis range).
     float ShapeNormalized(const float fU, const int iDeadzoneRaw, const SCurve& Curve, const float fScale);
 
+    //Clamps a hand-edited ini deadzone into the range the remap can survive:
+    //at 32767 the (1 - cDz) denominator is zero, and a negative value lifts
+    //the whole remap so a stick at rest already emits. Generous otherwise --
+    //an absurd-but-finite 20000 stays legal.
+    int ClampDeadzone(const int iDeadzoneRaw);
+
     //SDL can report -32768, one past the positive end of the range. Clamp to
     //-32767 so both axes are symmetric and negation can't overflow.
     int ClampAxis(const int iRaw);

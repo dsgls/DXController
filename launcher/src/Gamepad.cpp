@@ -296,8 +296,14 @@ void CGamepad::LoadSettings()
     bool bMissPadActiveGraceMs   = !GConfig->GetInt(kSection, L"PadActiveGraceMs",   m_iPadActiveGraceMs);
 
     //The threshold keeps its 0..255 meaning; out-of-range hand-edits would
-    //overflow the scale into SDL's trigger range in EmitTriggerAxis.
-    m_iTriggerThreshold = std::min(255, std::max(0, m_iTriggerThreshold));
+    //overflow the scale into SDL's trigger range in EmitTriggerAxis. The
+    //others clamp for the same reason and in the same silent way -- each
+    //unit's clamp names what its own math cannot survive.
+    m_iTriggerThreshold   = std::min(255, std::max(0, m_iTriggerThreshold));
+    m_iLeftStickDeadzone  = StickResponse::ClampDeadzone(m_iLeftStickDeadzone);
+    m_iRightStickDeadzone = StickResponse::ClampDeadzone(m_iRightStickDeadzone);
+    m_iMouseActivityPx    = PadActivity::ClampMouseActivityPx(m_iMouseActivityPx);
+    m_iPadActiveGraceMs   = PadActivity::ClampGraceMs(m_iPadActiveGraceMs);
 
     //Per-stick response curves. String token chosen so adding/removing curve
     //types in future never invalidates a hand-edited ini. Each numeric param is
