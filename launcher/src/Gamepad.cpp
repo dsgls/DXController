@@ -174,6 +174,10 @@ CGamepad::~CGamepad()
         }
         m_OpenPads.clear();
         SDL_Quit();
+        m_bInitialized  = false;
+        //CDialogPadNav reads this without holding a CGamepad; leaving it set
+        //past SDL_Quit would advertise a subsystem that is gone.
+        s_bSdlAvailable = false;
     }
 }
 
