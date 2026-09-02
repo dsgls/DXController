@@ -84,6 +84,23 @@ To cut a release, push a `v*` tag.
 
 ## Launcher architecture
 
+### Error-handling policy
+
+Four ways to react to a failure, one per situation:
+
+- **`GError->Log`** — fatal, unwinds. Unrecoverable startup failures only.
+- **`GLog` and continue** — degraded but still running. The default for a
+  failed Win32 call or a missing ini section.
+- **Silent return** — only with a comment saying why nothing is logged.
+- **`assert`** — internal invariants ("can't happen given our own code").
+  Never the sole guard on a condition reachable from external state (ini
+  contents, Win32 return values, engine/script objects, file system): it
+  compiles out in Release, leaving an unguarded dereference. Guard those,
+  and keep the assert only if it still documents something.
+
+Inside the main loop, prefer the documented silent return: a condition that
+holds for many consecutive frames would otherwise flood the log.
+
 ### Pure-unit layer and test scaffold
 
 Launcher logic that is pure computation — no syscalls, no engine headers,
