@@ -265,10 +265,20 @@ void CFixApp::ApplySettings() const
     }
     if(bHaveResolution)
     {
-        GConfig->SetInt(L"WinDrv.WindowsClient",L"FullscreenViewportX",iResX);
-        GConfig->SetInt(L"WinDrv.WindowsClient", L"WindowedViewportX", iResX);
-        GConfig->SetInt(L"WinDrv.WindowsClient",L"FullscreenViewportY",iResY);
-        GConfig->SetInt(L"WinDrv.WindowsClient", L"WindowedViewportY", iResY);
+        //Write the pair the dialog actually showed. ReadSettings reads
+        //Fullscreen* only in fullscreen mode and Windowed* in both windowed
+        //and borderless, so writing both pairs would overwrite a value the
+        //user never got to see.
+        if(IsDlgButtonChecked(m_hWnd, RADIO_VPFULLSCREEN))
+        {
+            GConfig->SetInt(L"WinDrv.WindowsClient", L"FullscreenViewportX", iResX);
+            GConfig->SetInt(L"WinDrv.WindowsClient", L"FullscreenViewportY", iResY);
+        }
+        else
+        {
+            GConfig->SetInt(L"WinDrv.WindowsClient", L"WindowedViewportX", iResX);
+            GConfig->SetInt(L"WinDrv.WindowsClient", L"WindowedViewportY", iResY);
+        }
     }
 
     //FOV
