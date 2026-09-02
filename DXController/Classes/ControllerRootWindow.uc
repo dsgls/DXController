@@ -97,6 +97,11 @@ event InitWindow()
 
     RegisterNavControllers();
     cursorMode = CM_Gamepad;
+
+    // Unconditional, once per root creation: proof in a user's ticket log
+    // that the Root= override took effect and the nav registry populated.
+    Log("DXC-NAV ROOT-INIT class=" $ string(Class)
+        $ " navCount=" $ string(navCount));
 }
 
 function RegisterNavControllers()
@@ -396,7 +401,6 @@ event DescendantAdded(Window descendant)
     local int idx;
     local bool bIsModalScreen;
     local string parentName;  // diagnostic
-    local string descMsg;
     local PersonaScreenBaseWindow persona;
     local DeusExPlayer p;
 
@@ -427,18 +431,11 @@ event DescendantAdded(Window descendant)
         parentName = string(descendant.GetParent().Class);
     else
         parentName = "None";
-    descMsg = "DXC-NAV DESC-ADD class=" $ string(descendant.Class)
+    class'DXControllerDebug'.static.NavLog(
+        "DXC-NAV DESC-ADD class=" $ string(descendant.Class)
         $ " parent=" $ parentName
         $ " isModal=" $ string(DeusExBaseWindow(descendant) != None)
-        $ " parentIsSelf=" $ string(descendant.GetParent() == Self);
-    // Direct children of root are the hooking events (HUD children at
-    // startup, each modal screen pushed) — the proof in a user's ticket log
-    // that the root-window integration works, so they log unconditionally.
-    // Deeper subtree construction is spam and stays behind bNavDebugLog.
-    if (descendant.GetParent() == Self)
-        Log(descMsg);
-    else
-        class'DXControllerDebug'.static.NavLog(descMsg);
+        $ " parentIsSelf=" $ string(descendant.GetParent() == Self));
 
     // Radial cancel-on-UI-takeover. PushWindow only accepts
     // DeusExBaseWindow subclasses, so that cast cleanly excludes the
@@ -691,10 +688,10 @@ function Tick(float deltaSeconds)
             activeNav.bFocusInitDone = true;
         // Fires once when init completes — whether the flag was set just
         // above (grid/menu controllers) or inside InitFocus itself
-        // (list/scroll controllers). Unconditional: once per screen, and it
-        // confirms in a ticket log that a nav controller took the screen.
+        // (list/scroll controllers).
         if (activeNav.bFocusInitDone)
-            Log("DXC-NAV TICK-INIT screen=" $ string(activeNav.screen.Class));
+            class'DXControllerDebug'.static.NavLog(
+                "DXC-NAV TICK-INIT screen=" $ string(activeNav.screen.Class));
     }
 
     // 4. Drive the active controller's per-frame hook. MenuNavController

@@ -2,17 +2,13 @@
 // DXControllerDebug — project-wide debug-log toggles.
 //
 // Two independent flags in [DXController.DXControllerDebug] (DeusEx.ini):
-//   bGamepadDebugLog — input-layer detail (axis routing, wheel stick
-//                      magnitudes; the launcher also reads it for its
-//                      device-idle edges). Callers use DebugLog().
-//   bNavDebugLog     — UI/navigation diagnostics (focus moves, activation,
-//                      terminal/conversation/keyboard/wheel traces).
-//                      Callers use NavLog().
+//   bGamepadDebugLog — input-layer detail. Callers use DebugLog().
+//   bNavDebugLog     — UI/navigation diagnostics. Callers use NavLog().
 //
-// A few messages log unconditionally via plain Log() at their call sites:
-// the ControllerRootWindow hooking events (direct-child DESC-ADD, TICK-TOP,
-// TICK-INIT), cursor-mode switches (DXC-CURSOR) and slow-frame reports
-// (DXC-PERF) — the baseline every user ticket log should contain.
+// A few rare, edge-triggered messages log unconditionally via plain Log()
+// at their call sites — integration-hooking proof, device handoffs,
+// abnormal states. Keep that tier to at most one line per screen change,
+// never per-event.
 //=============================================================================
 class DXControllerDebug extends Object
     config(DeusEx)
