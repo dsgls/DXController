@@ -1,5 +1,12 @@
 #pragma once
 
+//Pushed to warning level 0 the way stdafx.h does it, so this header doesn't
+//depend on stdafx.h having included windows.h first.
+#pragma warning(push, 0)
+#pragma warning(disable: 4324) //SDK structs padded by the launcher project's /Zp4
+#include <windows.h>
+#pragma warning(pop)
+
 #include <memory>
 
 class CDialogPadNav;
