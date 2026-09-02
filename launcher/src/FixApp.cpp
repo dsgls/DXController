@@ -7,9 +7,10 @@
 #include "SubTitleFix.h"
 #include "resource.h"
 
-bool CFixApp::Show(const HWND hWndParent) const
+void CFixApp::Show(const HWND hWndParent) const
 {
-    return DialogBoxParam(GetModuleHandle(0),MAKEINTRESOURCE(IDD_FIXAPP),hWndParent,FixAppDialogProc,reinterpret_cast<LPARAM>(this)) == 1;
+    //No result to report: every exit path ends the dialog with 0.
+    DialogBoxParam(GetModuleHandle(0),MAKEINTRESOURCE(IDD_FIXAPP),hWndParent,FixAppDialogProc,reinterpret_cast<LPARAM>(this));
 }
 
 void CFixApp::ReadSettings()
@@ -408,6 +409,7 @@ INT_PTR CALLBACK CFixApp::FixAppDialogProc(HWND hwndDlg,UINT uMsg,WPARAM wParam,
 
             case IDOK:
                 pThis->ApplySettings();
+                //Fall through: OK closes the dialog the same way Cancel does.
             case IDCANCEL:
                 EndDialog(hwndDlg, 0);
                 return TRUE;

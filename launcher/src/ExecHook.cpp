@@ -1,17 +1,6 @@
 #include "stdafx.h"
 #include "ExecHook.h"
 
-FExecHook::FExecHook()
-{
-
-}
-
-
-FExecHook::~FExecHook()
-{
-
-}
-
 void FExecHook::NotifyDestroy( void* Src )
 {
     if( Src==m_pPreferences )

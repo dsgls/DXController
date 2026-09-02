@@ -5,22 +5,6 @@
 const wchar_t* const FFileManagerDeusExe::sm_pszIntPaths = L"IntPaths";
 
 
-FFileManagerDeusExe::FFileManagerDeusExe()
-{
-
-}
-
-FFileManagerDeusExe::~FFileManagerDeusExe()
-{
-
-}
-
-void FFileManagerDeusExe::AfterCoreInit()
-{
-
-}
-
-
 void FFileManagerDeusExe::OnGameStart()
 {
     m_pIntPaths = std::make_unique<std::vector<std::wstring>>();

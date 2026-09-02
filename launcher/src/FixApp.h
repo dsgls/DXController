@@ -5,9 +5,9 @@
 class CFixApp : public CDialogHost
 {
 public:
-    bool Show(const HWND hWndParent) const;
+    void Show(const HWND hWndParent) const;
 
-    static const char sm_iDefaultFPSLimit = 120;
+    static constexpr int sm_iDefaultFPSLimit = 120;
 
 private:
     void ReadSettings();

@@ -8,10 +8,9 @@ class FFileManagerDeusExe : public FFileManagerWindows
 public:
     static const wchar_t* const sm_pszIntPaths;
 
-    explicit FFileManagerDeusExe();
-    virtual ~FFileManagerDeusExe();
+    virtual ~FFileManagerDeusExe() = default;
 
-    virtual void AfterCoreInit();
+    virtual void AfterCoreInit() {}
     void OnGameStart();
 
     //Used by startup dialog
