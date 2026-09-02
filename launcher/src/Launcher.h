@@ -3,6 +3,9 @@
 #include "Gamepad.h"
 #include "FrameStats.h"
 
+class CConfigOverride;
+class CWinDrvPatch;
+
 class CLauncher : private FExecHook
 {
 public:
@@ -11,6 +14,16 @@ public:
     CLauncher& operator=(const CLauncher&) = delete;
 
 private:
+    //Constructor phases, in call order. Two RAII locals stay owned by the
+    //constructor and are passed in by reference because their lifetimes are
+    //load-bearing: the config overrides must outlive pEngine->Init() and be
+    //restored before appExit() flushes the config cache, and the log window
+    //must outlive MainLoop because GLogWindow points at it.
+    bool RunPreGameDialogs(HMONITOR& hMonitorOut); //False means abort startup
+    void ApplyConfigOverrides(std::list<CConfigOverride>& ConfigOverrides);
+    UEngine* InitEngineAndViewport(const HMONITOR hMonitor, std::unique_ptr<WLog>& LogWindowPtr);
+    void LogStartupHeader(UEngine* const pEngine, const CWinDrvPatch& WinDrvPatch);
+
     void ApplyAutoFOV(const size_t iSizeX, const size_t iSizeY);
     void MainLoop(UEngine * const pEngine);
     void LoadSettings();

@@ -371,6 +371,84 @@ CLauncher::CLauncher()
         GError->Log(L"Failed to query performance counter.");
     }
 
+    HMONITOR hMonitor = NULL;
+    if (!RunPreGameDialogs(hMonitor)) //Everything below is the game actually starting
+    {
+        return;
+    }
+
+    LoadSettings();
+
+    static_cast<FFileManagerDeusExe*>(GFileManager)->OnGameStart();
+
+    if (m_bUseSingleCPU)
+    {
+        if (SetProcessAffinityMask(GetCurrentProcess(), 0x1) == FALSE) //Force on single CPU
+        {
+            GLog->Log(L"Failed to set process affinity.");
+        }
+    }
+
+    //Owned here, not by ApplyConfigOverrides: each CConfigOverride restores the
+    //stock ini value in its destructor, so the list has to outlive
+    //pEngine->Init() and be torn down before appExit() flushes the config cache.
+    std::list<CConfigOverride> ConfigOverrides;
+    ApplyConfigOverrides(ConfigOverrides);
+
+    //Owned here because GLogWindow points at it for the whole run.
+    std::unique_ptr<WLog> LogWindowPtr;
+    UEngine* const pEngine = InitEngineAndViewport(hMonitor, LogWindowPtr);
+
+    //Apply WinDrv binary patches BEFORE creating CNativeHooks so that any
+    //mismatch dialog runs before we start mutating GNatives[]. m_hWnd is
+    //assigned by InitEngineAndViewport above; it will be NULL on a dedicated
+    //server, which the dialog tolerates.
+    CWinDrvPatch WinDrvPatch(m_hWnd);
+
+    //Initialize native hooks
+    CNativeHooks NativeHooks(PROJECTNAME);
+
+    LogStartupHeader(pEngine, WinDrvPatch);
+
+    //Main loop. GIsGuarded makes appError append the engine's guard-chain
+    //history to GErrorHist and throw instead of showing its message box on the
+    //spot, so the throw unwinds through the VC6 DLLs' guard macros (which name
+    //each frame via appUnwindf) and arrives here with a call history.
+    GIsRunning = 1;
+    if (!GIsRequestingExit)
+    {
+        try
+        {
+            GIsGuarded = 1;
+            MainLoop(pEngine);
+            GIsGuarded = 0;
+        }
+        catch (...)
+        {
+            //Log before HandleError, which shows the stock message box. Log, not
+            //Logf - the history is up to 4096 chars and would overflow Core's
+            //format buffer. A throw from anywhere but appError leaves no history.
+            GLog->Log(NAME_Critical, GErrorHist[0] ? GErrorHist : L"(GErrorHist empty)");
+            GError->HandleError();
+            //Force exit, as an unguarded appError does today: appRequestExit(1)
+            //ends the process here. Nothing below may run - LocalizeGeneral,
+            //~CNativeHooks, ~CConfigOverride and appPreExit/appExit all work
+            //against an object system StaticShutdownAfterError has already torn
+            //down, and a secondary fault there would bury the original error.
+            appRequestExit(1);
+            return;
+        }
+    }
+    GIsRunning = 0;
+
+    GLogWindow->Log(NAME_Title, LocalizeGeneral("Exit"));
+}
+
+//Pre-game dialogs: first-run defaults, the video-options dialog and the
+//launcher dialog. Returns false when the launcher dialog asks to quit; on
+//success hMonitorOut carries the monitor the launcher dialog ended up on.
+bool CLauncher::RunPreGameDialogs(HMONITOR& hMonitorOut)
+{
     int iFirstRun = 0;
     GConfig->GetInt(L"FirstRun", L"FirstRun", iFirstRun);
     const bool bFirstRun = iFirstRun < ENGINE_VERSION;
@@ -397,265 +475,228 @@ CLauncher::CLauncher()
     }
 
     //Show launcher dialog
-    HMONITOR hMonitor = NULL;
+    hMonitorOut = NULL;
 
-    const auto DoLauncherDialog = [&hMonitor]
+    const auto DoLauncherDialog = [&hMonitorOut]
     {
         CLauncherDialog LD;
         const auto bRet = LD.Show(NULL);
-        hMonitor = LD.GetChildWindowMonitor();
+        hMonitorOut = LD.GetChildWindowMonitor();
         return bRet;
     };
 
-    if (!GIsClient || ParseParam(appCmdLine(), TEXT("skipdialog")) || DoLauncherDialog()) //Here the game actually starts
+    return !GIsClient || ParseParam(appCmdLine(), TEXT("skipdialog")) || DoLauncherDialog();
+}
+
+//Override ini-driven engine settings without persisting them to the user's
+//DeusEx.ini / User.ini. CConfigOverride snapshots each key (value,
+//present-or-absent, file's Dirty flag) on construction and restores it on
+//destruction, so a drop-in binary + .u install needs no manual ini edits. The
+//list belongs to the caller: see the lifetime note in Launcher.h.
+void CLauncher::ApplyConfigOverrides(std::list<CConfigOverride>& ConfigOverrides)
+{
+    ConfigOverrides.emplace_back(L"Engine.Engine",        L"Console",      L"DXController.ControllerConsole");
+    ConfigOverrides.emplace_back(L"Engine.Engine",        L"Root",         L"DXController.ControllerRootWindow");
+    ConfigOverrides.emplace_back(L"WinDrv.WindowsClient", L"UseJoystick",  L"False");
+    if (m_bRawInput) //If raw input is enabled, disable DirectInput
     {
-        LoadSettings();
-
-        static_cast<FFileManagerDeusExe*>(GFileManager)->OnGameStart();
-
-        if (m_bUseSingleCPU)
-        {
-            if (SetProcessAffinityMask(GetCurrentProcess(), 0x1) == FALSE) //Force on single CPU
-            {
-                GLog->Log(L"Failed to set process affinity.");
-            }
-        }
-
-        //Override ini-driven engine settings without persisting them to the
-        //user's DeusEx.ini / User.ini. CConfigOverride snapshots each key
-        //(value, present-or-absent, file's Dirty flag) on construction and
-        //restores it on destruction, so a drop-in binary + .u install needs no
-        //manual ini edits. The list outlives pEngine->Init() and is torn down
-        //before appExit() flushes the config cache to disk.
-        std::list<CConfigOverride> ConfigOverrides;
-        ConfigOverrides.emplace_back(L"Engine.Engine",        L"Console",      L"DXController.ControllerConsole");
-        ConfigOverrides.emplace_back(L"Engine.Engine",        L"Root",         L"DXController.ControllerRootWindow");
-        ConfigOverrides.emplace_back(L"WinDrv.WindowsClient", L"UseJoystick",  L"False");
-        if (m_bRawInput) //If raw input is enabled, disable DirectInput
-        {
-            ConfigOverrides.emplace_back(L"WinDrv.WindowsClient", L"UseDirectInput", L"False");
-        }
-        if (m_bBorderlessFullscreenWindow) //In borderless mode, disable normal full screen
-        {
-            ConfigOverrides.emplace_back(L"WinDrv.WindowsClient", L"StartupFullscreen", L"False");
-        }
-
-        //Gamepad bindings, in User.ini. XInputExt synthesizes Joy* events from
-        //the launcher's gamepad shim; UseJoystick=False above just suppresses
-        //DirectInput's joystick enumeration so it doesn't double up.
-        const wchar_t* const pszUserIni = *static_cast<FConfigCacheIni*>(GConfig)->UserIni;
-        ConfigOverrides.emplace_back(L"Extension.InputExt", L"Joy1",        L"Jump",                   pszUserIni);
-        ConfigOverrides.emplace_back(L"Extension.InputExt", L"Joy2",        L"ReloadWeapon",           pszUserIni);
-        ConfigOverrides.emplace_back(L"Extension.InputExt", L"Joy3",        L"ParseRightClick",        pszUserIni);
-        ConfigOverrides.emplace_back(L"Extension.InputExt", L"Joy4",        L"SwitchAmmo",             pszUserIni);
-        ConfigOverrides.emplace_back(L"Extension.InputExt", L"Joy5",        L"",                       pszUserIni);
-        ConfigOverrides.emplace_back(L"Extension.InputExt", L"Joy6",        L"",                       pszUserIni);
-        ConfigOverrides.emplace_back(L"Extension.InputExt", L"Joy7",        L"TogglePlayerMenuWindow", pszUserIni);
-        ConfigOverrides.emplace_back(L"Extension.InputExt", L"Joy8",        L"ShowMainMenu",           pszUserIni);
-        ConfigOverrides.emplace_back(L"Extension.InputExt", L"Joy9",        L"",                       pszUserIni);
-        ConfigOverrides.emplace_back(L"Extension.InputExt", L"Joy10",       L"",                       pszUserIni);
-        ConfigOverrides.emplace_back(L"Extension.InputExt", L"Joy11",       L"",                       pszUserIni);
-        ConfigOverrides.emplace_back(L"Extension.InputExt", L"Joy12",       L"",                       pszUserIni);
-        ConfigOverrides.emplace_back(L"Extension.InputExt", L"Joy13",       L"",                       pszUserIni);
-        ConfigOverrides.emplace_back(L"Extension.InputExt", L"Joy14",       L"",                       pszUserIni);
-        ConfigOverrides.emplace_back(L"Extension.InputExt", L"Joy15",       L"",                       pszUserIni);
-        ConfigOverrides.emplace_back(L"Extension.InputExt", L"Joy16",       L"",                       pszUserIni);
-        ConfigOverrides.emplace_back(L"Extension.InputExt", L"JoyPovUp",    L"ActivateBelt 1",         pszUserIni);
-        ConfigOverrides.emplace_back(L"Extension.InputExt", L"JoyPovLeft",  L"ActivateBelt 2",         pszUserIni);
-        ConfigOverrides.emplace_back(L"Extension.InputExt", L"JoyPovRight", L"ActivateBelt 3",         pszUserIni);
-        ConfigOverrides.emplace_back(L"Extension.InputExt", L"JoyPovDown",  L"ActivateBelt 4",         pszUserIni);
-        ConfigOverrides.emplace_back(L"Extension.InputExt", L"JoyX",        L"Axis aStrafe",           pszUserIni);
-        ConfigOverrides.emplace_back(L"Extension.InputExt", L"JoyY",        L"Axis aBaseY",            pszUserIni);
-        ConfigOverrides.emplace_back(L"Extension.InputExt", L"JoyU",        L"Axis aTurn",             pszUserIni);
-        ConfigOverrides.emplace_back(L"Extension.InputExt", L"JoyV",        L"Axis aLookUp",           pszUserIni);
-        ConfigOverrides.emplace_back(L"Extension.InputExt", L"JoyZ",        L"",                       pszUserIni);
-        ConfigOverrides.emplace_back(L"Extension.InputExt", L"JoyR",        L"",                       pszUserIni);
-
-        //Init windowing
-        InitWindowing();
-
-        //Create log window
-        const std::unique_ptr<WLog> LogWindowPtr = std::make_unique<WLog>(static_cast<FOutputDeviceFile*>(GLog)->Filename, static_cast<FOutputDeviceFile*>(GLog)->LogAr, L"GameLog");
-        GLogWindow = LogWindowPtr.get(); //Yup...
-        GLogWindow->OpenWindow(!GIsClient, 0);
-        GLogWindow->Log(NAME_Title, LocalizeGeneral("Start"));
-
-        GExec = this;
-
-        //Init engine
-        UClass* const pEngineClass = LoadClass<UGameEngine>(nullptr, L"ini:Engine.Engine.GameEngine", nullptr, LOAD_NoFail, nullptr);
-        assert(pEngineClass);
-        UEngine* const pEngine = ConstructObject<UEngine>(pEngineClass);
-        assert(pEngine);
-        if (!pEngine)
-        {
-            GError->Log(L"Engine initialization failed.");
-        }
-        m_pEngine = pEngine;
-
-        pEngine->Init();
-
-        GLogWindow->SetExec(pEngine); //If we directly set GExec, only our custom commands work
-        GLogWindow->Log(NAME_Title, LocalizeGeneral("Run"));
-
-        //Find window handle
-        if (GIsClient)
-        {
-            if (pEngine->Client && pEngine->Client->Viewports.Num() > 0)
-            {
-                m_pViewPort = pEngine->Client->Viewports(0);
-                m_hWnd = static_cast<const HWND>(m_pViewPort->GetWindow());
-            }
-            else
-            {
-                GLog->Log(L"Unable to get viewport.");
-            }
-        }
-
-        //Button/axis maps and open-pad enumeration wait until here, after the
-        //engine and viewport exist; SDL itself was already started by
-        //m_Gamepad.InitSdl() at the top of the constructor, ahead of the
-        //launcher/FixApp dialogs.
-        m_Gamepad.Init(m_pViewPort);
-
-        //Move window to launcher's monitor
-        if (hMonitor != NULL && m_hWnd)
-        {
-            Misc::CenterWindowOnMonitor(m_hWnd, hMonitor);
-        }
-
-        if (m_bBorderlessFullscreenWindow)
-        {
-            ToggleBorderlessWindowedFullscreen();
-        }
-
-        //Initialize raw input
-        if (m_bRawInput && m_hWnd)
-        {
-            if (!RegisterRawInput(m_hWnd))
-            {
-                GError->Log(L"Raw input: Failed to register raw input device.");
-            }
-        }
-
-        if (GIsClient && m_bAutoFov)
-        {
-            RECT r;
-            GetClientRect(m_hWnd, &r);
-            int iSizeX = r.right - r.left;
-            int iSizeY = r.bottom - r.top;
-            ApplyAutoFOV(iSizeX, iSizeY);
-        }
-
-        //Apply WinDrv binary patches BEFORE creating CNativeHooks so that any
-        //mismatch dialog runs before we start mutating GNatives[]. m_hWnd is
-        //assigned earlier in this constructor (right after pEngine->Init); it
-        //will be NULL on a dedicated server, which the dialog tolerates.
-        CWinDrvPatch WinDrvPatch(m_hWnd);
-
-        //Initialize native hooks
-        CNativeHooks NativeHooks(PROJECTNAME);
-
-        //Startup diagnostic block (design doc sec3.4) -- the latest point
-        //where every fact it reports exists (viewport, WinDrvPatch outcomes,
-        //gamepad). StartupHeader::Build is the pure assembly; everything here
-        //is plumbing that gathers facts and logs the resulting lines.
-        {
-            StartupHeader::Facts Facts;
-
-            Facts.szLauncherVersion = WIDEN(LAUNCHER_PRODUCTVERSION_STR);
-
-            wchar_t szExePath[MAX_PATH] = {};
-            GetModuleFileNameW(NULL, szExePath, static_cast<DWORD>(_countof(szExePath)));
-            Facts.szExePath = szExePath;
-            Facts.szCommandLine = GetCommandLineW();
-
-            Facts.szOsBuild = GetOsBuildString();
-
-            Facts.bSdlLoaded = CGamepad::IsSdlAvailable();
-            if (Facts.bSdlLoaded) //Never call into <SDL3/SDL.h> when SDL3.dll isn't loaded -- see the include comment above
-            {
-                Facts.szSdlVersion = FormatSdlVersion(SDL_GetVersion());
-            }
-            else
-            {
-                Facts.szSdlVersion = L"unavailable";
-            }
-
-            wchar_t szRenderDevice[256] = {};
-            GConfig->GetString(L"Engine.Engine", L"GameRenderDevice", szRenderDevice, static_cast<INT>(_countof(szRenderDevice)));
-            Facts.szRenderDevice = szRenderDevice;
-
-            if (m_pViewPort)
-            {
-                Facts.iViewportSizeX = static_cast<int>(m_pViewPort->SizeX);
-                Facts.iViewportSizeY = static_cast<int>(m_pViewPort->SizeY);
-                Facts.bFullscreen = m_pViewPort->IsFullscreen() != 0;
-            }
-            Facts.bBorderless = m_bInBorderlessFullscreenWindow;
-
-            Facts.fEffectiveFpsCap = FramePacing::EffectiveRate(m_fFPSLimit, pEngine->GetMaxTickRate());
-            Facts.fMaxTickRate = pEngine->GetMaxTickRate();
-
-            wchar_t szPadName[64] = {};
-            wchar_t szPadGuid[40] = {};
-            m_Gamepad.GetActivePadNameAndGuid(szPadName, _countof(szPadName), szPadGuid, _countof(szPadGuid));
-            Facts.szPadName = szPadName;
-            Facts.szPadGuid = szPadGuid;
-            Facts.szPadFamily = m_Gamepad.GetInfo();
-
-            for (const CWinDrvPatch::SSiteOutcome& Site : WinDrvPatch.GetSiteOutcomes())
-            {
-                Facts.PatchOutcomes.push_back({ Site.pszDescription, Site.pszOutcome });
-            }
-
-            Facts.bRawInput = m_bRawInput != 0;
-            Facts.bUseAutoFov = m_bAutoFov != 0;
-            Facts.bBorderlessFullscreenWindow = m_bBorderlessFullscreenWindow != 0;
-            Facts.bBorderlessFullscreenWindowAllMonitors = m_bBorderlessFullscreenWindowUseAllMonitors != 0;
-            Facts.bUseSingleCPU = m_bUseSingleCPU != 0;
-            Facts.iFpsLimitIni = static_cast<int>(m_fFPSLimit);
-
-            for (const std::wstring& Line : StartupHeader::Build(Facts))
-            {
-                GLog->Logf(L"%s", Line.c_str());
-            }
-        }
-
-        //Main loop. GIsGuarded makes appError append the engine's guard-chain
-        //history to GErrorHist and throw instead of showing its message box on the
-        //spot, so the throw unwinds through the VC6 DLLs' guard macros (which name
-        //each frame via appUnwindf) and arrives here with a call history.
-        GIsRunning = 1;
-        if (!GIsRequestingExit)
-        {
-            try
-            {
-                GIsGuarded = 1;
-                MainLoop(pEngine);
-                GIsGuarded = 0;
-            }
-            catch (...)
-            {
-                //Log before HandleError, which shows the stock message box. Log, not
-                //Logf - the history is up to 4096 chars and would overflow Core's
-                //format buffer. A throw from anywhere but appError leaves no history.
-                GLog->Log(NAME_Critical, GErrorHist[0] ? GErrorHist : L"(GErrorHist empty)");
-                GError->HandleError();
-                //Force exit, as an unguarded appError does today: appRequestExit(1)
-                //ends the process here. Nothing below may run - LocalizeGeneral,
-                //~CNativeHooks, ~CConfigOverride and appPreExit/appExit all work
-                //against an object system StaticShutdownAfterError has already torn
-                //down, and a secondary fault there would bury the original error.
-                appRequestExit(1);
-                return;
-            }
-        }
-        GIsRunning = 0;
-
-        GLogWindow->Log(NAME_Title, LocalizeGeneral("Exit"));
+        ConfigOverrides.emplace_back(L"WinDrv.WindowsClient", L"UseDirectInput", L"False");
+    }
+    if (m_bBorderlessFullscreenWindow) //In borderless mode, disable normal full screen
+    {
+        ConfigOverrides.emplace_back(L"WinDrv.WindowsClient", L"StartupFullscreen", L"False");
     }
 
+    //Gamepad bindings, in User.ini. XInputExt synthesizes Joy* events from
+    //the launcher's gamepad shim; UseJoystick=False above just suppresses
+    //DirectInput's joystick enumeration so it doesn't double up.
+    struct SJoyBinding { const wchar_t* pszKey; const wchar_t* pszCommand; };
+    static constexpr SJoyBinding kJoyBindings[] =
+    {
+        { L"Joy1",        L"Jump"                   },
+        { L"Joy2",        L"ReloadWeapon"           },
+        { L"Joy3",        L"ParseRightClick"        },
+        { L"Joy4",        L"SwitchAmmo"             },
+        { L"Joy5",        L""                       },
+        { L"Joy6",        L""                       },
+        { L"Joy7",        L"TogglePlayerMenuWindow" },
+        { L"Joy8",        L"ShowMainMenu"           },
+        { L"Joy9",        L""                       },
+        { L"Joy10",       L""                       },
+        { L"Joy11",       L""                       },
+        { L"Joy12",       L""                       },
+        { L"Joy13",       L""                       },
+        { L"Joy14",       L""                       },
+        { L"Joy15",       L""                       },
+        { L"Joy16",       L""                       },
+        { L"JoyPovUp",    L"ActivateBelt 1"         },
+        { L"JoyPovLeft",  L"ActivateBelt 2"         },
+        { L"JoyPovRight", L"ActivateBelt 3"         },
+        { L"JoyPovDown",  L"ActivateBelt 4"         },
+        { L"JoyX",        L"Axis aStrafe"           },
+        { L"JoyY",        L"Axis aBaseY"            },
+        { L"JoyU",        L"Axis aTurn"             },
+        { L"JoyV",        L"Axis aLookUp"           },
+        { L"JoyZ",        L""                       },
+        { L"JoyR",        L""                       },
+    };
+
+    const wchar_t* const pszUserIni = *static_cast<FConfigCacheIni*>(GConfig)->UserIni;
+    for (const SJoyBinding& Binding : kJoyBindings)
+    {
+        ConfigOverrides.emplace_back(L"Extension.InputExt", Binding.pszKey, Binding.pszCommand, pszUserIni);
+    }
+}
+
+//Windowing, log window, engine construction and the viewport-dependent setup
+//(gamepad maps, monitor placement, borderless, raw input, auto-FOV). Returns
+//the constructed engine; LogWindowPtr takes ownership of the log window.
+UEngine* CLauncher::InitEngineAndViewport(const HMONITOR hMonitor, std::unique_ptr<WLog>& LogWindowPtr)
+{
+    //Init windowing
+    InitWindowing();
+
+    //Create log window
+    LogWindowPtr = std::make_unique<WLog>(static_cast<FOutputDeviceFile*>(GLog)->Filename, static_cast<FOutputDeviceFile*>(GLog)->LogAr, L"GameLog");
+    GLogWindow = LogWindowPtr.get(); //Yup...
+    GLogWindow->OpenWindow(!GIsClient, 0);
+    GLogWindow->Log(NAME_Title, LocalizeGeneral("Start"));
+
+    GExec = this;
+
+    //Init engine
+    UClass* const pEngineClass = LoadClass<UGameEngine>(nullptr, L"ini:Engine.Engine.GameEngine", nullptr, LOAD_NoFail, nullptr);
+    assert(pEngineClass);
+    UEngine* const pEngine = ConstructObject<UEngine>(pEngineClass);
+    assert(pEngine);
+    if (!pEngine)
+    {
+        GError->Log(L"Engine initialization failed.");
+    }
+    m_pEngine = pEngine;
+
+    pEngine->Init();
+
+    GLogWindow->SetExec(pEngine); //If we directly set GExec, only our custom commands work
+    GLogWindow->Log(NAME_Title, LocalizeGeneral("Run"));
+
+    //Find window handle
+    if (GIsClient)
+    {
+        if (pEngine->Client && pEngine->Client->Viewports.Num() > 0)
+        {
+            m_pViewPort = pEngine->Client->Viewports(0);
+            m_hWnd = static_cast<const HWND>(m_pViewPort->GetWindow());
+        }
+        else
+        {
+            GLog->Log(L"Unable to get viewport.");
+        }
+    }
+
+    //Button/axis maps and open-pad enumeration wait until here, after the
+    //engine and viewport exist; SDL itself was already started by
+    //m_Gamepad.InitSdl() at the top of the constructor, ahead of the
+    //launcher/FixApp dialogs.
+    m_Gamepad.Init(m_pViewPort);
+
+    //Move window to launcher's monitor
+    if (hMonitor != NULL && m_hWnd)
+    {
+        Misc::CenterWindowOnMonitor(m_hWnd, hMonitor);
+    }
+
+    if (m_bBorderlessFullscreenWindow)
+    {
+        ToggleBorderlessWindowedFullscreen();
+    }
+
+    //Initialize raw input
+    if (m_bRawInput && m_hWnd)
+    {
+        if (!RegisterRawInput(m_hWnd))
+        {
+            GError->Log(L"Raw input: Failed to register raw input device.");
+        }
+    }
+
+    if (GIsClient && m_bAutoFov)
+    {
+        RECT r;
+        GetClientRect(m_hWnd, &r);
+        int iSizeX = r.right - r.left;
+        int iSizeY = r.bottom - r.top;
+        ApplyAutoFOV(iSizeX, iSizeY);
+    }
+
+    return pEngine;
+}
+
+//Startup diagnostic block (design doc sec3.4) -- called from the latest point
+//where every fact it reports exists (viewport, WinDrvPatch outcomes, gamepad).
+//StartupHeader::Build is the pure assembly; everything here is plumbing that
+//gathers facts and logs the resulting lines.
+void CLauncher::LogStartupHeader(UEngine* const pEngine, const CWinDrvPatch& WinDrvPatch)
+{
+    StartupHeader::Facts Facts;
+
+    Facts.szLauncherVersion = WIDEN(LAUNCHER_PRODUCTVERSION_STR);
+
+    wchar_t szExePath[MAX_PATH] = {};
+    GetModuleFileNameW(NULL, szExePath, static_cast<DWORD>(_countof(szExePath)));
+    Facts.szExePath = szExePath;
+    Facts.szCommandLine = GetCommandLineW();
+
+    Facts.szOsBuild = GetOsBuildString();
+
+    Facts.bSdlLoaded = CGamepad::IsSdlAvailable();
+    if (Facts.bSdlLoaded) //Never call into <SDL3/SDL.h> when SDL3.dll isn't loaded -- see the include comment above
+    {
+        Facts.szSdlVersion = FormatSdlVersion(SDL_GetVersion());
+    }
+    else
+    {
+        Facts.szSdlVersion = L"unavailable";
+    }
+
+    wchar_t szRenderDevice[256] = {};
+    GConfig->GetString(L"Engine.Engine", L"GameRenderDevice", szRenderDevice, static_cast<INT>(_countof(szRenderDevice)));
+    Facts.szRenderDevice = szRenderDevice;
+
+    if (m_pViewPort)
+    {
+        Facts.iViewportSizeX = static_cast<int>(m_pViewPort->SizeX);
+        Facts.iViewportSizeY = static_cast<int>(m_pViewPort->SizeY);
+        Facts.bFullscreen = m_pViewPort->IsFullscreen() != 0;
+    }
+    Facts.bBorderless = m_bInBorderlessFullscreenWindow;
+
+    Facts.fEffectiveFpsCap = FramePacing::EffectiveRate(m_fFPSLimit, pEngine->GetMaxTickRate());
+    Facts.fMaxTickRate = pEngine->GetMaxTickRate();
+
+    wchar_t szPadName[64] = {};
+    wchar_t szPadGuid[40] = {};
+    m_Gamepad.GetActivePadNameAndGuid(szPadName, _countof(szPadName), szPadGuid, _countof(szPadGuid));
+    Facts.szPadName = szPadName;
+    Facts.szPadGuid = szPadGuid;
+    Facts.szPadFamily = m_Gamepad.GetInfo();
+
+    for (const CWinDrvPatch::SSiteOutcome& Site : WinDrvPatch.GetSiteOutcomes())
+    {
+        Facts.PatchOutcomes.push_back({ Site.pszDescription, Site.pszOutcome });
+    }
+
+    Facts.bRawInput = m_bRawInput != 0;
+    Facts.bUseAutoFov = m_bAutoFov != 0;
+    Facts.bBorderlessFullscreenWindow = m_bBorderlessFullscreenWindow != 0;
+    Facts.bBorderlessFullscreenWindowAllMonitors = m_bBorderlessFullscreenWindowUseAllMonitors != 0;
+    Facts.bUseSingleCPU = m_bUseSingleCPU != 0;
+    Facts.iFpsLimitIni = static_cast<int>(m_fFPSLimit);
+
+    for (const std::wstring& Line : StartupHeader::Build(Facts))
+    {
+        GLog->Logf(L"%s", Line.c_str());
+    }
 }
 
 void CLauncher::ApplyAutoFOV(const size_t iSizeX, const size_t iSizeY)
