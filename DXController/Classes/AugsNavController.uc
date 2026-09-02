@@ -109,7 +109,7 @@ function bool HandleDPad(int dx, int dy)
     {
         focused = bestBtn;
         s.SelectAugmentation(bestBtn);
-        class'DXControllerDebug'.static.DebugLog("DXC-NAV FOCUS aug=" $ string(bestBtn));
+        class'DXControllerDebug'.static.NavLog("DXC-NAV FOCUS aug=" $ string(bestBtn));
     }
     return true;
 }

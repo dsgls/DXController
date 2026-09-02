@@ -59,7 +59,7 @@ function bool HandleDPad(int dx, int dy)
             focusIndex = idx;
             focused = s.skillButtons[idx];
             s.SelectSkillButton(s.skillButtons[idx]);
-            class'DXControllerDebug'.static.DebugLog("DXC-NAV FOCUS skill=" $ string(idx));
+            class'DXControllerDebug'.static.NavLog("DXC-NAV FOCUS skill=" $ string(idx));
             return true;
         }
     }

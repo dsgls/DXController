@@ -12141,11 +12141,14 @@ exec function TogglePlayerMenuWindow()
     root = DeusExRootWindow(rootWindow);
     if (root == None)
     {
+        // Unconditional: no root window during a menu toggle is an abnormal
+        // state worth having in any log (and there is no root to route the
+        // GamepadNavLog hook through).
         Log("DXC-NAV TPW root=None");
         return;
     }
 
-    Log("DXC-NAV TPW LBHeld=" $ string(bGamepadLBHeld)
+    root.GamepadNavLog("DXC-NAV TPW LBHeld=" $ string(bGamepadLBHeld)
         $ " RBHeld=" $ string(bGamepadRBHeld)
         $ " Restrict=" $ string(RestrictInput())
         $ " LastPS=" $ string(LastPersonaScreen));

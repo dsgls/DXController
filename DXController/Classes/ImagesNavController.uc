@@ -95,7 +95,7 @@ function bool HandleDPad(int dx, int dy)
     // GetFocusedRect returns false and the overlay doesn't draw a frame.
     focused = None;
 
-    class'DXControllerDebug'.static.DebugLog("DXC-NAV FOCUS images row=" $ string(focusIndex));
+    class'DXControllerDebug'.static.NavLog("DXC-NAV FOCUS images row=" $ string(focusIndex));
     return true;
 }
 

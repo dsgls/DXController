@@ -123,7 +123,7 @@ function CollectAugButtons()
 
     bListDirty = false;
 
-    class'DXControllerDebug'.static.DebugLog(
+    class'DXControllerDebug'.static.NavLog(
         "DXC-NAV AugInstall collected rows=" $ string(rowCount));
 }
 
@@ -199,7 +199,7 @@ function RefreshIfDirty()
     {
         focused = btn;
         HUDMedBotAddAugsScreen(screen).SelectAugmentation(btn);
-        class'DXControllerDebug'.static.DebugLog(
+        class'DXControllerDebug'.static.NavLog(
             "DXC-NAV AugInstall focus rehome row=" $ string(focusRow)
                 $ " col=" $ string(focusCol));
     }
@@ -272,7 +272,7 @@ function InitFocus()
         focused = btn;
         // Pre-select the first button so the install screen shows info.
         HUDMedBotAddAugsScreen(screen).SelectAugmentation(btn);
-        class'DXControllerDebug'.static.DebugLog(
+        class'DXControllerDebug'.static.NavLog(
             "DXC-NAV AugInstall focus init row=0 col=0");
     }
 }
@@ -332,7 +332,7 @@ function bool HandleDPad(int dx, int dy)
     focusCol = newCol;
     focused  = btn;
     HUDMedBotAddAugsScreen(screen).SelectAugmentation(btn);
-    class'DXControllerDebug'.static.DebugLog(
+    class'DXControllerDebug'.static.NavLog(
         "DXC-NAV AugInstall focus row=" $ string(newRow)
             $ " col=" $ string(newCol));
     return true;
@@ -357,7 +357,7 @@ function bool HandleActivate(byte button)
         if (s.btnInstall != None && s.btnInstall.bIsSensitive)
         {
             s.btnInstall.PressButton();
-            class'DXControllerDebug'.static.DebugLog("DXC-NAV AugInstall install");
+            class'DXControllerDebug'.static.NavLog("DXC-NAV AugInstall install");
         }
         return true;
     }

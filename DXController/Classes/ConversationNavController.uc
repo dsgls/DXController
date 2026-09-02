@@ -35,7 +35,7 @@ function Attach(Window s)
 {
     Super.Attach(s);
 
-    class'DXControllerDebug'.static.DebugLog(
+    class'DXControllerDebug'.static.NavLog(
         "DXC-CONV ATTACH screen=" $ string(s.Class)
         $ " numChoices=" $ string(GetNumChoices()));
 }
@@ -44,7 +44,7 @@ function Detach()
 {
     if (screen != None)
     {
-        class'DXControllerDebug'.static.DebugLog(
+        class'DXControllerDebug'.static.NavLog(
             "DXC-CONV DETACH screen=" $ string(screen.Class));
     }
     Super.Detach();
@@ -98,7 +98,7 @@ function InitFocus()
     focused = cwa.conChoices[0];
     ApplyChoiceHighlight();
 
-    class'DXControllerDebug'.static.DebugLog(
+    class'DXControllerDebug'.static.NavLog(
         "DXC-CONV INIT-FOCUS focusIndex=0 numChoices="
         $ string(cwa.numChoices));
 }
@@ -191,7 +191,7 @@ function bool HandleDPad(int dx, int dy)
     focused = cwa.conChoices[focusIndex];
     ApplyChoiceHighlight();
 
-    class'DXControllerDebug'.static.DebugLog(
+    class'DXControllerDebug'.static.NavLog(
         "DXC-CONV DPAD dy=" $ string(dy)
         $ " focusIndex=" $ string(oldIndex) $ "->" $ string(focusIndex));
     return true;
@@ -224,7 +224,7 @@ function bool HandleActivate(byte button)
         if (cwa != None)
         {
             cwa.AbortCinematicConvo();
-            class'DXControllerDebug'.static.DebugLog("DXC-CONV CINEMATIC-ABORT");
+            class'DXControllerDebug'.static.NavLog("DXC-CONV CINEMATIC-ABORT");
         }
         return true;
     }
@@ -247,13 +247,13 @@ function bool HandleActivate(byte button)
                 // list.
                 focused = None;
                 focusIndex = -1;
-                class'DXControllerDebug'.static.DebugLog(
+                class'DXControllerDebug'.static.NavLog(
                     "DXC-CONV COMMIT focusIndex=" $ string(committedIndex));
             }
             return true;
         }
         // B in choice mode: consumed no-op.
-        class'DXControllerDebug'.static.DebugLog("DXC-CONV B-NOOP");
+        class'DXControllerDebug'.static.NavLog("DXC-CONV B-NOOP");
         return true;
     }
 
@@ -261,7 +261,7 @@ function bool HandleActivate(byte button)
     if (cw.conPlay != None)
     {
         cw.conPlay.PlayNextEvent();
-        class'DXControllerDebug'.static.DebugLog(
+        class'DXControllerDebug'.static.NavLog(
             "DXC-CONV ADVANCE btn=" $ string(button));
     }
     return true;
@@ -292,7 +292,7 @@ function OnScreenDescendantRemoved(Window descendant)
     focused = None;
     focusIndex = -1;
     bFocusInitDone = false;
-    class'DXControllerDebug'.static.DebugLog("DXC-CONV CHOICE-LIST-INVALIDATE");
+    class'DXControllerDebug'.static.NavLog("DXC-CONV CHOICE-LIST-INVALIDATE");
 }
 
 // ---- Menu toggle policy ----------------------------------------------------

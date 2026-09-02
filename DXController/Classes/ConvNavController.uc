@@ -108,7 +108,7 @@ function bool HandleDPad(int dx, int dy)
     focusIndex = newIndex;
     focused = None;
 
-    class'DXControllerDebug'.static.DebugLog("DXC-NAV FOCUS conv row=" $ string(focusIndex));
+    class'DXControllerDebug'.static.NavLog("DXC-NAV FOCUS conv row=" $ string(focusIndex));
     return true;
 }
 

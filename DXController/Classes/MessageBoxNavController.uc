@@ -63,7 +63,7 @@ function bool HandleDPad(int dx, int dy)
         SetFocus(s.btnYes);
         side = "yes";
     }
-    class'DXControllerDebug'.static.DebugLog("DXC-NAV FOCUS msgbox=" $ side);
+    class'DXControllerDebug'.static.NavLog("DXC-NAV FOCUS msgbox=" $ side);
     return true;
 }
 

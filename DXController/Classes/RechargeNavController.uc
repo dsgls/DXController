@@ -59,9 +59,9 @@ function bool HandleDPad(int dx, int dy)
     SetFocus(candidate);
 
     if (focused == s.btnRecharge)
-        class'DXControllerDebug'.static.DebugLog("DXC-NAV FOCUS recharge=recharge");
+        class'DXControllerDebug'.static.NavLog("DXC-NAV FOCUS recharge=recharge");
     else
-        class'DXControllerDebug'.static.DebugLog("DXC-NAV FOCUS recharge=close");
+        class'DXControllerDebug'.static.NavLog("DXC-NAV FOCUS recharge=close");
     return true;
 }
 

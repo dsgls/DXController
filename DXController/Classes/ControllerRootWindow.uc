@@ -294,7 +294,7 @@ function SwitchActiveNav(MenuNavController desired, Window desiredScreen)
     if (activeNav != None)
     {
         if (activeNav.screen != None)
-            class'DXControllerDebug'.static.DebugLog(
+            class'DXControllerDebug'.static.NavLog(
                 "DXC-NAV SWITCH detach=" $ string(activeNav.screen.Class));
         activeNav.Detach();
     }
@@ -302,7 +302,7 @@ function SwitchActiveNav(MenuNavController desired, Window desiredScreen)
     if (activeNav != None)
     {
         activeNav.Attach(desiredScreen);
-        class'DXControllerDebug'.static.DebugLog(
+        class'DXControllerDebug'.static.NavLog(
             "DXC-NAV SWITCH attach=" $ string(desiredScreen.Class));
 
         // Raise the focus overlay so it draws on top of the newly-
@@ -350,6 +350,13 @@ function OpenKeyboard(MenuUIEditWindow target, Window ownerScreen, string label,
     keyboard.Open(target, ownerScreen, label, allowedChars);
 }
 
+// Override of the DeusExRootWindow.GamepadNavLog hook: forwards DeusEx-side
+// nav diagnostics into the bNavDebugLog gate.
+function GamepadNavLog(coerce string msg)
+{
+    class'DXControllerDebug'.static.NavLog(msg);
+}
+
 // Override of the DeusExRootWindow.CloseGamepadKeyboard hook. Called
 // from ComputerUIWindow's IK_Escape handler so a physical-keyboard Esc
 // dismisses the on-screen keyboard. Returns true if the keyboard was
@@ -389,6 +396,7 @@ event DescendantAdded(Window descendant)
     local int idx;
     local bool bIsModalScreen;
     local string parentName;  // diagnostic
+    local string descMsg;
     local PersonaScreenBaseWindow persona;
     local DeusExPlayer p;
 
@@ -396,7 +404,7 @@ event DescendantAdded(Window descendant)
 
     if (descendant == None)
     {
-        class'DXControllerDebug'.static.DebugLog("DXC-NAV DESC-ADD descendant=None");  // diagnostic
+        class'DXControllerDebug'.static.NavLog("DXC-NAV DESC-ADD descendant=None");  // diagnostic
         return;
     }
 
@@ -419,11 +427,18 @@ event DescendantAdded(Window descendant)
         parentName = string(descendant.GetParent().Class);
     else
         parentName = "None";
-    class'DXControllerDebug'.static.DebugLog(
-        "DXC-NAV DESC-ADD class=" $ string(descendant.Class)
+    descMsg = "DXC-NAV DESC-ADD class=" $ string(descendant.Class)
         $ " parent=" $ parentName
         $ " isModal=" $ string(DeusExBaseWindow(descendant) != None)
-        $ " parentIsSelf=" $ string(descendant.GetParent() == Self));  // diagnostic
+        $ " parentIsSelf=" $ string(descendant.GetParent() == Self);
+    // Direct children of root are the hooking events (HUD children at
+    // startup, each modal screen pushed) — the proof in a user's ticket log
+    // that the root-window integration works, so they log unconditionally.
+    // Deeper subtree construction is spam and stays behind bNavDebugLog.
+    if (descendant.GetParent() == Self)
+        Log(descMsg);
+    else
+        class'DXControllerDebug'.static.NavLog(descMsg);
 
     // Radial cancel-on-UI-takeover. PushWindow only accepts
     // DeusExBaseWindow subclasses, so that cast cleanly excludes the
@@ -472,7 +487,7 @@ event DescendantAdded(Window descendant)
     // walk GetTopChild here — the engine fires this event before the
     // new child is in root's child list.
     idx = FindNavIndex(descendant.Class);
-    class'DXControllerDebug'.static.DebugLog(
+    class'DXControllerDebug'.static.NavLog(
         "DXC-NAV DESC-ADD FindNavIndex result idx=" $ string(idx));  // diagnostic
     if (idx >= 0)
     {
@@ -609,21 +624,20 @@ function Tick(float deltaSeconds)
     //    focus-retry blocks below see the up-to-date activeNav.
     topNav = FindTopmostModalNav(topScreen);
 
-    // === Diagnostic: log top-screen identity transitions ===
+    // Top-screen identity transitions: edge-triggered and low-volume, so
+    // logged unconditionally — the ticket-log record of top-level nav state.
     if (topScreen != None && string(topScreen.Class) != lastDiagTopName)
     {
-        class'DXControllerDebug'.static.DebugLog(
-            "DXC-NAV TICK-TOP topScreen=" $ string(topScreen.Class)
+        Log("DXC-NAV TICK-TOP topScreen=" $ string(topScreen.Class)
             $ " idx=" $ string(FindNavIndex(topScreen.Class))
             $ " hasNav=" $ string(topNav != None));
         lastDiagTopName = string(topScreen.Class);
     }
     else if (topScreen == None && lastDiagTopName != "None")
     {
-        class'DXControllerDebug'.static.DebugLog("DXC-NAV TICK-TOP topScreen=None");
+        Log("DXC-NAV TICK-TOP topScreen=None");
         lastDiagTopName = "None";
     }
-    // === End diagnostic ===
 
     // === Diagnostic: report a frame-time spike flagged above, tagged with
     // the screen now on top (e.g. MenuMain for the slow main-menu open).
@@ -634,8 +648,9 @@ function Tick(float deltaSeconds)
             topName = string(topScreen.Class);
         else
             topName = "None";
-        class'DXControllerDebug'.static.DebugLog(
-            "DXC-PERF slow-frame ms=" $ string(frameMs)
+        // Rare (>=500 ms frames only) and unconditional: stall evidence in
+        // every ticket log.
+        Log("DXC-PERF slow-frame ms=" $ string(frameMs)
             $ " top=" $ topName
             $ " hasNav=" $ string(topNav != None));
     }
@@ -650,7 +665,7 @@ function Tick(float deltaSeconds)
         {
             cursorMode = CM_Mouse;
             ShowCursor(True);
-            class'DXControllerDebug'.static.DebugLog("DXC-CURSOR mode=mouse (poll)");
+            Log("DXC-CURSOR mode=mouse (poll)");
         }
     }
 
@@ -676,10 +691,10 @@ function Tick(float deltaSeconds)
             activeNav.bFocusInitDone = true;
         // Fires once when init completes — whether the flag was set just
         // above (grid/menu controllers) or inside InitFocus itself
-        // (list/scroll controllers).
+        // (list/scroll controllers). Unconditional: once per screen, and it
+        // confirms in a ticket log that a nav controller took the screen.
         if (activeNav.bFocusInitDone)
-            class'DXControllerDebug'.static.DebugLog(
-                "DXC-NAV TICK-INIT screen=" $ string(activeNav.screen.Class));
+            Log("DXC-NAV TICK-INIT screen=" $ string(activeNav.screen.Class));
     }
 
     // 4. Drive the active controller's per-frame hook. MenuNavController
@@ -706,7 +721,8 @@ function NoticeGamepadActivity()
     {
         cursorMode = CM_Gamepad;
         HideCursorAndClearHover();
-        class'DXControllerDebug'.static.DebugLog("DXC-CURSOR mode=gamepad");
+        // Unconditional: the script-side half of every input-device handoff.
+        Log("DXC-CURSOR mode=gamepad");
     }
 }
 
@@ -748,7 +764,7 @@ event MouseMoved(float newX, float newY)
     {
         cursorMode = CM_Mouse;
         ShowCursor(True);
-        class'DXControllerDebug'.static.DebugLog("DXC-CURSOR mode=mouse");
+        Log("DXC-CURSOR mode=mouse");
     }
     Super.MouseMoved(newX, newY);
 }
@@ -777,7 +793,7 @@ event bool VirtualKeyPressed(EInputKey key, bool bRepeat)
         scrName = string(activeNav.screen.Class);
     else
         scrName = "none";
-    class'DXControllerDebug'.static.DebugLog(
+    class'DXControllerDebug'.static.NavLog(
         "DXC-VKP key=" $ Mid(string(GetEnum(enum'EInputKey', key)), 3)
         $ "(" $ string(bkey) $ ") bRepeat=" $ string(bRepeat)
         $ " nav=" $ string(activeNav != None) $ " screen=" $ scrName);
@@ -865,11 +881,11 @@ event bool VirtualKeyPressed(EInputKey key, bool bRepeat)
     {
         if (activeNav != None && !activeNav.AllowsMenuToggle())
         {
-            class'DXControllerDebug'.static.DebugLog(
+            class'DXControllerDebug'.static.NavLog(
                 "DXC-NAV BLOCK-MENU-TOGGLE key=Joy7");
             return true;
         }
-        class'DXControllerDebug'.static.DebugLog(
+        class'DXControllerDebug'.static.NavLog(
             "DXC-NAV BACK-RECV p=" $ string(p != None)
             $ " topPersona=" $ string(PersonaScreenBaseWindow(GetTopWindow()) != None));
         if (p != None)
@@ -896,7 +912,7 @@ event bool VirtualKeyPressed(EInputKey key, bool bRepeat)
 
         if (activeNav != None && !activeNav.AllowsMenuToggle())
         {
-            class'DXControllerDebug'.static.DebugLog(
+            class'DXControllerDebug'.static.NavLog(
                 "DXC-NAV BLOCK-MENU-TOGGLE key=Joy8");
             return true;
         }
@@ -965,7 +981,7 @@ event bool VirtualKeyPressed(EInputKey key, bool bRepeat)
     }
 
     superResult = Super.VirtualKeyPressed(key, bRepeat);
-    class'DXControllerDebug'.static.DebugLog(
+    class'DXControllerDebug'.static.NavLog(
         "DXC-VKP key=" $ string(bkey) $ " unmatched, Super returned="
         $ string(superResult));
     return superResult;

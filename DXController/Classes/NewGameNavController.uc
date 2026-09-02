@@ -125,7 +125,7 @@ function InitFocus()
     // before vanilla has built the field at all.
     ClearNameSelection(s);
 
-    class'DXControllerDebug'.static.DebugLog(
+    class'DXControllerDebug'.static.NavLog(
         "DXC-NAV INIT newgame region=skills row=0");
 }
 
@@ -197,7 +197,7 @@ function bool HandleDPad(int dx, int dy)
                     actionBtns, actionBtnCount, actionBtnIdx);
             if (actionBtnCount > 0)
                 SetFocus(actionBtns[actionBtnIdx]);
-            class'DXControllerDebug'.static.DebugLog(
+            class'DXControllerDebug'.static.NavLog(
                 "DXC-NAV FOCUS newgame ab-idx=" $ string(actionBtnIdx));
             return true;
         }
@@ -245,7 +245,7 @@ function bool HandleDPad(int dx, int dy)
             if (curRow != prevRow)
             {
                 // Stayed inside the list.
-                class'DXControllerDebug'.static.DebugLog(
+                class'DXControllerDebug'.static.NavLog(
                     "DXC-NAV FOCUS newgame skills row=" $ string(curRow));
                 return true;
             }
@@ -286,7 +286,7 @@ function EnterName(MenuScreenNewGame s)
         return;
     region = REGION_Name;
     SetFocus(s.editName);
-    class'DXControllerDebug'.static.DebugLog(
+    class'DXControllerDebug'.static.NavLog(
         "DXC-NAV FOCUS newgame region=name");
 }
 
@@ -300,7 +300,7 @@ function EnterPortrait(MenuScreenNewGame s)
     focused = s.btnPortrait;
     if (screen != None && s.btnPortrait != None)
         screen.SetFocusWindow(s.btnPortrait);
-    class'DXControllerDebug'.static.DebugLog(
+    class'DXControllerDebug'.static.NavLog(
         "DXC-NAV FOCUS newgame region=portrait");
 }
 
@@ -319,7 +319,7 @@ function EnterSkillsAt(MenuScreenNewGame s, int targetIdx)
     if (screen != None)
         screen.SetFocusWindow(s.lstSkills);
     s.lstSkills.SetRow(s.lstSkills.IndexToRowId(targetIdx), True, True);
-    class'DXControllerDebug'.static.DebugLog(
+    class'DXControllerDebug'.static.NavLog(
         "DXC-NAV FOCUS newgame region=skills row=" $ string(targetIdx));
 }
 
@@ -358,7 +358,7 @@ function EnterActionBarAt(MenuScreenNewGame s, int targetIdx)
     if (actionBtnCount == 0)
     {
         // No action buttons at all — stay where we are. (Defensive.)
-        class'DXControllerDebug'.static.DebugLog(
+        class'DXControllerDebug'.static.NavLog(
             "DXC-NAV FOCUS newgame ab-empty");
         return;
     }
@@ -378,14 +378,14 @@ function EnterActionBarAt(MenuScreenNewGame s, int targetIdx)
         // Stay in the current region, matching OptionsNavController's
         // behavior in the same case (D-down past last row consumes
         // but doesn't transition). Won't happen in vanilla.
-        class'DXControllerDebug'.static.DebugLog(
+        class'DXControllerDebug'.static.NavLog(
             "DXC-NAV FOCUS newgame ab-no-sensitive");
         return;
     }
     region = REGION_ActionBar;
     actionBtnIdx = idx;
     SetFocus(actionBtns[actionBtnIdx]);
-    class'DXControllerDebug'.static.DebugLog(
+    class'DXControllerDebug'.static.NavLog(
         "DXC-NAV FOCUS newgame region=ab ab-idx=" $ string(actionBtnIdx));
 }
 
@@ -404,7 +404,7 @@ function OpenNameKeyboard(MenuScreenNewGame s)
     // filterString is the same set vanilla hands editName.SetFilter, so
     // the keyboard's . - _ # keys are consumed no-ops on this field.
     root.OpenKeyboard(s.editName, screen, "ENTER NAME", s.filterString);
-    class'DXControllerDebug'.static.DebugLog("DXC-NAV ACTIVATE newgame kbd-open");
+    class'DXControllerDebug'.static.NavLog("DXC-NAV ACTIVATE newgame kbd-open");
 }
 
 // "You need a name" affordance for the paths that find START insensitive:
@@ -461,7 +461,7 @@ function bool HandleActivate(byte button)
         if (region == REGION_Portrait)
         {
             s.NextPortrait();
-            class'DXControllerDebug'.static.DebugLog(
+            class'DXControllerDebug'.static.NavLog(
                 "DXC-NAV ACTIVATE newgame portrait next");
             return true;
         }
@@ -473,7 +473,7 @@ function bool HandleActivate(byte button)
             if (s.btnUpgrade != None && s.btnUpgrade.bIsSensitive)
             {
                 s.UpgradeSkill();
-                class'DXControllerDebug'.static.DebugLog(
+                class'DXControllerDebug'.static.NavLog(
                     "DXC-NAV ACTIVATE newgame upgrade");
             }
             return true;
@@ -486,7 +486,7 @@ function bool HandleActivate(byte button)
                 if (focusedBtn.bIsSensitive)
                 {
                     focusedBtn.PressButton();
-                    class'DXControllerDebug'.static.DebugLog(
+                    class'DXControllerDebug'.static.NavLog(
                         "DXC-NAV ACTIVATE newgame ab idx=" $ string(actionBtnIdx));
                 }
                 else if (IsNameBlank(s)
@@ -507,7 +507,7 @@ function bool HandleActivate(byte button)
             if (s.btnDowngrade != None && s.btnDowngrade.bIsSensitive)
             {
                 s.DowngradeSkill();
-                class'DXControllerDebug'.static.DebugLog(
+                class'DXControllerDebug'.static.NavLog(
                     "DXC-NAV ACTIVATE newgame downgrade");
             }
             return true;
@@ -521,7 +521,7 @@ function bool HandleActivate(byte button)
         if (startBtn != None && startBtn.bIsSensitive)
         {
             startBtn.PressButton();
-            class'DXControllerDebug'.static.DebugLog(
+            class'DXControllerDebug'.static.NavLog(
                 "DXC-NAV ACTIVATE newgame start");
         }
         else if (IsNameBlank(s))

@@ -126,7 +126,7 @@ function FocusRow(ComputerScreenSecurity sec)
             if (screen != None
                 && sec.winCameras[cameraIndex].btnCamera != None)
                 screen.SetFocusWindow(sec.winCameras[cameraIndex].btnCamera);
-            class'DXControllerDebug'.static.DebugLog(
+            class'DXControllerDebug'.static.NavLog(
                 "DXC-TERM SEC-CAMERA idx=" $ string(cameraIndex));
         }
         else
@@ -169,7 +169,7 @@ function OnEnter(ComputerUIWindow s)
         cameraIndex = 0;
 
     FocusRow(sec);
-    class'DXControllerDebug'.static.DebugLog("DXC-TERM SEC-ENTER");
+    class'DXControllerDebug'.static.NavLog("DXC-TERM SEC-ENTER");
 }
 
 // ---- D-pad -----------------------------------------------------------------
@@ -209,7 +209,7 @@ function bool HandleDPad(int dx, int dy)
                 cameraIndex = 0;
         }
         FocusRow(sec);
-        class'DXControllerDebug'.static.DebugLog(
+        class'DXControllerDebug'.static.NavLog(
             "DXC-TERM SEC-DPAD row=" $ string(rowIndex));
         return true;
     }
@@ -251,12 +251,12 @@ function bool HandleActivate(byte button)
     if (RowNavigable(sec, rowIndex) && btn != None)
     {
         btn.PressButton();
-        class'DXControllerDebug'.static.DebugLog(
+        class'DXControllerDebug'.static.NavLog(
             "DXC-TERM SEC-CHOICE idx=" $ string(rowIndex) $ " sensitive=True");
     }
     else
     {
-        class'DXControllerDebug'.static.DebugLog(
+        class'DXControllerDebug'.static.NavLog(
             "DXC-TERM SEC-CHOICE idx=" $ string(rowIndex) $ " sensitive=False");
     }
     return true;

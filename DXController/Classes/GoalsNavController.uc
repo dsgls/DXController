@@ -106,7 +106,7 @@ function bool HandleDPad(int dx, int dy)
     // winGoals/winNotes in InitWindow before this controller attaches, so
     // this branch is not expected to be reached during normal navigation.
 
-    class'DXControllerDebug'.static.DebugLog(
+    class'DXControllerDebug'.static.NavLog(
         "DXC-NAV FOCUS goals idx=" $ string(focusIndex));
     return true;
 }

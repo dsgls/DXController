@@ -45,7 +45,7 @@ event DrawWindow(GC gc)
     // === Diagnostic: log when the rect changes ===
     if (rx != lastDiagX || ry != lastDiagY || rw != lastDiagW || rh != lastDiagH)
     {
-        class'DXControllerDebug'.static.DebugLog(
+        class'DXControllerDebug'.static.NavLog(
             "DXC-FOCUS rect x=" $ string(int(rx))
             $ " y=" $ string(int(ry))
             $ " w=" $ string(int(rw))

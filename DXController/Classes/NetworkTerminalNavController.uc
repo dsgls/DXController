@@ -68,7 +68,7 @@ function Attach(Window s)
     paneHackFocused = None;
     paneAccountsFocused = None;
     paneAccountsRowKind = 0;
-    class'DXControllerDebug'.static.DebugLog(
+    class'DXControllerDebug'.static.NavLog(
         "DXC-TERM ATTACH terminal=" $ string(s.Class));
 
     // If a Computer-pane screen already exists at attach time, pick it
@@ -83,7 +83,7 @@ function Attach(Window s)
 function Detach()
 {
     if (screen != None)
-        class'DXControllerDebug'.static.DebugLog(
+        class'DXControllerDebug'.static.NavLog(
             "DXC-TERM DETACH terminal=" $ string(screen.Class));
 
     if (activeSub != None)
@@ -130,7 +130,7 @@ function NavTick(float deltaSeconds)
     // Computer. Focus state on Computer survives across these transitions.
     if (activePane != PANE_COMPUTER && !IsPanePresent(activePane))
     {
-        class'DXControllerDebug'.static.DebugLog(
+        class'DXControllerDebug'.static.NavLog(
             "DXC-TERM PANE-AUTO-FALLBACK pane=" $ string(activePane));
         activePane = PANE_COMPUTER;
     }
@@ -171,7 +171,7 @@ function OnComputerScreenChanged(ComputerUIWindow newScreen)
     if (newScreen == None)
         return;
 
-    class'DXControllerDebug'.static.DebugLog(
+    class'DXControllerDebug'.static.NavLog(
         "DXC-TERM SCREEN-CHANGED to=" $ string(newScreen.Class));
 
     // A Computer-pane swap is a deliberate navigation event — pull the
@@ -181,7 +181,7 @@ function OnComputerScreenChanged(ComputerUIWindow newScreen)
     // button, so the IsPanePresent auto-fallback never fires.
     if (activePane != PANE_COMPUTER)
     {
-        class'DXControllerDebug'.static.DebugLog(
+        class'DXControllerDebug'.static.NavLog(
             "DXC-TERM PANE-RESET-ON-SWAP pane=" $ string(activePane));
         activePane = PANE_COMPUTER;
     }
@@ -285,7 +285,7 @@ function SwitchPane(int newPane)
         paneAccountsRowKind = 0;  // list
     }
 
-    class'DXControllerDebug'.static.DebugLog(
+    class'DXControllerDebug'.static.NavLog(
         "DXC-TERM PANE-SWITCH from=" $ string(oldPane) $ " to=" $ string(newPane));
 }
 
@@ -379,14 +379,14 @@ function bool HandleHackAccountsActivate(byte button)
         // A on list row: explicit activation — vanilla's
         // ListRowActivated wires ChangeSelectedAccount.
         ha.ChangeSelectedAccount();
-        class'DXControllerDebug'.static.DebugLog("DXC-TERM HACKACCOUNTS-LIST-ACTIVATE");
+        class'DXControllerDebug'.static.NavLog("DXC-TERM HACKACCOUNTS-LIST-ACTIVATE");
     }
     else if (paneAccountsRowKind == 1 && ha.btnChangeAccount != None && ha.btnChangeAccount.bIsSensitive)
     {
         // A on btnChangeAccount: PressButton → ButtonActivated →
         // ChangeSelectedAccount (vanilla).
         ha.btnChangeAccount.PressButton();
-        class'DXControllerDebug'.static.DebugLog("DXC-TERM HACKACCOUNTS-BTN-ACTIVATE");
+        class'DXControllerDebug'.static.NavLog("DXC-TERM HACKACCOUNTS-BTN-ACTIVATE");
     }
     return true;
 }
@@ -412,7 +412,7 @@ function bool HandleActivate(byte button)
         winComp = nt.winComputer;
         if (winComp != None)
         {
-            class'DXControllerDebug'.static.DebugLog(
+            class'DXControllerDebug'.static.NavLog(
                 "DXC-TERM B-ESCAPE screen=" $ string(winComp.Class));
             winComp.VirtualKeyPressed(IK_Escape, false);
         }
@@ -446,7 +446,7 @@ function bool HandleActivate(byte button)
             && paneHackFocused.bIsSensitive
             && PersonaActionButtonWindow(paneHackFocused) != None)
         {
-            class'DXControllerDebug'.static.DebugLog(
+            class'DXControllerDebug'.static.NavLog(
                 "DXC-TERM HACK-PRESS label=" $ PersonaActionButtonWindow(paneHackFocused).buttonText);
             PersonaActionButtonWindow(paneHackFocused).PressButton();
         }

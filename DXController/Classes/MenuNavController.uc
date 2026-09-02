@@ -63,13 +63,13 @@ function Attach(Window s)
     // `focused == None` and set bFocusInitDone themselves.
     if (focused != None)
         bFocusInitDone = true;
-    class'DXControllerDebug'.static.DebugLog("DXC-NAV ATTACH screen=" $ string(screen.Class));
+    class'DXControllerDebug'.static.NavLog("DXC-NAV ATTACH screen=" $ string(screen.Class));
 }
 
 function Detach()
 {
     if (screen != None)
-        class'DXControllerDebug'.static.DebugLog("DXC-NAV DETACH screen=" $ string(screen.Class));
+        class'DXControllerDebug'.static.NavLog("DXC-NAV DETACH screen=" $ string(screen.Class));
     screen = None;
     focused = None;
     focusIndex = -1;

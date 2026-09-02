@@ -61,7 +61,7 @@ function OnEnter(ComputerUIWindow s)
     // Sync engine focus so keyboard typing lands here.
     SetFocus(loginScr.editUserName);
 
-    class'DXControllerDebug'.static.DebugLog(
+    class'DXControllerDebug'.static.NavLog(
         "DXC-TERM LOGIN-INIT row=" $ string(rowIndex)
         $ " barCount=" $ string(barCount));
 }
@@ -116,7 +116,7 @@ function MoveToRow(int newRow)
     // and the vanilla focus-text-color indicator paints on buttons.
     SetFocus(w);
 
-    class'DXControllerDebug'.static.DebugLog(
+    class'DXControllerDebug'.static.NavLog(
         "DXC-TERM SUB-DPAD screen=" $ string(screen.Class)
         $ " row=" $ string(newRow) $ " barIdx=" $ string(actionBarIndex));
 }
@@ -144,7 +144,7 @@ function bool HandleDPad(int dx, int dy)
             actionBarIndex = class'ComputerButtonBarNav'.static.MoveRight(
                 barBtns, barCount, actionBarIndex);
         SetFocus(barBtns[actionBarIndex]);
-        class'DXControllerDebug'.static.DebugLog(
+        class'DXControllerDebug'.static.NavLog(
             "DXC-TERM SUB-DPAD screen=" $ string(screen.Class)
             $ " row=" $ string(rowIndex) $ " barIdx=" $ string(actionBarIndex));
         return true;
@@ -180,7 +180,7 @@ function bool HandleActivate(byte button)
         && MenuUIActionButtonWindow(focused) != None
         && focused.bIsSensitive)
     {
-        class'DXControllerDebug'.static.DebugLog(
+        class'DXControllerDebug'.static.NavLog(
             "DXC-TERM SUB-ACTIVATE press=" $ MenuUIActionButtonWindow(focused).buttonText);
         MenuUIActionButtonWindow(focused).PressButton();
     }
@@ -208,7 +208,7 @@ function OnTick(float deltaSeconds)
         rowIndex = ROW_USERNAME;
         focusIndex = ROW_USERNAME;
         SetFocus(loginScr.editUserName);
-        class'DXControllerDebug'.static.DebugLog(
+        class'DXControllerDebug'.static.NavLog(
             "DXC-TERM LOGIN-RESYNC row=USERNAME (vanilla reset detected)");
     }
 }

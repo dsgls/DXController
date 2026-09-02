@@ -105,7 +105,7 @@ function Open(MenuUIEditWindow t, Window ownerScreen, string label,
     // which intercepts gamepad keys into HandleKey while bOpen. The
     // target field keeps its engine focus, so a physical keyboard can
     // still type into it directly.
-    class'DXControllerDebug'.static.DebugLog(
+    class'DXControllerDebug'.static.NavLog(
         "DXC-KBD OPEN target=" $ string(target.Class) $ " label=" $ label);
 }
 
@@ -120,7 +120,7 @@ function CloseKbd(string reason)
     targetScreen = None;
     allowedChars = "";
 
-    class'DXControllerDebug'.static.DebugLog("DXC-KBD CLOSE reason=" $ reason);
+    class'DXControllerDebug'.static.NavLog("DXC-KBD CLOSE reason=" $ reason);
 }
 
 // Teardown close: the target field is being destroyed with its screen,
@@ -133,7 +133,7 @@ function ForceClose()
     target = None;
     targetScreen = None;
     allowedChars = "";
-    class'DXControllerDebug'.static.DebugLog("DXC-KBD CLOSE reason=teardown");
+    class'DXControllerDebug'.static.NavLog("DXC-KBD CLOSE reason=teardown");
 }
 
 // ---------------------------------------------------------------------------
@@ -217,11 +217,11 @@ function InsertChar(string ch)
         return;
     if (allowedChars != "" && InStr(allowedChars, ch) < 0)
     {
-        class'DXControllerDebug'.static.DebugLog("DXC-KBD KEY-FILTERED id=" $ ch);
+        class'DXControllerDebug'.static.NavLog("DXC-KBD KEY-FILTERED id=" $ ch);
         return;
     }
     target.InsertText(ch, true);
-    class'DXControllerDebug'.static.DebugLog("DXC-KBD KEY id=" $ ch);
+    class'DXControllerDebug'.static.NavLog("DXC-KBD KEY id=" $ ch);
 }
 
 function DoBackspace()
@@ -229,7 +229,7 @@ function DoBackspace()
     if (target == None)
         return;
     target.DeleteChar(true, true);
-    class'DXControllerDebug'.static.DebugLog("DXC-KBD BACKSPACE");
+    class'DXControllerDebug'.static.NavLog("DXC-KBD BACKSPACE");
 }
 
 // ---------------------------------------------------------------------------

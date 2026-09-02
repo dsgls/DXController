@@ -82,7 +82,7 @@ function bool HandleDPad(int dx, int dy)
 
     focusIndex = lst.RowIdToIndex(lst.GetFocusRow());
     // Leave `focused` as the sentinel (lst) so Tick doesn't reset us.
-    class'DXControllerDebug'.static.DebugLog(
+    class'DXControllerDebug'.static.NavLog(
         "DXC-NAV FOCUS list row=" $ string(focusIndex));
     return true;
 }

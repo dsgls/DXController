@@ -108,7 +108,7 @@ function bool HandleDPad(int dx, int dy)
         {
             focusIndex = newIdx;
             SetFocus(m.winButtons[newIdx]);
-            class'DXControllerDebug'.static.DebugLog(
+            class'DXControllerDebug'.static.NavLog(
                 "DXC-NAV FOCUS menumain idx=" $ string(focusIndex));
             return true;
         }

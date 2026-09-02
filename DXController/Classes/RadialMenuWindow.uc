@@ -108,7 +108,7 @@ function Open(int newMode, optional Inventory item, optional bool bStickyMode, o
 
     if (mode == WM_Aug)
         PopulateAugSlots();
-    class'DXControllerDebug'.static.DebugLog("DXC-WHEEL OPEN mode=" $ string(newMode));
+    class'DXControllerDebug'.static.NavLog("DXC-WHEEL OPEN mode=" $ string(newMode));
 }
 
 function PopulateAugSlots()
@@ -250,7 +250,7 @@ function Close(bool bApply)
         }
     }
 
-    class'DXControllerDebug'.static.DebugLog("DXC-WHEEL CLOSE slot=" $ string(highlightedSlot)
+    class'DXControllerDebug'.static.NavLog("DXC-WHEEL CLOSE slot=" $ string(highlightedSlot)
         $ " action=" $ actionLog);
 
     bOpen = false;
@@ -335,7 +335,7 @@ function UpdateStick(float x, float y)
     }
 
     if (highlightedSlot != oldSlot)
-        class'DXControllerDebug'.static.DebugLog("DXC-WHEEL HL slot=" $ string(highlightedSlot));
+        class'DXControllerDebug'.static.NavLog("DXC-WHEEL HL slot=" $ string(highlightedSlot));
 }
 
 // Called by ControllerRootWindow.DescendantAdded when a screen gets
@@ -354,7 +354,7 @@ function OnTopWindowPushed(Window pushed)
     if (bSticky && pushed == stickySourceScreen)
         return;
 
-    class'DXControllerDebug'.static.DebugLog(
+    class'DXControllerDebug'.static.NavLog(
         "DXC-WHEEL CANCEL reason=ui-takeover");
     Close(false);
 }

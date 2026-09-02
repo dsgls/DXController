@@ -149,7 +149,17 @@ event bool VirtualKeyPressed(EInputKey key, bool bRepeat)
 	}
 
 	if ( IsKeyDown( IK_Alt ) || IsKeyDown( IK_Shift ) || IsKeyDown( IK_Ctrl ))
+	{
+		// DXController diagnostic, unconditional: this gate swallowing Escape
+		// is the visible symptom of a stuck modifier in keyDownMap ("Esc does
+		// nothing"), and the line names the stuck entry. Esc-while-modifier-
+		// held is rare enough to log every non-repeat occurrence.
+		if ( key == IK_Escape && !bRepeat )
+			Log("DXC-KEYGATE Escape rejected alt=" $ IsKeyDown(IK_Alt)
+				$ " shift=" $ IsKeyDown(IK_Shift)
+				$ " ctrl=" $ IsKeyDown(IK_Ctrl));
 		return False;
+	}
 
 	// When player dies in multiplayer...
 	if ((Player != None) && (Player.Health <= 0) && (Player.Level.NetMode != NM_Standalone))
@@ -1089,6 +1099,15 @@ function S_ColorScheme GetCurrentHUDColorScheme()
 function bool CloseGamepadKeyboard()
 {
     return false;
+}
+
+// Hook for the DXController nav debug log ([DXController.DXControllerDebug]
+// bNavDebugLog). Base impl is a no-op; ControllerRootWindow overrides it to
+// forward to DXControllerDebug.NavLog. DeusEx-side classes must route nav
+// diagnostics through this hook — DeusEx.u builds before DXController.u, so
+// they cannot reference the DXController package directly.
+function GamepadNavLog(coerce string msg)
+{
 }
 
 // Hook for the DXController cursor-mode policy. Base impl says "not in

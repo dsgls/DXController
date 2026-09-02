@@ -96,7 +96,7 @@ function bool HandleDPad(int dx, int dy)
 
     focusIndex = target;
     ApplyFocus();
-    class'DXControllerDebug'.static.DebugLog("DXC-NAV FOCUS heal=" $ string(focusIndex));
+    class'DXControllerDebug'.static.NavLog("DXC-NAV FOCUS heal=" $ string(focusIndex));
     return true;
 }
 

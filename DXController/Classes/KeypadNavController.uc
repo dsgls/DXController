@@ -55,7 +55,7 @@ function bool HandleDPad(int dx, int dy)
     focusIndex = row * COLS + col;
     focused = s.btnKeys[focusIndex];
 
-    class'DXControllerDebug'.static.DebugLog(
+    class'DXControllerDebug'.static.NavLog(
         "DXC-NAV FOCUS keypad=" $ string(focusIndex));
     return true;
 }

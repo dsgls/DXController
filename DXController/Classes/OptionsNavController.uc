@@ -170,7 +170,7 @@ function bool HandleDPad(int dx, int dy)
                 actionBtns, actionBtnCount, actionBtnIdx);
         if (actionBtnCount > 0)
             SetFocus(actionBtns[actionBtnIdx]);
-        class'DXControllerDebug'.static.DebugLog(
+        class'DXControllerDebug'.static.NavLog(
             "DXC-NAV FOCUS options-ab idx=" $ string(actionBtnIdx));
         return true;
     }
@@ -188,7 +188,7 @@ function bool HandleDPad(int dx, int dy)
             else
                 focused = None;
             SyncChoiceEngineFocus();
-            class'DXControllerDebug'.static.DebugLog(
+            class'DXControllerDebug'.static.NavLog(
                 "DXC-NAV FOCUS options exit-ab → idx=" $ string(focusIndex));
             return true;
         }
@@ -203,7 +203,7 @@ function bool HandleDPad(int dx, int dy)
             else
                 focused = None;
             SyncChoiceEngineFocus();
-            class'DXControllerDebug'.static.DebugLog(
+            class'DXControllerDebug'.static.NavLog(
                 "DXC-NAV FOCUS options exit-ab ↑ idx=" $ string(focusIndex));
             return true;
         }
@@ -243,7 +243,7 @@ function bool HandleDPad(int dx, int dy)
                 focusIndex = newIdx;
                 focused = choices[focusIndex];
                 SyncChoiceEngineFocus();
-                class'DXControllerDebug'.static.DebugLog(
+                class'DXControllerDebug'.static.NavLog(
                     "DXC-NAV FOCUS options idx=" $ string(focusIndex));
                 return true;
             }
@@ -284,7 +284,7 @@ function bool EnterActionBar()
     bInActionBar = true;
     actionBtnIdx = primaryIdx;
     SetFocus(actionBtns[actionBtnIdx]);
-    class'DXControllerDebug'.static.DebugLog(
+    class'DXControllerDebug'.static.NavLog(
         "DXC-NAV FOCUS options enter-ab idx=" $ string(actionBtnIdx));
     return true;
 }
@@ -304,7 +304,7 @@ function bool HandleActivate(byte button)
             && MenuUIActionButtonWindow(focused).bIsSensitive)
         {
             MenuUIActionButtonWindow(focused).PressButton();
-            class'DXControllerDebug'.static.DebugLog(
+            class'DXControllerDebug'.static.NavLog(
                 "DXC-NAV ACTIVATE options-ab idx=" $ string(actionBtnIdx));
         }
         return true;

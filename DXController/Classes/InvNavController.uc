@@ -239,7 +239,7 @@ function OnFocusedDestroyed()
     focused = nbr;
     ClampCursorInto(nbr);
     s.SelectInventory(PersonaItemButton(nbr));
-    class'DXControllerDebug'.static.DebugLog("DXC-NAV INV-RECOVER focus=" $ string(nbr));
+    class'DXControllerDebug'.static.NavLog("DXC-NAV INV-RECOVER focus=" $ string(nbr));
 }
 
 // Nearest remaining inventory item to the logical cursor cell, by tile
@@ -375,7 +375,7 @@ function bool HandleDPad(int dx, int dy)
         focused = next;
         UpdateCursorAfterMove(next, dx, dy);
         s.SelectInventory(PersonaItemButton(next));
-        class'DXControllerDebug'.static.DebugLog("DXC-NAV FOCUS item=" $ string(next));
+        class'DXControllerDebug'.static.NavLog("DXC-NAV FOCUS item=" $ string(next));
     }
     return true;
 }
@@ -661,7 +661,7 @@ function OpenAssignWheel(PersonaScreenInventory s)
 
     root.radial.Open(root.radial.WM_BeltAssign, inv, true, s);
     subDialogActive = 'WheelAssign';
-    class'DXControllerDebug'.static.DebugLog("DXC-WHEEL OPEN mode=BeltAssign source=" $ inv.ItemName);
+    class'DXControllerDebug'.static.NavLog("DXC-WHEEL OPEN mode=BeltAssign source=" $ inv.ItemName);
 }
 
 function ResolveAssignWheel(byte button)
@@ -770,7 +770,7 @@ function EnterModApply(PersonaScreenInventory s)
     {
         if (s.winStatus != None)
             s.winStatus.AddText(NoCompatibleWeaponLabel);
-        class'DXControllerDebug'.static.DebugLog("DXC-NAV MODAPPLY no-target mod=" $ mod.ItemName);
+        class'DXControllerDebug'.static.NavLog("DXC-NAV MODAPPLY no-target mod=" $ mod.ItemName);
         return;
     }
 
@@ -778,7 +778,7 @@ function EnterModApply(PersonaScreenInventory s)
     focused = first;
     SeedCursor(first);
     subDialogActive = 'ModApply';
-    class'DXControllerDebug'.static.DebugLog(
+    class'DXControllerDebug'.static.NavLog(
         "DXC-NAV MODAPPLY ENTER mod=" $ mod.ItemName $ " targets=" $ string(count));
 }
 
@@ -807,7 +807,7 @@ function ApplyModToFocusedWeapon(PersonaScreenInventory s)
         s.winStatus.AddText(Sprintf(s.WeaponUpgradedLabel, wpn.itemName));
     mod.DestroyMod();   // destroys the mod actor; its tile is removed via InventoryDeleted
 
-    class'DXControllerDebug'.static.DebugLog("DXC-NAV MODAPPLY APPLY weapon=" $ wpn.ItemName);
+    class'DXControllerDebug'.static.NavLog("DXC-NAV MODAPPLY APPLY weapon=" $ wpn.ItemName);
 
     // Reselect the upgraded weapon (parity with FinishButtonDrag) so its
     // updated stats show in the info panel. focused still points at the
@@ -855,7 +855,7 @@ function ResolveModApply(byte button)
         }
         modSourceButton = None;
         subDialogActive = '';
-        class'DXControllerDebug'.static.DebugLog("DXC-NAV MODAPPLY CANCEL");
+        class'DXControllerDebug'.static.NavLog("DXC-NAV MODAPPLY CANCEL");
     }
     // other buttons: no-op while ModApply is active.
 }
@@ -894,7 +894,7 @@ function EnterMove(PersonaScreenInventory s)
     PersonaInventoryItemButton(focused).SetDropFill(True);    // start green
 
     subDialogActive = 'Move';
-    class'DXControllerDebug'.static.DebugLog("DXC-NAV MOVE ENTER item=" $ inv.ItemName);
+    class'DXControllerDebug'.static.NavLog("DXC-NAV MOVE ENTER item=" $ inv.ItemName);
 }
 
 // ----------------------------------------------------------------------
@@ -970,7 +970,7 @@ function ResolveMove(byte button)
             s.MoveItemButton(btn, btn.dragPosX, btn.dragPosY);
             EndMove();
             s.SelectInventory(btn);
-            class'DXControllerDebug'.static.DebugLog(
+            class'DXControllerDebug'.static.NavLog(
                 "DXC-NAV MOVE PLACE x=" $ string(btn.dragPosX) $ " y=" $ string(btn.dragPosY));
         }
         // else: invalid (red) — no-op; B exits, so no soft-lock.
@@ -981,7 +981,7 @@ function ResolveMove(byte button)
         s.SetItemButtonPos(btn, moveOrigX, moveOrigY);
         EndMove();
         s.SelectInventory(btn);
-        class'DXControllerDebug'.static.DebugLog("DXC-NAV MOVE CANCEL");
+        class'DXControllerDebug'.static.NavLog("DXC-NAV MOVE CANCEL");
     }
     // other buttons: no-op while moving.
 }
