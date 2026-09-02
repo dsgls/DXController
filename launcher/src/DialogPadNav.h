@@ -1,16 +1,11 @@
 #pragma once
 
+#include "PadNavGraph.h"
+#include "PadRepeat.h"
+
 #include <cstdint>
 
 struct SDL_Gamepad;
-
-//One nav-table row: a control and its four spatial neighbours, indexed by
-//CDialogPadNav's direction order up/down/left/right. 0 = no move.
-struct SPadNavEntry
-{
-    int iControl;
-    int iNeighbour[4];
-};
 
 //SDL gamepad navigation for one native dialog. Create in WM_INITDIALOG,
 //destroy in WM_DESTROY, and forward WM_TIMER events carrying sm_iTimerId to
@@ -41,15 +36,10 @@ public:
 private:
     enum class EMode { Navigate, EditActive, ComboActive };
 
-    struct SRepeatState
-    {
-        bool      bDown;
-        ULONGLONG iNextFireMs;
-    };
-
     bool ReadPad(WORD& iButtons);
     HWND ResolveFocus() const;
     const SPadNavEntry* FindEntry(int iControl) const;
+    bool IsControlEnabled(int iControl) const;
     void Move(int iDirection);
     void PressA();
     void PressB();
@@ -79,7 +69,7 @@ private:
     bool                m_bConnected;
     bool                m_bFocusVisualsEnabled;
     WORD                m_iPrevButtons;
-    SRepeatState        m_aRepeat[4];
+    PadRepeat::SRepeatState m_aRepeat[4];
 
     EMode               m_eMode;
     HWND                m_hActiveCtrl;

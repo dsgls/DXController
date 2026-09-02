@@ -7,10 +7,7 @@
 
 namespace
 {
-    constexpr UINT      kPollIntervalMs   = 30;
-    //Keyboard-style auto-repeat for held d-pad directions.
-    constexpr ULONGLONG kRepeatDelayMs    = 400;
-    constexpr ULONGLONG kRepeatIntervalMs = 100;
+    constexpr UINT kPollIntervalMs = 30;
 
     //Local bit assignments for the WORD mask ReadPad() returns -- SDL has no
     //XInput-style bitmask to borrow, so these are arbitrary, just distinct.
@@ -170,25 +167,14 @@ void CDialogPadNav::OnTimer()
     }
 
     const WORD iPressed = static_cast<WORD>(iButtons & ~m_iPrevButtons);
-    m_iPrevButtons = iButtons;
 
-    const ULONGLONG iNowMs = GetTickCount64();
+    bool bFired[4] = {};
+    PadRepeat::Tick(m_aRepeat, kDirBits, m_iPrevButtons, iButtons, GetTickCount64(), bFired);
+    m_iPrevButtons = iButtons;
     for (int i = 0; i < 4; ++i)
     {
-        SRepeatState& Repeat = m_aRepeat[i];
-        if ((iButtons & kDirBits[i]) == 0)
+        if (bFired[i])
         {
-            Repeat = {};
-        }
-        else if (iPressed & kDirBits[i])
-        {
-            Repeat.bDown = true;
-            Repeat.iNextFireMs = iNowMs + kRepeatDelayMs;
-            Move(i);
-        }
-        else if (Repeat.bDown && iNowMs >= Repeat.iNextFireMs)
-        {
-            Repeat.iNextFireMs = iNowMs + kRepeatIntervalMs;
             Move(i);
         }
     }
@@ -235,14 +221,13 @@ HWND CDialogPadNav::ResolveFocus() const
 
 const SPadNavEntry* CDialogPadNav::FindEntry(const int iControl) const
 {
-    for (size_t i = 0; i < m_iEntryCount; ++i)
-    {
-        if (m_pEntries[i].iControl == iControl)
-        {
-            return &m_pEntries[i];
-        }
-    }
-    return nullptr;
+    return PadNavGraph::FindEntry(m_pEntries, m_iEntryCount, iControl);
+}
+
+bool CDialogPadNav::IsControlEnabled(const int iControl) const
+{
+    const HWND hCtrl = GetDlgItem(m_hDlg, iControl);
+    return hCtrl != nullptr && IsWindowEnabled(hCtrl) != FALSE;
 }
 
 void CDialogPadNav::Move(const int iDirection)
@@ -281,41 +266,15 @@ void CDialogPadNav::Move(const int iDirection)
     }
 
     const HWND hFocus = ResolveFocus();
-    const SPadNavEntry* const pEntry = hFocus ? FindEntry(GetDlgCtrlID(hFocus)) : nullptr;
-
-    int iTarget;
-    if (!pEntry)
-    {
-        //Focus is outside the nav graph (e.g. the user Tabbed onto a SysLink,
-        //which pads can't reach) -- snap back to the home control.
-        iTarget = m_iHomeCtrl;
-    }
-    else
-    {
-        iTarget = pEntry->iNeighbour[iDirection];
-        //Skip disabled controls by following the same direction onward. The
-        //iteration cap guards against an all-disabled directional cycle.
-        for (size_t iGuard = 0; iTarget != 0 && iGuard < m_iEntryCount; ++iGuard)
-        {
-            const HWND hCandidate = GetDlgItem(m_hDlg, iTarget);
-            if (hCandidate && IsWindowEnabled(hCandidate))
-            {
-                break;
-            }
-            const SPadNavEntry* const pNext = FindEntry(iTarget);
-            iTarget = pNext ? pNext->iNeighbour[iDirection] : 0;
-        }
-    }
+    const int iTarget = PadNavGraph::Move(
+        m_pEntries, m_iEntryCount, hFocus ? GetDlgCtrlID(hFocus) : 0, m_iHomeCtrl, iDirection,
+        [this](const int iControl) { return IsControlEnabled(iControl); });
     if (iTarget == 0)
     {
         return;
     }
 
     const HWND hTarget = GetDlgItem(m_hDlg, iTarget);
-    if (!hTarget || !IsWindowEnabled(hTarget))
-    {
-        return;
-    }
     wchar_t szClass[16];
     if (GetClassName(hTarget, szClass, _countof(szClass)) == 0)
     {
@@ -504,7 +463,7 @@ void CDialogPadNav::EnterNavigate()
 
 void CDialogPadNav::ClearRepeats()
 {
-    for (SRepeatState& Repeat : m_aRepeat)
+    for (PadRepeat::SRepeatState& Repeat : m_aRepeat)
     {
         Repeat = {};
     }

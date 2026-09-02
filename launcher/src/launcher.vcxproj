@@ -104,6 +104,8 @@
     <ClCompile Include="ButtonMapResolve.cpp" />
     <ClCompile Include="AxisMapParse.cpp" />
     <ClCompile Include="PadActivity.cpp" />
+    <ClCompile Include="PadNavGraph.cpp" />
+    <ClCompile Include="PadRepeat.cpp" />
     <ClCompile Include="FancyTreeView.cpp" />
     <ClCompile Include="FixApp.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Use</PrecompiledHeader>
@@ -160,6 +162,8 @@
     <ClInclude Include="ButtonMapResolve.h" />
     <ClInclude Include="AxisMapParse.h" />
     <ClInclude Include="PadActivity.h" />
+    <ClInclude Include="PadNavGraph.h" />
+    <ClInclude Include="PadRepeat.h" />
     <ClInclude Include="FancyTreeView.h" />
     <ClInclude Include="FixApp.h" />
     <ClInclude Include="FreeSpaceFix.h" />
