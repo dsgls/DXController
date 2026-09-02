@@ -238,30 +238,44 @@ void CFixApp::ApplySettings() const
     const unsigned char iBitDepth = IsDlgButtonChecked(m_hWnd,RADIO_16BIT) ? sm_iBPP_16 : sm_iBPP_32;   
     GConfig->SetInt(L"WinDrv.WindowsClient",L"FullscreenColorBits",iBitDepth);
 
-    //Resolution
-    size_t iResX, iResY;
+    //Resolution. The combo is editable, so it can have no selection at all
+    //(user-typed text); in that case there is nothing to write and the ini
+    //keeps its current resolution.
+    size_t iResX = 0, iResY = 0;
+    bool bHaveResolution = true;
     if(IsDlgButtonChecked(m_hWnd,RADIO_RESCOMMON))
     {
         const int i = ComboBox_GetCurSel(m_hWndCBResolutions);
-        const Resolution* pRes = reinterpret_cast<Resolution*>(ComboBox_GetItemData(m_hWndCBResolutions,i));
-        iResX = pRes->iX;
-        iResY = pRes->iY;
+        const LRESULT iItemData = i == CB_ERR ? CB_ERR : ComboBox_GetItemData(m_hWndCBResolutions, i);
+        const Resolution* const pRes = iItemData == CB_ERR ? nullptr : reinterpret_cast<Resolution*>(iItemData);
+        if(pRes)
+        {
+            iResX = pRes->iX;
+            iResY = pRes->iY;
+        }
+        else
+        {
+            bHaveResolution = false;
+        }
     }
     else
     {
         iResX = GetDlgItemInt(m_hWnd, TXT_RESX, nullptr, FALSE);
         iResY = GetDlgItemInt(m_hWnd, TXT_RESY, nullptr, FALSE);
     }
-    GConfig->SetInt(L"WinDrv.WindowsClient",L"FullscreenViewportX",iResX);
-    GConfig->SetInt(L"WinDrv.WindowsClient", L"WindowedViewportX", iResX);
-    GConfig->SetInt(L"WinDrv.WindowsClient",L"FullscreenViewportY",iResY);
-    GConfig->SetInt(L"WinDrv.WindowsClient", L"WindowedViewportY", iResY);
+    if(bHaveResolution)
+    {
+        GConfig->SetInt(L"WinDrv.WindowsClient",L"FullscreenViewportX",iResX);
+        GConfig->SetInt(L"WinDrv.WindowsClient", L"WindowedViewportX", iResX);
+        GConfig->SetInt(L"WinDrv.WindowsClient",L"FullscreenViewportY",iResY);
+        GConfig->SetInt(L"WinDrv.WindowsClient", L"WindowedViewportY", iResY);
+    }
 
     //FOV
     float fFOV;
     if(IsDlgButtonChecked(m_hWnd, RADIO_FOVAUTO))
     {
-        fFOV = Misc::CalcFOV(iResX, iResY);
+        fFOV = bHaveResolution ? Misc::CalcFOV(iResX, iResY) : 0.0f; //CalcFOV divides by iResY
         GConfig->SetBool(PROJECTNAME, L"UseAutoFOV", TRUE);
     }
     else
@@ -297,11 +311,17 @@ void CFixApp::ApplySettings() const
     //Single CPU
     GConfig->SetBool(PROJECTNAME, L"UseSingleCPU", IsDlgButtonChecked(m_hWnd, CHK_USESINGLECPU) != 0);
         
-    //Renderer
+    //Renderer. ReadSettings only selects a renderer it recognised, and the
+    //combo is editable, so there may be no selection. Both writes below key
+    //off it, so skip both and keep the configured renderer untouched rather
+    //than silently rewriting it to whatever happens to be first in the list.
     const int iRendererIndex = ComboBox_GetCurSel(m_hWndCBRenderers);
-    GConfig->SetString(L"Engine.Engine",L"GameRenderDevice",m_Renderers[iRendererIndex].c_str());
-    //Detail textures
-    GConfig->SetBool(m_Renderers[iRendererIndex].c_str(),L"DetailTextures",IsDlgButtonChecked(m_hWnd,CHK_DETAILTEX)!=0);
+    if(iRendererIndex != CB_ERR)
+    {
+        GConfig->SetString(L"Engine.Engine",L"GameRenderDevice",m_Renderers[iRendererIndex].c_str());
+        //Detail textures
+        GConfig->SetBool(m_Renderers[iRendererIndex].c_str(),L"DetailTextures",IsDlgButtonChecked(m_hWnd,CHK_DETAILTEX)!=0);
+    }
 }
 
 INT_PTR CALLBACK CFixApp::FixAppDialogProc(HWND hwndDlg,UINT uMsg,WPARAM wParam,LPARAM lParam)
