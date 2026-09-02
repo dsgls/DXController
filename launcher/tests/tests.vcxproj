@@ -76,6 +76,7 @@
     <ClCompile Include="StartupHeaderTests.cpp" />
     <ClCompile Include="StickResponseTests.cpp" />
     <ClCompile Include="ButtonMapResolveTests.cpp" />
+    <ClCompile Include="AxisMapParseTests.cpp" />
     <ClCompile Include="..\src\FrameStats.cpp" />
     <ClCompile Include="..\src\FramePacing.cpp" />
     <ClCompile Include="..\src\CursorPolicy.cpp" />
@@ -85,6 +86,7 @@
     <ClCompile Include="..\src\StartupHeader.cpp" />
     <ClCompile Include="..\src\StickResponse.cpp" />
     <ClCompile Include="..\src\ButtonMapResolve.cpp" />
+    <ClCompile Include="..\src\AxisMapParse.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="doctest.h" />
@@ -97,6 +99,7 @@
     <ClInclude Include="..\src\StartupHeader.h" />
     <ClInclude Include="..\src\StickResponse.h" />
     <ClInclude Include="..\src\ButtonMapResolve.h" />
+    <ClInclude Include="..\src\AxisMapParse.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
 </Project>

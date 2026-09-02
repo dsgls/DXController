@@ -87,6 +87,9 @@
     <ClCompile Include="ButtonMapResolve.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="AxisMapParse.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="ConfigOverride.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -165,6 +168,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="ButtonMapResolve.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="AxisMapParse.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="ConfigOverride.h">

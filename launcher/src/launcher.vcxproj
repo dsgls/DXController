@@ -102,6 +102,7 @@
     <ClCompile Include="StartupHeader.cpp" />
     <ClCompile Include="StickResponse.cpp" />
     <ClCompile Include="ButtonMapResolve.cpp" />
+    <ClCompile Include="AxisMapParse.cpp" />
     <ClCompile Include="FancyTreeView.cpp" />
     <ClCompile Include="FixApp.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Use</PrecompiledHeader>
@@ -156,6 +157,7 @@
     <ClInclude Include="StartupHeader.h" />
     <ClInclude Include="StickResponse.h" />
     <ClInclude Include="ButtonMapResolve.h" />
+    <ClInclude Include="AxisMapParse.h" />
     <ClInclude Include="FancyTreeView.h" />
     <ClInclude Include="FixApp.h" />
     <ClInclude Include="FreeSpaceFix.h" />

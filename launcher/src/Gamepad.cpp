@@ -1,6 +1,7 @@
 #include "stdafx.h"
 #include "Gamepad.h"
 
+#include "AxisMapParse.h"
 #include "ButtonMapResolve.h"
 
 #include <SDL3/SDL.h>
@@ -113,95 +114,6 @@ namespace
         return false;
     }
 
-    //Parses a [DXController.GamepadAxisMap] key into a source kind (spec §5):
-    //"gyro.pitch|yaw|roll", "accel.x|y|z", "touchpad.x|y", or "joyaxis.N" for
-    //a raw joystick axis index. Case-insensitive. *piOutJoyAxis is only
-    //meaningful for the joyaxis form. Returns false for anything else.
-    bool ParseAxisSourceName(const wchar_t* const pszName,
-                             CGamepad::EAxisSource* const peOutSource,
-                             int* const piOutJoyAxis)
-    {
-        struct SourceName
-        {
-            const wchar_t*        pszName;
-            CGamepad::EAxisSource eSource;
-        };
-        static const SourceName kNames[] =
-        {
-            { L"gyro.pitch",  CGamepad::EAxisSource::GyroPitch },
-            { L"gyro.yaw",    CGamepad::EAxisSource::GyroYaw   },
-            { L"gyro.roll",   CGamepad::EAxisSource::GyroRoll  },
-            { L"accel.x",     CGamepad::EAxisSource::AccelX    },
-            { L"accel.y",     CGamepad::EAxisSource::AccelY    },
-            { L"accel.z",     CGamepad::EAxisSource::AccelZ    },
-            { L"touchpad.x",  CGamepad::EAxisSource::TouchpadX },
-            { L"touchpad.y",  CGamepad::EAxisSource::TouchpadY },
-        };
-        if (!pszName)
-        {
-            return false;
-        }
-        for (const SourceName& Name : kNames)
-        {
-            if (_wcsicmp(pszName, Name.pszName) == 0)
-            {
-                *peOutSource   = Name.eSource;
-                *piOutJoyAxis  = 0;
-                return true;
-            }
-        }
-
-        static const wchar_t* const pszJoyAxisPrefix = L"joyaxis.";
-        const size_t iPrefixLen = wcslen(pszJoyAxisPrefix);
-        if (_wcsnicmp(pszName, pszJoyAxisPrefix, iPrefixLen) == 0)
-        {
-            const wchar_t* const pszIndex = pszName + iPrefixLen;
-            wchar_t* pEnd = nullptr;
-            const long iIndex = wcstol(pszIndex, &pEnd, 10);
-            //Upper bound is a sanity limit, not an SDL one; the real axis
-            //count is checked against the live joystick at read time.
-            if (pEnd != pszIndex && pEnd && *pEnd == L'\0' && iIndex >= 0 && iIndex < 64)
-            {
-                *peOutSource  = CGamepad::EAxisSource::JoyAxis;
-                *piOutJoyAxis = static_cast<int>(iIndex);
-                return true;
-            }
-        }
-        return false;
-    }
-
-    //True for the sensor-derived sources, which never count as pad activity
-    //(spec §6).
-    bool IsSensorAxisSource(const CGamepad::EAxisSource eSource)
-    {
-        switch (eSource)
-        {
-        case CGamepad::EAxisSource::GyroPitch:
-        case CGamepad::EAxisSource::GyroYaw:
-        case CGamepad::EAxisSource::GyroRoll:
-        case CGamepad::EAxisSource::AccelX:
-        case CGamepad::EAxisSource::AccelY:
-        case CGamepad::EAxisSource::AccelZ:
-            return true;
-        default:
-            return false;
-        }
-    }
-
-    //Strict float parse: the whole token must be consumed, so "1e" or "12x"
-    //is rejected rather than silently read as a prefix.
-    bool ParseFloatToken(const wchar_t* const pszToken, float* const pfOut)
-    {
-        wchar_t* pEnd = nullptr;
-        const double dValue = wcstod(pszToken, &pEnd);
-        if (pEnd == pszToken || !pEnd || *pEnd != L'\0')
-        {
-            return false;
-        }
-        *pfOut = static_cast<float>(dValue);
-        return true;
-    }
-
     //Stick deflection at which a non-active pad's AXIS_MOTION claims the active
     //slot: ~25%, deliberately coarser than the emission deadzones so a resting
     //stick on a second pad can't steal input. Triggers are excluded from the
@@ -210,37 +122,6 @@ namespace
     //axis-state events right after SDL_OpenGamepad, so an idle or freshly
     //plugged-in pad would otherwise steal the slot.
     constexpr int kActiveSwitchAxisValue = 8000;
-
-    //Case-insensitive parse of the curve-type INI token. Returns eDefault when
-    //pszToken is null or doesn't match any of the four expected tokens.
-    CGamepad::EStickCurveType ParseStickCurveType(const wchar_t* const pszToken,
-                                                  const CGamepad::EStickCurveType eDefault)
-    {
-        if (!pszToken)
-        {
-            return eDefault;
-        }
-        if (_wcsicmp(pszToken, L"Linear")  == 0) return CGamepad::EStickCurveType::Linear;
-        if (_wcsicmp(pszToken, L"Power")   == 0) return CGamepad::EStickCurveType::Power;
-        if (_wcsicmp(pszToken, L"Expo")    == 0) return CGamepad::EStickCurveType::Expo;
-        if (_wcsicmp(pszToken, L"Sigmoid") == 0) return CGamepad::EStickCurveType::Sigmoid;
-        return eDefault;
-    }
-
-    //Inverse of ParseStickCurveType: maps the enum back to the canonical
-    //token. Defaults to L"Linear" so the function is total even if the
-    //enum is extended without updating this helper.
-    const wchar_t* StickCurveTypeToString(const CGamepad::EStickCurveType eType)
-    {
-        switch (eType)
-        {
-        case CGamepad::EStickCurveType::Linear:  return L"Linear";
-        case CGamepad::EStickCurveType::Power:   return L"Power";
-        case CGamepad::EStickCurveType::Expo:    return L"Expo";
-        case CGamepad::EStickCurveType::Sigmoid: return L"Sigmoid";
-        }
-        return L"Linear";
-    }
 
     bool IsStickAxis(const Uint8 iAxis)
     {
@@ -429,9 +310,9 @@ void CGamepad::LoadSettings()
     //check (GetStr always returns a static buffer, never nullptr).
     TCHAR szCurveToken[64];
     bool bMissCurveLeftType  = !GConfig->GetString(kSection, L"StickCurveLeft",  szCurveToken, ARRAY_COUNT(szCurveToken));
-    m_LeftStickCurve.eType   = ParseStickCurveType(bMissCurveLeftType  ? nullptr : szCurveToken, m_LeftStickCurve.eType);
+    m_LeftStickCurve.eType   = AxisMapParse::ParseCurveType(bMissCurveLeftType  ? nullptr : szCurveToken, m_LeftStickCurve.eType);
     bool bMissCurveRightType = !GConfig->GetString(kSection, L"StickCurveRight", szCurveToken, ARRAY_COUNT(szCurveToken));
-    m_RightStickCurve.eType  = ParseStickCurveType(bMissCurveRightType ? nullptr : szCurveToken, m_RightStickCurve.eType);
+    m_RightStickCurve.eType  = AxisMapParse::ParseCurveType(bMissCurveRightType ? nullptr : szCurveToken, m_RightStickCurve.eType);
 
     bool bMissPowerLeft           = !GConfig->GetFloat(kSection, L"StickCurvePowerLeft",             m_LeftStickCurve.fPower);
     bool bMissPowerRight          = !GConfig->GetFloat(kSection, L"StickCurvePowerRight",            m_RightStickCurve.fPower);
@@ -476,8 +357,8 @@ void CGamepad::LoadSettings()
     if (bMissMouseActivityPx)  { GConfig->SetInt(kSection, L"MouseActivityPx",                            m_iMouseActivityPx);                bAnyMissing = true; }
     if (bMissPadActiveGraceMs) { GConfig->SetInt(kSection, L"PadActiveGraceMs",                           m_iPadActiveGraceMs);               bAnyMissing = true; }
 
-    if (bMissCurveLeftType)    { GConfig->SetString(kSection, L"StickCurveLeft",                          StickCurveTypeToString(m_LeftStickCurve.eType));  bAnyMissing = true; }
-    if (bMissCurveRightType)   { GConfig->SetString(kSection, L"StickCurveRight",                         StickCurveTypeToString(m_RightStickCurve.eType)); bAnyMissing = true; }
+    if (bMissCurveLeftType)    { GConfig->SetString(kSection, L"StickCurveLeft",                          AxisMapParse::CurveTypeToString(m_LeftStickCurve.eType));  bAnyMissing = true; }
+    if (bMissCurveRightType)   { GConfig->SetString(kSection, L"StickCurveRight",                         AxisMapParse::CurveTypeToString(m_RightStickCurve.eType)); bAnyMissing = true; }
 
     if (bMissPowerLeft)        { GConfig->SetFloat(kSection, L"StickCurvePowerLeft",                      m_LeftStickCurve.fPower);           bAnyMissing = true; }
     if (bMissPowerRight)       { GConfig->SetFloat(kSection, L"StickCurvePowerRight",                     m_RightStickCurve.fPower);          bAnyMissing = true; }
@@ -670,113 +551,66 @@ void CGamepad::LoadAxisMap()
     {
         EAxisSource eSource  = EAxisSource::JoyAxis;
         int         iJoyAxis = 0;
-        if (!ParseAxisSourceName(*It.Key(), &eSource, &iJoyAxis))
+        if (!AxisMapParse::ParseSourceName(*It.Key(), &eSource, &iJoyAxis))
         {
             GLog->Logf(L"Gamepad: [DXController.GamepadAxisMap] unknown source '%s' -- ignored.", *It.Key());
             continue;
         }
 
-        //Value form: "<SlotName> [Scale=<f>] [Deadzone=<f>]", whitespace
-        //separated. wcstok_s writes into its input, so work on a copy.
-        wchar_t szValue[256];
-        wcsncpy_s(szValue, *It.Value(), _TRUNCATE);
-        wchar_t*       pContext = nullptr;
-        const wchar_t* pszSlot  = wcstok_s(szValue, L" \t", &pContext);
-
-        EInputKey eKey = IK_None;
-        if (!ParseEInputKeyValue(pszSlot, m_pViewport, &eKey))
+        //Slot name and parameters. The one engine dependency, resolving a slot
+        //name against the viewport's key-name table, goes in as a callback.
+        const AxisMapParse::SValue Value = AxisMapParse::ParseValue(*It.Key(), *It.Value(), IK_None,
+            [this](const wchar_t* const pszName, int* const piOutKey)
+            {
+                EInputKey eParsed = IK_None;
+                if (!ParseEInputKeyValue(pszName, m_pViewport, &eParsed))
+                {
+                    return false;
+                }
+                *piOutKey = eParsed;
+                return true;
+            });
+        for (const std::wstring& Message : Value.Log)
         {
-            GLog->Logf(L"Gamepad: [DXController.GamepadAxisMap] %s=%s does not name a known key -- ignored.", *It.Key(), *It.Value());
-            continue;
+            GLog->Logf(L"%s", Message.c_str());
         }
-        if (eKey == IK_None)
+        if (!Value.bAccepted || Value.iKey == IK_None)
         {
-            continue; //"None" or an empty value: the line is deliberately inert
+            continue; //rejected, or "None"/empty and deliberately inert
         }
-
-        float fScale    = 1000.0f; //suits the -1..1 sources; gyro/accel need an explicit one
-        float fDeadzone = 0.0f;
-        bool  bBadLine  = false;
-        for (const wchar_t* pszToken = wcstok_s(nullptr, L" \t", &pContext);
-             pszToken != nullptr;
-             pszToken = wcstok_s(nullptr, L" \t", &pContext))
-        {
-            float* pfTarget = nullptr;
-            const wchar_t* pszNumber = nullptr;
-            if (_wcsnicmp(pszToken, L"Scale=", 6) == 0)
-            {
-                pfTarget  = &fScale;
-                pszNumber = pszToken + 6;
-            }
-            else if (_wcsnicmp(pszToken, L"Deadzone=", 9) == 0)
-            {
-                pfTarget  = &fDeadzone;
-                pszNumber = pszToken + 9;
-            }
-            else
-            {
-                GLog->Logf(L"Gamepad: [DXController.GamepadAxisMap] %s: unknown parameter '%s' -- ignored.", *It.Key(), pszToken);
-                continue;
-            }
-
-            float fParsed = 0.0f;
-            if (!ParseFloatToken(pszNumber, &fParsed) || (pfTarget == &fDeadzone && fParsed < 0.0f))
-            {
-                GLog->Logf(L"Gamepad: [DXController.GamepadAxisMap] %s: bad parameter '%s' -- default kept.", *It.Key(), pszToken);
-                continue;
-            }
-            //NaN/Inf pass every range test above and would peg the axis (a NaN
-            //comparison is false, so the clamp in EmitAxisMap leaves -1000).
-            //Dropping the line is the safe reading of a value that has no
-            //sane substitute.
-            if (!std::isfinite(fParsed))
-            {
-                GLog->Logf(L"Gamepad: [DXController.GamepadAxisMap] %s: parameter '%s' is not a finite number -- line ignored.", *It.Key(), pszToken);
-                bBadLine = true;
-                break;
-            }
-            *pfTarget = fParsed;
-        }
-        if (bBadLine)
-        {
-            continue;
-        }
+        const EInputKey eKey = static_cast<EInputKey>(Value.iKey);
 
         //Destination registry (spec §5, same rule as §4): the fixed
         //stick/trigger slots, then the already-resolved button map, then the
         //axis entries accepted from earlier lines. Later line loses.
-        if (IsReservedAxisDestination(eKey))
+        std::vector<int> ButtonKeys;
+        ButtonKeys.reserve(m_ResolvedButtonKeys.size());
+        for (const EInputKey eButtonKey : m_ResolvedButtonKeys)
+        {
+            ButtonKeys.push_back(eButtonKey);
+        }
+        std::vector<int> AxisKeys;
+        AxisKeys.reserve(m_AxisMap.size());
+        for (const SAxisEntry& Entry : m_AxisMap)
+        {
+            AxisKeys.push_back(Entry.eKey);
+        }
+        const AxisMapParse::EDestStatus eDest = AxisMapParse::CheckDestination(
+            Value.iKey,
+            [](const int iKey) { return IsReservedAxisDestination(static_cast<EInputKey>(iKey)); },
+            ButtonKeys, AxisKeys);
+        if (eDest == AxisMapParse::EDestStatus::Reserved)
         {
             GLog->Logf(L"Gamepad: [DXController.GamepadAxisMap] %s targets a slot the stick/trigger pipeline already emits on -- ignored.", *It.Key());
             continue;
         }
-        bool bTaken = false;
-        for (const EInputKey eButtonKey : m_ResolvedButtonKeys)
-        {
-            if (eButtonKey == eKey)
-            {
-                bTaken = true;
-                break;
-            }
-        }
-        if (!bTaken)
-        {
-            for (const SAxisEntry& Entry : m_AxisMap)
-            {
-                if (Entry.eKey == eKey)
-                {
-                    bTaken = true;
-                    break;
-                }
-            }
-        }
-        if (bTaken)
+        if (eDest == AxisMapParse::EDestStatus::Taken)
         {
             GLog->Logf(L"Gamepad: [DXController.GamepadAxisMap] %s's destination is already claimed by a button or another axis entry -- ignored.", *It.Key());
             continue;
         }
 
-        m_AxisMap.push_back({ eSource, iJoyAxis, eKey, fScale, fDeadzone, 0.0f });
+        m_AxisMap.push_back({ eSource, iJoyAxis, eKey, Value.fScale, Value.fDeadzone, 0.0f });
 
         switch (eSource)
         {
@@ -1250,7 +1084,7 @@ void CGamepad::EmitAxisMap(UEngine* const pEngine, UViewport* const pViewport,
         if (fOut != 0.0f)
         {
             pEngine->InputEvent(pViewport, Entry.eKey, IST_Axis, fOut);
-            if (!IsSensorAxisSource(Entry.eSource))
+            if (!AxisMapParse::IsSensorSource(Entry.eSource))
             {
                 bOutActivity = true;
             }

@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <vector>
 
+#include "AxisMapParse.h"
 #include "StickResponse.h"
 
 class UEngine;
@@ -17,15 +18,7 @@ public:
 
     enum class EStick { Left, Right };
 
-    //Source kinds a [DXController.GamepadAxisMap] line can name (spec §5).
-    //Natural units: gyro rad/s, accel m/s², touchpad and joyaxis -1..1.
-    enum class EAxisSource
-    {
-        GyroPitch, GyroYaw, GyroRoll,
-        AccelX, AccelY, AccelZ,
-        TouchpadX, TouchpadY,
-        JoyAxis
-    };
+    using EAxisSource = AxisMapParse::ESource;
 
     CGamepad();
     CGamepad(const CGamepad&) = delete;
