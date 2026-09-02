@@ -880,6 +880,35 @@ void CGamepad::ReleaseHeldButtons(UEngine* const pEngine, UViewport* const pView
 
 static constexpr float kAxisRange = StickResponse::kAxisRange;
 
+//The zero-edge contract every analog channel owes the engine: a non-zero value
+//goes out each tick, and the first zero after a non-zero emits one explicit
+//0.0 so scripts see a release instead of a stuck last value. fPrev is the
+//value this channel emitted on the previous tick.
+static void EmitAxisOrZeroEdge(UEngine* const pEngine, UViewport* const pViewport,
+                               const EInputKey eKey, const float fValue, const float fPrev)
+{
+    if (fValue != 0.0f)
+    {
+        pEngine->InputEvent(pViewport, eKey, IST_Axis, fValue);
+    }
+    else if (fPrev != 0.0f)
+    {
+        pEngine->InputEvent(pViewport, eKey, IST_Axis, 0.0f);
+    }
+}
+
+//The same contract's teardown half, for the focus-loss/disconnect/pad-switch
+//paths: pay the owed 0.0 and clear the cache so nothing is owed twice.
+static void FlushAxisIfHeld(UEngine* const pEngine, UViewport* const pViewport,
+                            const EInputKey eKey, float& fPrev)
+{
+    if (fPrev != 0.0f)
+    {
+        pEngine->InputEvent(pViewport, eKey, IST_Axis, 0.0f);
+        fPrev = 0.0f;
+    }
+}
+
 void CGamepad::EmitStickAxes(UEngine* const pEngine, UViewport* const pViewport,
                              const int iRawX, const int iRawY, const int iDeadzone,
                              const SStickCurve& Curve, const float fScale,
@@ -896,37 +925,15 @@ void CGamepad::EmitStickAxes(UEngine* const pEngine, UViewport* const pViewport,
     fOutX = Out.fX;
     fOutY = Out.fY;
 
-    if (fOutX != 0.0f)
-    {
-        pEngine->InputEvent(pViewport, eKeyX, IST_Axis, fOutX);
-    }
-    else if (fPrevX != 0.0f)
-    {
-        pEngine->InputEvent(pViewport, eKeyX, IST_Axis, 0.0f);
-    }
-    if (fOutY != 0.0f)
-    {
-        pEngine->InputEvent(pViewport, eKeyY, IST_Axis, fOutY);
-    }
-    else if (fPrevY != 0.0f)
-    {
-        pEngine->InputEvent(pViewport, eKeyY, IST_Axis, 0.0f);
-    }
+    EmitAxisOrZeroEdge(pEngine, pViewport, eKeyX, fOutX, fPrevX);
+    EmitAxisOrZeroEdge(pEngine, pViewport, eKeyY, fOutY, fPrevY);
 }
 
 float CGamepad::EmitTriggerAxis(UEngine* const pEngine, UViewport* const pViewport,
                                 const int iRaw, const float fPrev, const EInputKey eKey)
 {
     const float fOut = StickResponse::Trigger(iRaw, m_iTriggerThreshold);
-
-    if (fOut != 0.0f)
-    {
-        pEngine->InputEvent(pViewport, eKey, IST_Axis, fOut);
-    }
-    else if (fPrev != 0.0f)
-    {
-        pEngine->InputEvent(pViewport, eKey, IST_Axis, 0.0f);
-    }
+    EmitAxisOrZeroEdge(pEngine, pViewport, eKey, fOut, fPrev);
     return fOut;
 }
 
@@ -948,11 +955,7 @@ void CGamepad::FlushHeldAxes(UEngine* const pEngine, UViewport* const pViewport)
     };
     for (Entry& Axis : aAxes)
     {
-        if (*Axis.pPrev != 0.0f)
-        {
-            pEngine->InputEvent(pViewport, Axis.eKey, IST_Axis, 0.0f);
-            *Axis.pPrev = 0.0f;
-        }
+        FlushAxisIfHeld(pEngine, pViewport, Axis.eKey, *Axis.pPrev);
     }
 }
 
@@ -1083,17 +1086,10 @@ void CGamepad::EmitAxisMap(UEngine* const pEngine, UViewport* const pViewport,
         float fOut = fSource * Entry.fScale;
         fOut = std::min(kAxisRange, std::max(-kAxisRange, fOut));
 
-        if (fOut != 0.0f)
+        EmitAxisOrZeroEdge(pEngine, pViewport, Entry.eKey, fOut, Entry.fPrev);
+        if (fOut != 0.0f && !AxisMapParse::IsSensorSource(Entry.eSource))
         {
-            pEngine->InputEvent(pViewport, Entry.eKey, IST_Axis, fOut);
-            if (!AxisMapParse::IsSensorSource(Entry.eSource))
-            {
-                bOutActivity = true;
-            }
-        }
-        else if (Entry.fPrev != 0.0f)
-        {
-            pEngine->InputEvent(pViewport, Entry.eKey, IST_Axis, 0.0f);
+            bOutActivity = true;
         }
         Entry.fPrev = fOut;
     }
@@ -1103,11 +1099,7 @@ void CGamepad::FlushAxisMap(UEngine* const pEngine, UViewport* const pViewport)
 {
     for (SAxisEntry& Entry : m_AxisMap)
     {
-        if (Entry.fPrev != 0.0f)
-        {
-            pEngine->InputEvent(pViewport, Entry.eKey, IST_Axis, 0.0f);
-            Entry.fPrev = 0.0f;
-        }
+        FlushAxisIfHeld(pEngine, pViewport, Entry.eKey, Entry.fPrev);
     }
 }
 
