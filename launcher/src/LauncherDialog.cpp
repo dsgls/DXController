@@ -22,7 +22,7 @@ namespace
 
 bool CLauncherDialog::Show(const HWND hWndParent) const
 {
-    return DialogBoxParam(GetModuleHandle(0),MAKEINTRESOURCE(IDD_DIALOG1),hWndParent,LauncherDialogProc,reinterpret_cast<LPARAM>(this)) == 1;
+    return DialogBoxParam(GetModuleHandle(0),MAKEINTRESOURCE(IDD_LAUNCHER),hWndParent,LauncherDialogProc,reinterpret_cast<LPARAM>(this)) == 1;
 }
 
 void CLauncherDialog::FillLinkControl(const HWND hWndLinkControl, const wchar_t* const pszIniFilePath)

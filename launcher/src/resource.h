@@ -3,11 +3,10 @@
 // Used by res.rc
 //
 #define IDI_ICON                        101
-#define IDD_DIALOG1                     102
-#define IDD_DIALOG2                     107
+#define IDD_LAUNCHER                    102
 #define IDD_FIXAPP                      107
 #define IDD_DATADIRS                    113
-#define IDC_BITMAP1                     1002
+#define IDB_SPLASH                      1002
 #define IDC_PLAY                        1002
 #define IDC_CONFIG                      1004
 #define IDC_EXIT                        1006
@@ -24,7 +23,6 @@
 #define RADIO_32BIT                     1016
 #define CHK_DETAILTEX                   1017
 #define TXT_FOV                         1018
-#define CHK_FULLSCREEN                  1019
 #define RADIO_VPFULLSCREEN              1019
 #define TXT_LATENCY                     1020
 #define CHK_DIRECTSOUND                 1021

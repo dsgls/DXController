@@ -9,7 +9,7 @@
 
 bool CFixApp::Show(const HWND hWndParent) const
 {
-    return DialogBoxParam(GetModuleHandle(0),MAKEINTRESOURCE(IDD_DIALOG2),hWndParent,FixAppDialogProc,reinterpret_cast<LPARAM>(this)) == 1;
+    return DialogBoxParam(GetModuleHandle(0),MAKEINTRESOURCE(IDD_FIXAPP),hWndParent,FixAppDialogProc,reinterpret_cast<LPARAM>(this)) == 1;
 }
 
 void CFixApp::ReadSettings()
@@ -315,7 +315,7 @@ void CFixApp::ApplySettings() const
     //Full-screen
     GConfig->SetBool(PROJECTNAME, L"BorderlessFullscreenWindow", IsDlgButtonChecked(m_hWnd, RADIO_VPBORDERLESS) != 0);
     GConfig->SetBool(PROJECTNAME, L"BorderlessFullscreenWindowAllMonitors", IsDlgButtonChecked(m_hWnd, CHK_BORDERLESSALLMONITORS) != 0);
-    GConfig->SetBool(L"WinDrv.WindowsClient",L"StartupFullSCreen",IsDlgButtonChecked(m_hWnd,CHK_FULLSCREEN)!=0);
+    GConfig->SetBool(L"WinDrv.WindowsClient",L"StartupFullscreen",IsDlgButtonChecked(m_hWnd,RADIO_VPFULLSCREEN)!=0);
     //FPS Limit
     GConfig->SetInt(PROJECTNAME, L"FPSLimit", GetDlgItemInt(m_hWnd, TXT_FPSLIMIT, nullptr, FALSE));
     //Single CPU

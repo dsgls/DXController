@@ -61,7 +61,7 @@ IDI_ICON                ICON                    "DeusEx.ico"
 // Dialog
 //
 
-IDD_DIALOG1 DIALOGEX 0, 0, 331, 309
+IDD_LAUNCHER DIALOGEX 0, 0, 331, 309
 STYLE DS_SETFONT | DS_FIXEDSYS | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
 EXSTYLE WS_EX_APPWINDOW
 CAPTION "Deus Exe Launcher"
@@ -75,7 +75,7 @@ BEGIN
                     "SysLink",LWS_USEVISUALSTYLE | WS_TABSTOP,6,294,60,12
     CONTROL         "1",IDC_INIFILES1,"SysLink",LWS_USEVISUALSTYLE | LWS_RIGHT | WS_TABSTOP,264,270,60,12,WS_EX_TRANSPARENT | WS_EX_RIGHT
     CONTROL         "2",IDC_INIFILES2,"SysLink",LWS_USEVISUALSTYLE | LWS_RIGHT | WS_TABSTOP,264,282,60,9,WS_EX_TRANSPARENT | WS_EX_RIGHT
-    CONTROL         IDC_BITMAP1,IDC_STATIC,"Static",SS_BITMAP | SS_CENTERIMAGE,0,0,331,40
+    CONTROL         IDB_SPLASH,IDC_STATIC,"Static",SS_BITMAP | SS_CENTERIMAGE,0,0,331,40
     RTEXT           "Version",IDC_VERSION,246,294,80,8,0,WS_EX_TRANSPARENT | WS_EX_RIGHT
     LTEXT           "",IDC_PADHINTS,72,295,168,8,NOT WS_VISIBLE
 END
@@ -192,7 +192,7 @@ END
 #ifdef APSTUDIO_INVOKED
 GUIDELINES DESIGNINFO
 BEGIN
-    IDD_DIALOG1, DIALOG
+    IDD_LAUNCHER, DIALOG
     BEGIN
         LEFTMARGIN, 7
         TOPMARGIN, 6
@@ -223,7 +223,7 @@ END
 // Bitmap
 //
 
-IDC_BITMAP1             BITMAP                  "deusex.bmp"
+IDB_SPLASH             BITMAP                  "deusex.bmp"
 
 #endif    // English (United States) resources
 /////////////////////////////////////////////////////////////////////////////
