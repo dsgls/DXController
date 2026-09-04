@@ -45,10 +45,10 @@ The release `.zip` contains everything you need:
 
 ## Install
 
-1. Copy `DeusEx.exe`, `SDL3.dll`, `DeusEx.u`, and `DXController.u` from
-   the release `.zip` into the game's `System` folder (e.g.
-   `C:\GOG Games\Deus Ex GOTY\System\`), overwriting the existing
-   `DeusEx.exe` and `DeusEx.u`.
+Copy `DeusEx.exe`, `SDL3.dll`, `DeusEx.u`, and `DXController.u` from
+the release `.zip` into the game's `System` folder (e.g.
+`C:\GOG Games\Deus Ex GOTY\System\`), overwriting the existing
+`DeusEx.exe` and `DeusEx.u`.
 
 If you have any other mods installed, start with a fresh game install
 and install only DXController. Compatibility with other mods has not
