@@ -105,12 +105,6 @@ In menus, conversations, and devices the D-pad moves the selection, A
 confirms, and B cancels. LB/RB cycle between tabs in the
 inventory and persona screens.
 
-On the "Start New Game" screen, A on the Real Name field opens the
-on-screen keyboard so you can set your name without a keyboard — it types
-in capitals only. Start begins the game from anywhere on that screen, or
-jumps to the name field and opens the keyboard if you haven't entered a
-name yet.
-
 On-screen button hints show what each button does for the selected item.
 In the inventory screen the controller-specific actions are:
 
@@ -121,9 +115,6 @@ In the inventory screen the controller-specific actions are:
 | L-stick click  | Change ammo (weapons that can load more than one ammo type)  |
 | X              | Assign item to a belt slot                                   |
 | R-stick click  | Drop item                                                    |
-
-When moving an item, it glows green where it fits and red where it would
-overlap another item; A only places it on a green spot.
 
 ## Renderer
 
