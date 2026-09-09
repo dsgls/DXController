@@ -24,11 +24,13 @@ all of them), but all the on-screen button hints use Xbox controller icons.
 
 ## Credits
 
-Special thanks to [kentie](https://kentie.net/) for all his contributions to
-Deus Ex and Unreal Engine 1 modding. This project would not have been possible
-without his [Deus Exe](https://kentie.net/article/dxguide/). I modified it to
-inject controller events, handle deadzone and curve mapping, and to patch some
+Special thanks to @mkentie for all his contributions to Deus Ex and Unreal
+Engine 1 modding. This project would not have been possible without his
+[Deus Exe](https://kentie.net/article/dxguide/). I modified it to inject
+controller events, handle deadzone and curve mapping, and to patch some
 Deus Ex engine bugs I found during development.
+
+Also thanks to @davhuit for getting [the French version working](#french-version)
 
 ## Download
 
@@ -138,6 +140,15 @@ I have tested these renderers and can recommend them:
 
 The D3D10 renderer is better than the D3D11 renderer, so pick it unless
 you have a good reason not to.
+
+## French version
+
+The game didn't ship a French localization, but there is a mod for it. But
+it's not just a localization, it also changes some base-game scripts, so it's
+not compatible with DXController. But @davhuit made a merge mod to integrate
+the French patch into DXController. [It's available here](https://github.com/davhuit/DXController-French/releases/tag/v1.5.1-fr).
+I haven't tested this, if you encounter any bugs using it, please don't report
+them here unless you can reproduce them with the base DXController version.
 
 ## Advanced configuration
 
