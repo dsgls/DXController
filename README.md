@@ -22,6 +22,14 @@ all of them), but all the on-screen button hints use Xbox controller icons.
 
 - *Deus Ex: Game of the Year Edition* — the standard GOG or Steam release.
 
+## Credits
+
+Special thanks to [kentie](https://kentie.net/) for all his contributions to
+Deus Ex and Unreal Engine 1 modding. This project would not have been possible
+without his [Deus Exe](https://kentie.net/article/dxguide/). I modified it to
+inject controller events, handle deadzone and curve mapping, and to patch some
+Deus Ex engine bugs I found during development.
+
 ## Download
 
 Get the latest release from the
@@ -63,14 +71,14 @@ controller's deadzone. The mod does not apply the comically large deadzone
 used by most games, so if your controller sticks are not in good condition
 you will need to increase them. The same screen has a right-stick
 sensitivity setting — lower it if turning at full stick deflection is too
-fast, and an "Invert look Y-axis" toggle that flips the right stick's up/down
-direction for gameplay look and the security camera. The launcher applies the
-inversion to the right-stick Y axis it emits, so if you rebind that axis away
-from `aLookUp` in `User.ini` the inversion follows whatever you bound it to.
+fast, and an "Invert look Y-axis" toggle.
 
-The mod also autosaves periodically during play. Writing each save can cause
-a brief stutter — if it bothers you, make autosaves less frequent or turn
-them off entirely in Settings → Autosave.
+
+## Auto-save
+
+The mod autosaves during play. Writing each save can causea brief stutter.
+If it bothers you, or if you just don't like autosaves, you can turn them
+off or change the frequency in Settings → Autosave.
 
 ## Linux and Steam Deck
 
@@ -123,14 +131,20 @@ renderer. They work better with todays machines, and they improve the
 look of the graphics.
 
 I have tested these renderers and can recommend them:
-[D3D10 renderer](https://www.kentie.net/article/d3d11drv/)
-[D3D11 renderer](https://www.kentie.net/article/d3d11drv/)
-[enhanced OpenGL renderer](https://www.cwdohnal.com/utglr/)
+
+- [D3D10 renderer](https://www.kentie.net/article/d3d11drv/)
+- [D3D11 renderer](https://www.kentie.net/article/d3d11drv/)
+- [enhanced OpenGL renderer](https://www.cwdohnal.com/utglr/)
 
 The D3D10 renderer is better than the D3D11 renderer, so pick it unless
 you have a good reason not to.
 
-## Extra buttons and analog sources
+## Advanced configuration
+
+**You do not need to read any of this to use the mod. Ignore it unless
+you have a specific need.**
+
+### Extra buttons and analog sources
 
 Controllers with buttons beyond the standard layout — DualSense Edge
 paddles, the DualSense/DS4 touchpad click, Switch capture, Series X
@@ -150,7 +164,7 @@ and on `GamepadReload` (Settings → Controller triggers a reload after
 any change). UE1 ini files have no comment syntax — don't add `;`
 comments to these sections.
 
-### `[DXController.GamepadButtonMap]` — remap or add buttons
+#### `[DXController.GamepadButtonMap]` — remap or add buttons
 
 ```ini
 [DXController.GamepadButtonMap]
@@ -178,7 +192,7 @@ outside the `Joy1..16` range (e.g. onto `UnknownD8`) still works as a
 binding but won't register as gamepad activity for cursor-mode
 switching.
 
-### `[DXController.GamepadAxisMap]` — extra analog sources
+#### `[DXController.GamepadAxisMap]` — extra analog sources
 
 ```ini
 [DXController.GamepadAxisMap]
@@ -212,7 +226,7 @@ Axis-map slots aren't visible to the mod's own cursor-mode and
 menu-navigation logic (only `JoyX/Y/U/V` and the `Joy1..16`/D-pad
 range are) — they drive bindings only, not menu/UI input.
 
-### Xbox Elite paddle troubleshooting
+#### Xbox Elite paddle troubleshooting
 
 Stock SDL (the controller library the launcher uses) cannot see Elite
 paddle presses on Windows — this is an SDL/Windows limitation, not
@@ -225,7 +239,7 @@ presses arriving as ordinary buttons). Paddles on DualSense Edge,
 The pre-game launcher and "FixApp" dialogs use the same SDL gamepad
 support as the game, so any supported controller can navigate them.
 
-## Unrecognized controllers and SDL3 updates
+### Unrecognized controllers and SDL3 updates
 
 If your controller isn't recognized, drop a
 [`gamecontrollerdb.txt`](https://github.com/mdqinc/SDL_GameControllerDB)
@@ -235,25 +249,6 @@ next to `DeusEx.exe`; the launcher loads it automatically if present.
 [libsdl.org](https://github.com/libsdl-org/SDL/releases)) to pick up
 controller-support updates without waiting for a new DXController
 release.
-
-## Auto-save
-
-The mod autosaves during play. Change the settings in-game via
-Settings → Autosave (enable/disable, interval, and how many autosaves to
-keep). They are also stored in the `[DXController.AutoSaveManager]` section of
-`DeusEx.ini` and can be edited there:
-
-| Key | Default | Meaning |
-|-----|---------|---------|
-| `bEnabled` | `True` | Turn autosave on/off |
-| `IntervalSeconds` | `60` | Seconds of play between autosaves (floored at 10) |
-| `MaxSaves` | `40` | How many autosaves to keep (1–100); oldest is discarded |
-
-Autosaves appear in the normal Load Game list, named `Auto Save - <map>`,
-and load like any other save. The interval counts play time only — it does
-not advance while paused or in a menu — and a due autosave waits until you
-leave any conversation, menu, or cutscene before it fires. Each save shows a
-brief "Auto Saving..." note in the bottom-left corner.
 
 ## Development
 
@@ -296,3 +291,4 @@ This project uses a modified version of Deus Exe by kentie. I did not
 find any license information for it, but copyright of the original
 Deus Exe is held by the original author. My modifications are licensed
 GPLv3 or any license the original author chooses.
+
