@@ -37,11 +37,14 @@ protected:
     bool IntOverride(wchar_t(&szNewName)[MAX_PATH], const wchar_t* const pszOldName);
 
 private:
-    std::unique_ptr<std::vector<std::wstring>> m_pIntPaths; //Pointer because we can't allocate on startup
+    void BuildIntPaths(); //(Re)reads the IntPaths entries; needs GConfig
+
+    std::unique_ptr<std::vector<std::wstring>> m_pIntPaths; //Pointer because we can't allocate on startup; null until first built
 
 //From FFileManagerWindows
 public:
     virtual FArchive* CreateFileReader(const wchar_t* Filename, DWORD Flags, FOutputDevice* Error) override;
+    virtual INT FileSize(const wchar_t* Filename) override;
 };
 
 //File manager that uses user documents directory

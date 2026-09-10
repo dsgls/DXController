@@ -7,8 +7,14 @@ const wchar_t* const FFileManagerDeusExe::sm_pszIntPaths = L"IntPaths";
 
 void FFileManagerDeusExe::OnGameStart()
 {
+    //Rebuilt here because the data-directories dialog may have just edited the list
+    BuildIntPaths();
+}
+
+void FFileManagerDeusExe::BuildIntPaths()
+{
+    assert(GConfig);
     m_pIntPaths = std::make_unique<std::vector<std::wstring>>();
-    //Prepare int overrides
     TMultiMap<FString, FString>* const pSectionInt = GConfig->GetSectionPrivate(PROJECTNAME, FALSE, FALSE);
     if(pSectionInt)
     {
@@ -28,10 +34,6 @@ void FFileManagerDeusExe::OnGameStart()
 
 bool FFileManagerDeusExe::IntOverride(wchar_t(&szNewName)[MAX_PATH], const wchar_t* const pszOldName)
 {
-    if(!m_pIntPaths) //Not initialized yet
-    {
-        return false;
-    }
     wchar_t* pszExtension = PathFindExtension(pszOldName);
     assert(pszExtension);
     if(*pszExtension == '\0')
@@ -46,6 +48,19 @@ bool FFileManagerDeusExe::IntOverride(wchar_t(&szNewName)[MAX_PATH], const wchar
     if(!bIntFile && !bLocalizedFile)
     {
         return false;
+    }
+
+    //The engine reads some .int files (DeusEx.int among them) during appInit,
+    //long before OnGameStart, and the config cache keeps whichever copy it
+    //read first. Building the list on first use, as soon as GConfig exists,
+    //keeps those early reads from bypassing the override.
+    if(!m_pIntPaths)
+    {
+        if(!GConfig)
+        {
+            return false;
+        }
+        BuildIntPaths();
     }
 
     for(const std::wstring& IntPath : *m_pIntPaths)
@@ -78,6 +93,14 @@ FArchive* FFileManagerDeusExe::CreateFileReader(const wchar_t* Filename, DWORD F
 {
     wchar_t szFilename[MAX_PATH];
     return FFileManagerWindows::CreateFileReader(IntOverride(szFilename, Filename) ? szFilename : Filename, Flags, Error);
+}
+
+//Same override as CreateFileReader: FConfigCacheIni::Find probes with
+//FileSize() before it reads, so both must resolve to the same file.
+INT FFileManagerDeusExe::FileSize(const wchar_t* Filename)
+{
+    wchar_t szFilename[MAX_PATH];
+    return FFileManagerWindows::FileSize(IntOverride(szFilename, Filename) ? szFilename : Filename);
 }
 
 bool FFileManagerDeusExe::ToModernFileName(wchar_t(&szNewName)[MAX_PATH], const wchar_t* const pszOldName, const char /*op*/ /*= 'r'*/)
@@ -190,7 +213,7 @@ INT FFileManagerDeusExeUserDocs::FileSize(const wchar_t* Filename)
 {
     assert(Filename);
     wchar_t szNewFilename[MAX_PATH];
-    return FFileManagerWindows::FileSize(ToModernFileName(szNewFilename, Filename) ? szNewFilename : Filename);
+    return FFileManagerWindows::FileSize(IntOverride(szNewFilename, Filename) ? szNewFilename : ToModernFileName(szNewFilename, Filename) ? szNewFilename : Filename);
 }
 
 UBOOL FFileManagerDeusExeUserDocs::Copy(const wchar_t* DestFile, const wchar_t* SrcFile, UBOOL ReplaceExisting, UBOOL EvenIfReadOnly, UBOOL Attributes, void(*Progress)(FLOAT Fraction))
