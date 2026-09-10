@@ -36,10 +36,23 @@ protected:
     */  
     bool IntOverride(wchar_t(&szNewName)[MAX_PATH], const wchar_t* const pszOldName);
 
+    /**
+    Redirects an open of a DeusExCon*.u conversation package to the copy in
+    the first data directory (Core.System Paths order) that has one. The game
+    requests these by bare file name, which appFindPackageFile satisfies from
+    the current directory (System) before it consults the path list, so a
+    mod's copy in a data directory would otherwise never load. Returns false
+    for anything else.
+    */
+    bool ConOverride(wchar_t(&szNewName)[MAX_PATH], const wchar_t* const pszOldName) const;
+
 private:
     void BuildIntPaths(); //(Re)reads the IntPaths entries; needs GConfig
+    void BuildConPaths(); //(Re)scans the data directories for conversation packages; needs GSys
+    void ScanConDir(const wchar_t* const pszDir);
 
     std::unique_ptr<std::vector<std::wstring>> m_pIntPaths; //Pointer because we can't allocate on startup; null until first built
+    std::unique_ptr<std::unordered_map<std::wstring, std::wstring>> m_pConPaths; //Lower-cased bare file name -> winning copy; null until OnGameStart
 
 //From FFileManagerWindows
 public:

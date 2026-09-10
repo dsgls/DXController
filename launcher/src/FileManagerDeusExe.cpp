@@ -7,8 +7,114 @@ const wchar_t* const FFileManagerDeusExe::sm_pszIntPaths = L"IntPaths";
 
 void FFileManagerDeusExe::OnGameStart()
 {
-    //Rebuilt here because the data-directories dialog may have just edited the list
+    //Rebuilt here because the data-directories dialog may have just edited the lists
     BuildIntPaths();
+    BuildConPaths();
+}
+
+void FFileManagerDeusExe::BuildConPaths()
+{
+    assert(GSys);
+    assert(GLog);
+    m_pConPaths = std::make_unique<std::unordered_map<std::wstring, std::wstring>>();
+
+    wchar_t szSystemDir[MAX_PATH];
+    Misc::GetGameSystemDir(szSystemDir);
+
+    //Paths entries are "..\<dir>\*.<ext>" relative to System, in priority
+    //order (the data-directories dialog writes the user's directories ahead
+    //of the stock ones). A directory listed once per extension is scanned
+    //once, the first time; ScanConDir only records unseen package names, so
+    //scanning again would find nothing new anyway.
+    for(INT i = 0; i < GSys->Paths.Num(); i++)
+    {
+        wchar_t szRelative[MAX_PATH];
+        wcscpy_s(szRelative, *GSys->Paths(i));
+        PathRemoveFileSpec(szRelative);
+
+        wchar_t szDir[MAX_PATH];
+        if(!PathCombine(szDir, szSystemDir, szRelative) || _wcsicmp(szDir, szSystemDir) == 0)
+        {
+            continue; //System itself is what the override exists to outrank
+        }
+
+        //A Documents-redirected copy of the directory outranks the install's
+        //own, matching the redirect every other read takes.
+        wchar_t szRedirected[MAX_PATH];
+        if(ToModernFileName(szRedirected, szDir) && _wcsicmp(szRedirected, szDir) != 0)
+        {
+            ScanConDir(szRedirected);
+        }
+        ScanConDir(szDir);
+    }
+
+    for(const auto& Entry : *m_pConPaths)
+    {
+        GLog->Logf(L"Data directories: conversation package '%s' redirected to '%s'.", Entry.first.c_str(), Entry.second.c_str());
+    }
+}
+
+void FFileManagerDeusExe::ScanConDir(const wchar_t* const pszDir)
+{
+    wchar_t szSpec[MAX_PATH];
+    if(!PathCombine(szSpec, pszDir, L"DeusExCon*.u"))
+    {
+        return;
+    }
+
+    WIN32_FIND_DATAW Data;
+    const HANDLE hFind = FindFirstFileW(szSpec, &Data);
+    if(hFind == INVALID_HANDLE_VALUE)
+    {
+        return; //Silent: most data directories hold no conversation packages
+    }
+    do
+    {
+        //"*.u" also matches longer extensions through 8.3 short names
+        if((Data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) || _wcsicmp(PathFindExtension(Data.cFileName), L".u") != 0)
+        {
+            continue;
+        }
+
+        std::wstring Key(Data.cFileName);
+        std::transform(Key.begin(), Key.end(), Key.begin(), towlower);
+        if(m_pConPaths->count(Key) != 0)
+        {
+            continue; //An earlier, higher-priority directory already provides it
+        }
+
+        wchar_t szFullPath[MAX_PATH];
+        if(PathCombine(szFullPath, pszDir, Data.cFileName))
+        {
+            m_pConPaths->emplace(std::move(Key), szFullPath);
+        }
+    } while(FindNextFileW(hFind, &Data));
+    FindClose(hFind);
+}
+
+bool FFileManagerDeusExe::ConOverride(wchar_t(&szNewName)[MAX_PATH], const wchar_t* const pszOldName) const
+{
+    if(!m_pConPaths || m_pConPaths->empty())
+    {
+        return false;
+    }
+
+    const wchar_t* const pszFileName = PathFindFileName(pszOldName);
+    if(_wcsicmp(PathFindExtension(pszFileName), L".u") != 0)
+    {
+        return false;
+    }
+
+    std::wstring Key(pszFileName);
+    std::transform(Key.begin(), Key.end(), Key.begin(), towlower);
+    const auto It = m_pConPaths->find(Key);
+    if(It == m_pConPaths->cend())
+    {
+        return false;
+    }
+
+    wcscpy_s(szNewName, It->second.c_str());
+    return true;
 }
 
 void FFileManagerDeusExe::BuildIntPaths()
@@ -92,7 +198,7 @@ bool FFileManagerDeusExe::IntOverride(wchar_t(&szNewName)[MAX_PATH], const wchar
 FArchive* FFileManagerDeusExe::CreateFileReader(const wchar_t* Filename, DWORD Flags, FOutputDevice* Error)
 {
     wchar_t szFilename[MAX_PATH];
-    return FFileManagerWindows::CreateFileReader(IntOverride(szFilename, Filename) ? szFilename : Filename, Flags, Error);
+    return FFileManagerWindows::CreateFileReader(ConOverride(szFilename, Filename) || IntOverride(szFilename, Filename) ? szFilename : Filename, Flags, Error);
 }
 
 //Same override as CreateFileReader: FConfigCacheIni::Find probes with
@@ -100,7 +206,7 @@ FArchive* FFileManagerDeusExe::CreateFileReader(const wchar_t* Filename, DWORD F
 INT FFileManagerDeusExe::FileSize(const wchar_t* Filename)
 {
     wchar_t szFilename[MAX_PATH];
-    return FFileManagerWindows::FileSize(IntOverride(szFilename, Filename) ? szFilename : Filename);
+    return FFileManagerWindows::FileSize(ConOverride(szFilename, Filename) || IntOverride(szFilename, Filename) ? szFilename : Filename);
 }
 
 bool FFileManagerDeusExe::ToModernFileName(wchar_t(&szNewName)[MAX_PATH], const wchar_t* const pszOldName, const char /*op*/ /*= 'r'*/)
@@ -199,7 +305,7 @@ FArchive* FFileManagerDeusExeUserDocs::CreateFileReader(const wchar_t* Filename,
 {
     assert(Filename);
     wchar_t szNewFilename[MAX_PATH];
-    return FFileManagerWindows::CreateFileReader(IntOverride(szNewFilename, Filename) ? szNewFilename : ToModernFileName(szNewFilename, Filename) ? szNewFilename : Filename, Flags, Error);
+    return FFileManagerWindows::CreateFileReader(ConOverride(szNewFilename, Filename) || IntOverride(szNewFilename, Filename) ? szNewFilename : ToModernFileName(szNewFilename, Filename) ? szNewFilename : Filename, Flags, Error);
 }
 
 FArchive* FFileManagerDeusExeUserDocs::CreateFileWriter(const wchar_t* Filename, DWORD Flags, FOutputDevice* Error)
@@ -213,7 +319,7 @@ INT FFileManagerDeusExeUserDocs::FileSize(const wchar_t* Filename)
 {
     assert(Filename);
     wchar_t szNewFilename[MAX_PATH];
-    return FFileManagerWindows::FileSize(IntOverride(szNewFilename, Filename) ? szNewFilename : ToModernFileName(szNewFilename, Filename) ? szNewFilename : Filename);
+    return FFileManagerWindows::FileSize(ConOverride(szNewFilename, Filename) || IntOverride(szNewFilename, Filename) ? szNewFilename : ToModernFileName(szNewFilename, Filename) ? szNewFilename : Filename);
 }
 
 UBOOL FFileManagerDeusExeUserDocs::Copy(const wchar_t* DestFile, const wchar_t* SrcFile, UBOOL ReplaceExisting, UBOOL EvenIfReadOnly, UBOOL Attributes, void(*Progress)(FLOAT Fraction))
