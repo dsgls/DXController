@@ -475,8 +475,23 @@ event DrawWindow(GC gc)
 // Drawn with the inherited backgroundDrawStyle, tinted with the HUD
 // theme's background colour — additive translucent by default, masked
 // opaque when the player turns HUD translucency off.
+//
+// Sticky mode opens over a persona screen, whose bright background an
+// additive plate cannot cover — the screen reads as if it were drawn on
+// top of the wheel. Darken the plate's footprint first with the Veil
+// (DSTY_Modulated, x0.25; the on-screen keyboard's technique). Skipped
+// in gameplay, where the additive plate over the dark scene is the
+// intended look, and when the plate is masked (it covers outright).
 function DrawBackplate(GC gc, float cx, float cy)
 {
+    if (bSticky && backgroundDrawStyle == DSTY_Translucent)
+    {
+        gc.SetStyle(DSTY_Modulated);
+        gc.DrawPattern(cx - PlateDiameter * 0.5, cy - PlateDiameter * 0.5,
+                       PlateDiameter, PlateDiameter, 0, 0,
+                       Texture'DXController.Veil');
+    }
+
     gc.SetStyle(backgroundDrawStyle);
     gc.SetTileColor(colBackground);
     gc.DrawStretchedTexture(cx - PlateDiameter * 0.5, cy - PlateDiameter * 0.5,
