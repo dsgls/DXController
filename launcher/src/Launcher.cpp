@@ -953,6 +953,20 @@ void CLauncher::MainLoop(UEngine* const pEngine)
         //its separate roles below.
         const HWND hForeground = GetForegroundWindow();
         const bool bForeground = m_hWnd != NULL && (hForeground == m_hWnd || IsChild(m_hWnd, hForeground) != FALSE);
+
+        //Alt-tabbing back into exclusive fullscreen can hand the game window the
+        //foreground while the render device still has it minimized, leaving a black
+        //taskbar entry the user can't get back. Keyed on the game window itself
+        //being foreground, not on our process: the log window being foreground
+        //while the game is minimized is the user's doing.
+        const bool bIconicForeground = bForeground && hForeground == m_hWnd && IsIconic(m_hWnd) != FALSE;
+        if (bIconicForeground && !m_bPrevIconicForeground) //Edge, so a restore that doesn't stick can't flood the log
+        {
+            GLog->Log(L"Window: game window is foreground but minimized; restoring.");
+            ShowWindow(m_hWnd, SW_RESTORE);
+        }
+        m_bPrevIconicForeground = bIconicForeground;
+
         RECT rClientScreen = {};
         RECT rClientArea = {};
         //Fails once the window is gone, which this block outlives by a frame; the

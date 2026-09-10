@@ -42,6 +42,7 @@ private:
     UEngine* m_pEngine = nullptr; //Set once in the constructor; used by Exec() (GamepadReload) which has no other route to it
     bool m_bPrevInMenu = false;
     bool m_bPrevHasFocus = false;
+    bool m_bPrevIconicForeground = false; //Edge state for the minimized-yet-foreground restore in MainLoop
 
     //Active-input-device change log (LogActiveInputDevice). The tri-state is
     //derived from the same IsPadActive/IsMouseActive values the frame's
