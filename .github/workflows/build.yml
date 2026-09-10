@@ -72,6 +72,7 @@ jobs:
           # palette-index-0 key colour to the scene — must match sync-and-build.sh.
           python assets/png-to-pcx.py "$($wheelSrc.FullName)" "$texDir" --size 1024 --mode masked --key black
           python assets/png-to-pcx.py "$(Join-Path $wheelSrc.FullName 'wedges')" "$texDir" --size 1024 --mode grey
+          python assets/png-to-pcx.py "$(Join-Path $wheelSrc.FullName 'veil')" "$texDir" --size 1024 --mode grey
           python assets/png-to-pcx.py "$($menuBgSrc.FullName)" "$texDir" --size native --mode grey
           python assets/png-to-pcx.py "$($veilSrc.FullName)" "$texDir" --size native --mode grey
 

@@ -478,8 +478,8 @@ event DrawWindow(GC gc)
 //
 // Sticky mode opens over a persona screen, whose bright background an
 // additive plate cannot cover — the screen reads as if it were drawn on
-// top of the wheel. Darken the plate's footprint first with the Veil
-// (DSTY_Modulated, x0.25; the on-screen keyboard's technique). Skipped
+// top of the wheel. Darken the plate's own footprint first with WheelVeil
+// (DSTY_Modulated, x0.25 inside the cells, identity elsewhere). Skipped
 // in gameplay, where the additive plate over the dark scene is the
 // intended look, and when the plate is masked (it covers outright).
 function DrawBackplate(GC gc, float cx, float cy)
@@ -487,9 +487,10 @@ function DrawBackplate(GC gc, float cx, float cy)
     if (bSticky && backgroundDrawStyle == DSTY_Translucent)
     {
         gc.SetStyle(DSTY_Modulated);
-        gc.DrawPattern(cx - PlateDiameter * 0.5, cy - PlateDiameter * 0.5,
-                       PlateDiameter, PlateDiameter, 0, 0,
-                       Texture'DXController.Veil');
+        gc.DrawStretchedTexture(cx - PlateDiameter * 0.5, cy - PlateDiameter * 0.5,
+                                PlateDiameter, PlateDiameter,
+                                0, 0, PlateTexSize, PlateTexSize,
+                                Texture'DXController.WheelVeil');
     }
 
     gc.SetStyle(backgroundDrawStyle);

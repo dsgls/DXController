@@ -8,6 +8,7 @@
 //     (Group=Wheel, black key — its translucent draw adds the key colour)
 //   Non-masked greyscale (black adds nothing under additive DSTY_Translucent):
 //     Wedge0..Wedge9 (Group=Wheel) — the wheel's slice-highlight stamps
+//     WheelVeil (Group=Wheel) — plate-shaped modulation veil (128 outside, 32 inside)
 //     MenuAutoSaveBackground_1, _2 (Group=MenuAutoSaveBackground) — autosave-settings menu background tiles
 //
 // FILE= is relative to the package dir (DXController/), so paths are
@@ -49,6 +50,12 @@ class DXControllerTextures extends Object;
 
 // --- Wheel plate (masked, Group=Wheel) ---
 #exec TEXTURE IMPORT NAME=WheelPlate FILE=Textures\WheelPlate.pcx GROUP=Wheel MIPS=On  FLAGS=2
+
+// --- Wheel veil (NON-masked greyscale, Group=Wheel) ---
+// Same footprint as WheelPlate; 128 (identity) outside, 32 (x0.25) inside.
+// Drawn DSTY_Modulated under the plate over persona screens. Modulated
+// draws have no colour key, so the shape has to live in the texel values.
+#exec TEXTURE IMPORT NAME=WheelVeil FILE=Textures\WheelVeil.pcx GROUP=Wheel MIPS=On
 
 // --- Modulation veil (NON-masked flat grey 32, Group=UI) ---
 // Drawn DSTY_Modulated to darken the scene to x0.25 (texel/128).
