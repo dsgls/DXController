@@ -1084,6 +1084,25 @@ void CLauncher::MainLoop(UEngine* const pEngine)
         {
             m_pViewPort = nullptr;
         }
+        else
+        {
+            //A video-mode change can replace the viewport object and/or its window.
+            //Follow both, and move everything bound to the old window handle (raw
+            //input registration; the pre-tick facts pick the new handle up next
+            //frame) to the new one. Logged because it is rare and a bug report
+            //wants to know it happened.
+            m_pViewPort = pEngine->Client->Viewports(0);
+            const HWND hViewportWnd = static_cast<HWND>(m_pViewPort->GetWindow());
+            if(hViewportWnd != NULL && hViewportWnd != m_hWnd)
+            {
+                GLog->Logf(L"Window: viewport window changed from 0x%p to 0x%p; re-attaching.", static_cast<void*>(m_hWnd), static_cast<void*>(hViewportWnd));
+                m_hWnd = hViewportWnd;
+                if(m_bRawInput && !RegisterRawInput(m_hWnd))
+                {
+                    GLog->Log(L"Raw input: failed to re-register for the new viewport window.");
+                }
+            }
+        }
 
         if(m_pViewPort)
         {
