@@ -875,22 +875,23 @@ void CLauncher::PumpMessages(UEngine* const pEngine, const bool bMouseOverWindow
                     pEngine->InputEvent(m_pViewPort, EInputKey::IK_MouseY, EInputAction::IST_Axis, -fDeltaY);
                 }
 
-                if (raw.data.mouse.ulButtons & RI_MOUSE_BUTTON_4_UP)
+                //Press before release, and never one-or-the-other: a fast click
+                //can pack both edges into a single packet, and dropping the release
+                //leaves the engine's key table holding the button down.
+                static const struct { ULONG ulDown; ULONG ulUp; EInputKey eKey; } kSideButtons[] = {
+                    { RI_MOUSE_BUTTON_4_DOWN, RI_MOUSE_BUTTON_4_UP, IK_Unknown05 },
+                    { RI_MOUSE_BUTTON_5_DOWN, RI_MOUSE_BUTTON_5_UP, IK_Unknown06 },
+                };
+                for (const auto& Button : kSideButtons)
                 {
-                    pEngine->InputEvent(m_pViewPort, EInputKey::IK_Unknown05, EInputAction::IST_Release);
-                }
-                else if (raw.data.mouse.ulButtons & RI_MOUSE_BUTTON_4_DOWN)
-                {
-                    pEngine->InputEvent(m_pViewPort, EInputKey::IK_Unknown05, EInputAction::IST_Press);
-                }
-
-                if (raw.data.mouse.ulButtons & RI_MOUSE_BUTTON_5_UP)
-                {
-                    pEngine->InputEvent(m_pViewPort, EInputKey::IK_Unknown06, EInputAction::IST_Release);
-                }
-                else if (raw.data.mouse.ulButtons & RI_MOUSE_BUTTON_5_DOWN)
-                {
-                    pEngine->InputEvent(m_pViewPort, EInputKey::IK_Unknown06, EInputAction::IST_Press);
+                    if (raw.data.mouse.ulButtons & Button.ulDown)
+                    {
+                        pEngine->InputEvent(m_pViewPort, Button.eKey, EInputAction::IST_Press);
+                    }
+                    if (raw.data.mouse.ulButtons & Button.ulUp)
+                    {
+                        pEngine->InputEvent(m_pViewPort, Button.eKey, EInputAction::IST_Release);
+                    }
                 }
 
                 bSkipMessage = true;
