@@ -153,6 +153,10 @@
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Create</PrecompiledHeader>
     </ClCompile>
     <ClCompile Include="SubTitleFix.cpp" />
+    <ClCompile Include="LevelWatch.cpp">
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Use</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Use</PrecompiledHeader>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="DataDirDialog.h" />
@@ -165,6 +169,8 @@
     <ClInclude Include="CursorPolicy.h" />
     <ClInclude Include="CrashRecord.h" />
     <ClInclude Include="CrashContext.h" />
+    <ClInclude Include="LevelWatch.h" />
+    <ClInclude Include="FeedbackContextLog.h" />
     <ClInclude Include="LogTime.h" />
     <ClInclude Include="LogPath.h" />
     <ClInclude Include="StartupHeader.h" />

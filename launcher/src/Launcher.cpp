@@ -12,6 +12,8 @@
 #include "CursorPolicy.h"
 #include "CrashRecord.h"
 #include "CrashContext.h"
+#include "FeedbackContextLog.h"
+#include "LevelWatch.h"
 #include "FramePacing.h"
 #include "LogPath.h"
 #include "StartupHeader.h"
@@ -266,7 +268,7 @@ INT WINAPI WinMain(HINSTANCE /*hInInstance*/, HINSTANCE /*hPrevInstance*/, LPSTR
     FMallocWindows Malloc;
     FOutputDeviceFileFlush Log;
     FOutputDeviceWindowsError Error;
-    FFeedbackContextWindows Warn;
+    FFeedbackContextLog Warn;
 
     //If -localdata command line option present, don't use user documents for data; can't use appCmdLine() yet.
     std::unique_ptr<FFileManagerDeusExe> pFileManager(wcswcs(GetCommandLine(), L" -localdata") == nullptr ? new FFileManagerDeusExeUserDocs : new FFileManagerDeusExe);
@@ -906,6 +908,7 @@ void CLauncher::MainLoop(UEngine* const pEngine)
     //desktop.
     const CFrameTimer FrameTimer;
     CCursorGuard CursorGuard; //Releases clip and ShowCursor delta on return and on unwind
+    CLevelWatch LevelWatch;
     GLog->Logf(L"Main loop: frame pacing via %s.", FrameTimer.GetPathName());
 
     while (GIsRunning && !GIsRequestingExit)
@@ -1049,6 +1052,7 @@ void CLauncher::MainLoop(UEngine* const pEngine)
         }
         iLastTickQpc = liNow.QuadPart;
         RecordFrameStats(fFrameTimeMs, fOvershootMs);
+        LevelWatch.Update(pEngine); //Transitions happen inside Tick, so this reports them right after
 
         //Post-tick re-validation: the viewport also dies inside Tick when the user
         //closes the window, before any WM_QUIT reaches us. Client is null on a
