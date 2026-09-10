@@ -173,26 +173,41 @@ etc.) logs count/avg/p50/p99/max and stdev, then resets the buffer.
 
 ### Crash and cursor-state handling
 
-`CLauncher`'s constructor sets `GIsGuarded = 1` around the `MainLoop`
-call and wraps it in `try/catch(...)`: on catch it logs `GErrorHist`
-(via `Log`, not `Logf` — the history can already fill Core's format
-buffer), calls `GError->HandleError()` for the stock message box, then
-force-exits via `appRequestExit(1)` without falling through into normal
-constructor teardown (which would run against an object system
-`HandleError` already tore down). A `SetUnhandledExceptionFilter`
-handler installed in `WinMain` backstops faults that don't reach the
-guard chain: reentrancy gate first, then cursor release, then
-`GLogHook = NULL`, then log what's known, and module+offset resolution
-(`GetModuleHandleExW`/`GetModuleFileNameW`) *last* — it takes the loader
-lock and can deadlock if the fault happened under it.
+The engine's VC6 guard chain catches a hardware fault in `catch(...)`
+and rethrows it as a C++ exception, so by the time anything of ours
+runs, the registers and the faulting frames are gone. A vectored
+exception handler (`CrashContext::Install`, first thing in `WinMain`)
+therefore records every error-severity exception first-chance: the
+record, the thread context and a copy of the top 16 KB of the faulting
+stack. Latest wins, and the report states the record's age, because
+some DLLs raise and swallow probe faults of their own.
 
-Two things are unverified pending the batched manual playtest: whether
-an SEH hardware fault actually propagates through the VC6 DLL guard
-chain to reach the filter with `GErrorHist` populated (the guard macros
-are plain VC6 `/GX`-era `catch(...)`/`throw;`), and the force-exit
+`CLauncher`'s constructor sets `GIsGuarded = 1` around the `MainLoop`
+call and wraps it in `try/catch(...)`: on catch it calls
+`CrashContext::LogReport`, then `GError->HandleError()` for the stock
+message box, then force-exits via `appRequestExit(1)` without falling
+through into normal constructor teardown (which would run against an
+object system `HandleError` already tore down). A
+`SetUnhandledExceptionFilter` handler backstops faults that never reach
+the guard chain (another thread, a window procedure): reentrancy gate,
+cursor release, `GLogHook = NULL`, then the same report.
+
+The report logs, in this order: origin (first-chance record or live
+filter pointers, thread, age), exception code and address, the map and
+engine-stage breadcrumbs, the register dump, `GErrorHist` (via `Log`,
+not `Logf` — the history can already fill Core's format buffer), and
+*last* the faulting module+offset and a DbgHelp stack walk — those take
+the loader lock and can deadlock if the fault happened under it. The
+walk reads the crashed frames from the first-chance snapshot rather
+than live memory, since the reporting code runs in frames above them
+and would have overwritten them. Symbols come from a PDB next to the
+exe when present, otherwise from export tables, which already name most
+engine functions. Everything runs against static buffers; the line
+formatting is the pure `CrashRecord` unit.
+
+Unverified pending the batched manual playtest: the force-exit
 semantics of `appRequestExit(1)` (declaration-only in the vendored SDK
-headers, no visible definition to check against). Treat both as
-best-effort until that pass confirms or refutes them.
+headers, no visible definition to check against).
 
 A cursor guard object, constructed at `MainLoop` entry, owns the
 currently-applied clip rect and the net `ShowCursor` delta this code

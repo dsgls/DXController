@@ -97,6 +97,10 @@
     <ClCompile Include="FramePacing.cpp" />
     <ClCompile Include="CursorPolicy.cpp" />
     <ClCompile Include="CrashRecord.cpp" />
+    <ClCompile Include="CrashContext.cpp">
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Use</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Use</PrecompiledHeader>
+    </ClCompile>
     <ClCompile Include="LogTime.cpp" />
     <ClCompile Include="LogPath.cpp" />
     <ClCompile Include="StartupHeader.cpp" />
@@ -160,6 +164,7 @@
     <ClInclude Include="FramePacing.h" />
     <ClInclude Include="CursorPolicy.h" />
     <ClInclude Include="CrashRecord.h" />
+    <ClInclude Include="CrashContext.h" />
     <ClInclude Include="LogTime.h" />
     <ClInclude Include="LogPath.h" />
     <ClInclude Include="StartupHeader.h" />

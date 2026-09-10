@@ -83,7 +83,7 @@ void CrashRecord::FormatException(const unsigned long ulExceptionCode, const voi
     }
 
     FWriter Writer{ pOut, iOutChars - 1, 0 };
-    Writer.Append(L"Crash: unhandled exception ");
+    Writer.Append(L"Crash: exception ");
     Writer.AppendHex(static_cast<size_t>(ulExceptionCode), 8);
     if (const wchar_t* const pszName = ExceptionName(ulExceptionCode))
     {
@@ -119,6 +119,174 @@ void CrashRecord::FormatModuleOffset(const void* const pFaultAddress, const void
         Writer.Append((pszModulePath && *pszModulePath) ? pszModulePath : L"(unknown path)");
         Writer.Append(L" + ");
         Writer.AppendHex(iFault - iBase, kiAddressDigits);
+    }
+    Writer.Finish();
+}
+
+namespace
+{
+    //Decimal without the CRT, for the same crashed-context reason as the hex writer.
+    void AppendDecimal(FWriter& Writer, unsigned long long ullValue)
+    {
+        wchar_t szDigits[24];
+        size_t iCount = 0;
+        do
+        {
+            szDigits[iCount++] = static_cast<wchar_t>(L'0' + (ullValue % 10));
+            ullValue /= 10;
+        } while (ullValue != 0);
+        while (iCount > 0)
+        {
+            const wchar_t szOne[2] = { szDigits[--iCount], L'\0' };
+            Writer.Append(szOne);
+        }
+    }
+
+    const wchar_t* FileNamePart(const wchar_t* const pszPath)
+    {
+        const wchar_t* pszName = pszPath;
+        for (const wchar_t* p = pszPath; p && *p; ++p)
+        {
+            if (*p == L'\\' || *p == L'/')
+            {
+                pszName = p + 1;
+            }
+        }
+        return pszName;
+    }
+}
+
+void CrashRecord::FormatOrigin(const bool bFirstChance, const unsigned long ulThreadId, const unsigned long long ullAgeMs, wchar_t* const pOut, const size_t iOutChars)
+{
+    if (iOutChars == 0)
+    {
+        return;
+    }
+
+    FWriter Writer{ pOut, iOutChars - 1, 0 };
+    if (bFirstChance)
+    {
+        Writer.Append(L"Crash: fault recorded first-chance on thread ");
+        AppendDecimal(Writer, ulThreadId);
+        Writer.Append(L", ");
+        AppendDecimal(Writer, ullAgeMs);
+        Writer.Append(L" ms before this report");
+    }
+    else
+    {
+        Writer.Append(L"Crash: fault reached the unhandled-exception filter on thread ");
+        AppendDecimal(Writer, ulThreadId);
+    }
+    Writer.Finish();
+}
+
+void CrashRecord::FormatBreadcrumbs(const wchar_t* const pszMap, const unsigned long long ullMapAgeMs, const wchar_t* const pszStage, const unsigned long long ullStageAgeMs, wchar_t* const pOut, const size_t iOutChars)
+{
+    if (iOutChars == 0)
+    {
+        return;
+    }
+
+    FWriter Writer{ pOut, iOutChars - 1, 0 };
+    Writer.Append(L"Crash: ");
+    if (pszMap && *pszMap)
+    {
+        Writer.Append(L"map '");
+        Writer.Append(pszMap);
+        Writer.Append(L"' (set ");
+        AppendDecimal(Writer, ullMapAgeMs);
+        Writer.Append(L" ms ago)");
+    }
+    else
+    {
+        Writer.Append(L"map unknown");
+    }
+    Writer.Append(L"; ");
+    if (pszStage && *pszStage)
+    {
+        Writer.Append(L"engine stage '");
+        Writer.Append(pszStage);
+        Writer.Append(L"' (set ");
+        AppendDecimal(Writer, ullStageAgeMs);
+        Writer.Append(L" ms ago)");
+    }
+    else
+    {
+        Writer.Append(L"engine stage none");
+    }
+    Writer.Finish();
+}
+
+void CrashRecord::FormatRegisters(const Registers& Regs, wchar_t* const pOut, const size_t iOutChars)
+{
+    if (iOutChars == 0)
+    {
+        return;
+    }
+
+    FWriter Writer{ pOut, iOutChars - 1, 0 };
+    Writer.Append(L"Crash: registers");
+    const struct { const wchar_t* pszName; unsigned long ulValue; } kRegs[] = {
+        { L" EIP=", Regs.ulEip }, { L" ESP=", Regs.ulEsp }, { L" EBP=", Regs.ulEbp },
+        { L" EAX=", Regs.ulEax }, { L" EBX=", Regs.ulEbx }, { L" ECX=", Regs.ulEcx }, { L" EDX=", Regs.ulEdx },
+        { L" ESI=", Regs.ulEsi }, { L" EDI=", Regs.ulEdi }, { L" EFLAGS=", Regs.ulEflags },
+    };
+    for (const auto& Reg : kRegs)
+    {
+        Writer.Append(Reg.pszName);
+        Writer.AppendHex(Reg.ulValue, 8);
+    }
+    Writer.Finish();
+}
+
+void CrashRecord::FormatFrame(const unsigned int uIndex, const void* const pPc, const void* const pModuleBase, const wchar_t* const pszModulePath, const wchar_t* const pszSymbol, const unsigned long long ullDisplacement, wchar_t* const pOut, const size_t iOutChars)
+{
+    if (iOutChars == 0)
+    {
+        return;
+    }
+
+    FWriter Writer{ pOut, iOutChars - 1, 0 };
+    Writer.Append(L"Crash:   #");
+    if (uIndex < 10)
+    {
+        Writer.Append(L"0");
+    }
+    AppendDecimal(Writer, uIndex);
+    Writer.Append(L" ");
+    const size_t iPc = AddressValue(pPc);
+    Writer.AppendHex(iPc, kiAddressDigits);
+    Writer.Append(L" ");
+
+    const size_t iBase = AddressValue(pModuleBase);
+    if (iBase == 0 || iBase > iPc)
+    {
+        Writer.Append(L"unknown");
+    }
+    else
+    {
+        const wchar_t* const pszName = FileNamePart(pszModulePath);
+        Writer.Append((pszName && *pszName) ? pszName : L"(unknown path)");
+        Writer.Append(L"+");
+        Writer.AppendHex(iPc - iBase, kiAddressDigits);
+    }
+
+    if (pszSymbol && *pszSymbol)
+    {
+        Writer.Append(L" ");
+        Writer.Append(pszSymbol);
+        Writer.Append(L"+0x");
+        //Displacement is short; no fixed width, so strip leading zeros of a 16-digit field.
+        wchar_t szHex[24];
+        FWriter Hex{ szHex, 23, 0 };
+        Hex.AppendHex(static_cast<size_t>(ullDisplacement), 8);
+        Hex.Finish();
+        const wchar_t* p = szHex + 2; //Past "0x"
+        while (*p == L'0' && *(p + 1) != L'\0')
+        {
+            ++p;
+        }
+        Writer.Append(p);
     }
     Writer.Finish();
 }

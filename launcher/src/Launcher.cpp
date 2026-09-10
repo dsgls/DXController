@@ -11,6 +11,7 @@
 #include "OutputDeviceFileFlush.h"
 #include "CursorPolicy.h"
 #include "CrashRecord.h"
+#include "CrashContext.h"
 #include "FramePacing.h"
 #include "LogPath.h"
 #include "StartupHeader.h"
@@ -182,12 +183,10 @@ namespace
         const wchar_t* m_pszPathName = L"";
     };
 
-    //Last stop for a hardware fault: /EHsc catch(...) never sees SEH, so a null
-    //dereference inside the engine bypasses the guarded loop entirely and lands
-    //here. Everything runs against static buffers, allocates nothing, and walks no
-    //stacks. The step order is load-bearing (see the design's crash-handling
-    //section): release the cursor and get the diagnosis into the log BEFORE the
-    //module lookup, which takes the loader lock and can deadlock when the fault
+    //Last stop for a fault the engine's guard chain did not catch (a fault on
+    //another thread, or under a window procedure). The step order is
+    //load-bearing: release the cursor and detach the log window BEFORE the
+    //report, whose tail takes the loader lock and can deadlock when the fault
     //happened under it.
     LONG WINAPI UnhandledExceptionLogger(EXCEPTION_POINTERS* const pExceptionInfo)
     {
@@ -201,36 +200,7 @@ namespace
 
         GLogHook = NULL; //Never dispatch into the WLog window code from a crashed context, as HandleError also does
 
-        if (!GLog) //Nothing left to report through; the cursor is already released
-        {
-            return EXCEPTION_CONTINUE_SEARCH;
-        }
-
-        const EXCEPTION_RECORD* const pRecord = pExceptionInfo ? pExceptionInfo->ExceptionRecord : nullptr;
-        const DWORD dwCode = pRecord ? pRecord->ExceptionCode : 0;
-        const void* const pFault = pRecord ? pRecord->ExceptionAddress : nullptr;
-
-        static wchar_t szLine[512];
-        CrashRecord::FormatException(dwCode, pFault, szLine, _countof(szLine));
-        GLog->Log(NAME_Critical, szLine);
-
-        //Log, not Logf: the history is up to 4096 chars and would overflow Core's
-        //format buffer. Whether an SEH fault leaves any history behind at all
-        //depends on the VC6 guard chain, so the empty case is expected.
-        GLog->Log(NAME_Critical, GErrorHist[0] ? GErrorHist : L"(GErrorHist empty)");
-
-        //Last, for the loader lock. Best effort: an unresolvable address still
-        //logged the code and the raw pointer above.
-        HMODULE hModule = NULL;
-        static wchar_t szModulePath[MAX_PATH];
-        szModulePath[0] = L'\0';
-        if (GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT, static_cast<LPCWSTR>(pFault), &hModule))
-        {
-            GetModuleFileNameW(hModule, szModulePath, static_cast<DWORD>(_countof(szModulePath)));
-            szModulePath[_countof(szModulePath) - 1] = L'\0'; //A path longer than the buffer truncates without terminating on XP
-        }
-        CrashRecord::FormatModuleOffset(pFault, hModule, szModulePath, szLine, _countof(szLine));
-        GLog->Log(NAME_Critical, szLine);
+        CrashContext::LogReport(pExceptionInfo); //Tolerates a null GLog
 
         return EXCEPTION_CONTINUE_SEARCH; //Let Windows error reporting run as it would have
     }
@@ -280,6 +250,8 @@ namespace
 
 INT WINAPI WinMain(HINSTANCE /*hInInstance*/, HINSTANCE /*hPrevInstance*/, LPSTR /*lpCmdLine*/, INT /*nCmdShow*/)
 {
+    CrashContext::Install(); //First: records faults from here on, including inside appInit
+
     INITCOMMONCONTROLSEX CommonControlsInfo;
     CommonControlsInfo.dwSize = sizeof(INITCOMMONCONTROLSEX);
     CommonControlsInfo.dwICC = ICC_TREEVIEW_CLASSES | ICC_LINK_CLASS;
@@ -425,10 +397,11 @@ CLauncher::CLauncher()
         }
         catch (...)
         {
-            //Log before HandleError, which shows the stock message box. Log, not
-            //Logf - the history is up to 4096 chars and would overflow Core's
-            //format buffer. A throw from anywhere but appError leaves no history.
-            GLog->Log(NAME_Critical, GErrorHist[0] ? GErrorHist : L"(GErrorHist empty)");
+            //Report before HandleError, which shows the stock message box. A
+            //hardware fault the guard chain caught and rethrew arrives here with
+            //its registers and stack already recorded first-chance; a plain
+            //appError arrives with only GErrorHist, which the report also logs.
+            CrashContext::LogReport(nullptr);
             GError->HandleError();
             //Force exit, as an unguarded appError does today: appRequestExit(1)
             //ends the process here. Nothing below may run - LocalizeGeneral,
