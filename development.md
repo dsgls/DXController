@@ -165,11 +165,45 @@ Facts are gathered at two points in the loop, deliberately:
   everything that dereferences the viewport (player/`rootWindow`/
   `bInMenu`, auto-FOV, cursor apply) reads its facts only after that
   re-validation, not before. Collapsing the two fact blocks into one
-  reintroduces a use-after-free.
+  reintroduces a use-after-free. The same block re-reads `Viewports(0)`
+  and its window handle every frame: a video-mode change can replace
+  either, and anything bound to the old handle (raw-input registration)
+  is moved to the new one when it changes.
+
+The loop also restores the game window when it is the foreground
+window yet minimized (alt-tab back into exclusive fullscreen can leave
+it that way). Keyed on the game window itself, not the process, so the
+log window being foreground while the game is minimized is left alone.
 
 A ring buffer records per-frame stats (frame duration, deadline
 overshoot); `GetFrameStats` (an exec command, alongside `GamepadGetInfo`
 etc.) logs count/avg/p50/p99/max and stdev, then resets the buffer.
+
+After each `Tick`, a level watcher logs map changes, `LevelAction`
+transitions and queued travel, and the feedback context
+(`FFeedbackContextLog`) logs each distinct slow-task status string.
+Both feed the crash report's breadcrumbs.
+
+### Data directories and file overrides
+
+`FFileManagerDeusExe` sits under every engine file access and applies
+two redirects before the Documents rebase:
+
+- **`.int` overrides** (`IntPaths` in the launcher's ini section): built
+  on first use as soon as `GConfig` exists, not at game start. The
+  engine reads `DeusEx.int` during `appInit`, and the config cache keeps
+  whichever copy it read first, so a list built later would miss it.
+- **Conversation packages** (`DeusExCon*.u`): the game requests these
+  by bare file name, and `appFindPackageFile` satisfies a bare name from
+  the current directory (`System`) before it consults `Core.System
+  Paths`, so a mod's copy in a data directory never loads on its own.
+  At game start the data directories are scanned in `Paths` order
+  (Documents-redirected copy before the install's, `System` itself
+  skipped) and each package name maps to the first copy found.
+
+Both redirects apply to `FileSize` as well as `CreateFileReader`, since
+`FConfigCacheIni::Find` and `appFindPackageFile` probe existence with
+`FileSize` before reading.
 
 ### Crash and cursor-state handling
 
@@ -200,9 +234,9 @@ not `Logf` — the history can already fill Core's format buffer), and
 the loader lock and can deadlock if the fault happened under it. The
 walk reads the crashed frames from the first-chance snapshot rather
 than live memory, since the reporting code runs in frames above them
-and would have overwritten them. Symbols come from a PDB next to the
-exe when present, otherwise from export tables, which already name most
-engine functions. Everything runs against static buffers; the line
+and would have overwritten them. Launcher frames resolve through `DeusEx.pdb`,
+which the release zip ships next to the exe; engine frames resolve
+through export tables, which already name most engine functions. Everything runs against static buffers; the line
 formatting is the pure `CrashRecord` unit.
 
 Unverified pending the batched manual playtest: the force-exit
