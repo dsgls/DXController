@@ -78,9 +78,9 @@ fast, and an "Invert look Y-axis" toggle.
 
 ## Auto-save
 
-The mod autosaves during play. Writing each save can causea brief stutter.
-If it bothers you, or if you just don't like autosaves, you can turn them
-off or change the frequency in Settings → Autosave.
+The mod can autosave during play. It is off by default; turn it on and
+set the interval (default 5 minutes) in Settings → Autosave. Writing each
+save can cause a brief stutter.
 
 ## Linux and Steam Deck
 

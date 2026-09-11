@@ -223,8 +223,8 @@ function bool ShouldShowToast()
 
 defaultproperties
 {
-    bEnabled=True
-    IntervalSeconds=60
+    bEnabled=False
+    IntervalSeconds=300
     MaxSaves=40
     AutoSaveTitle="Auto Save"
     AutoSavingLabel="Auto Saving..."
