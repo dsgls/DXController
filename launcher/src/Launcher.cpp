@@ -56,8 +56,10 @@ namespace
 
         void SetClip(const RECT& rClip) { s_bClipHeld = ClipCursor(&rClip) != FALSE; }
         void ReleaseClip() { ClipCursor(NULL); s_bClipHeld = false; }
-        void Show() { ShowCursor(TRUE); ++s_iShowDelta; }
-        void Hide() { ShowCursor(FALSE); --s_iShowDelta; }
+        //Both return ShowCursor's result: the display counter after the call.
+        int Show() { ++s_iShowDelta; return ShowCursor(TRUE); }
+        int Hide() { --s_iShowDelta; return ShowCursor(FALSE); }
+        int GetShowDelta() const { return s_iShowDelta; }
 
         //GetClipCursor cannot answer this: an unclipped cursor reports the whole
         //virtual screen, so releasing needs our own last-applied state.
@@ -911,6 +913,15 @@ void CLauncher::MainLoop(UEngine* const pEngine)
     CLevelWatch LevelWatch;
     GLog->Logf(L"Main loop: frame pacing via %s.", FrameTimer.GetPathName());
 
+    //Cursor diagnostics: a hide is one ShowCursor step per frame, so a display
+    //counter that something else keeps above zero shows up as a run of frames
+    //where a hide was requested yet CURSOR_SHOWING persists. Logged once the
+    //run reaches a second, then once a minute, then once more when it ends.
+    unsigned long long iCursorHideRunStartMs = 0;
+    unsigned long long iCursorHideRunLastLogMs = 0;
+    unsigned int iCursorHideRunFrames = 0;
+    int iCursorLastShowCursorResult = 0;
+
     while (GIsRunning && !GIsRequestingExit)
     {
         //Pre-tick facts, gathered once per frame. They feed the message pump
@@ -1169,13 +1180,50 @@ void CLauncher::MainLoop(UEngine* const pEngine)
             {
                 CursorGuard.ReleaseClip();
             }
+            //Every applied step is logged with ShowCursor's returned counter: the
+            //value itself is the diagnostic (a plain +-1 counter never sits far
+            //from zero; a large value means another party owns the count).
             if (Act.bHideOneStep) //Get rid of double mouse cursors when game doesn't clip it
             {
-                CursorGuard.Hide();
+                iCursorLastShowCursorResult = CursorGuard.Hide();
+                GLog->Logf(L"Cursor: ShowCursor(FALSE) -> %d (delta %d; pad=%d mouse=%d over=%d inClient=%d captured=%d fg=%d menu=%d hCursor=0x%p)",
+                    iCursorLastShowCursorResult, CursorGuard.GetShowDelta(), bPadActive, bMouseActive, bMouseOverWindow,
+                    Frame.bMouseInClientRect, Frame.bCaptured, bForeground, bInMenu, static_cast<void*>(CursorInfo.hCursor));
             }
             if (Act.bShowOneStep)
             {
-                CursorGuard.Show();
+                iCursorLastShowCursorResult = CursorGuard.Show();
+                GLog->Logf(L"Cursor: ShowCursor(TRUE) -> %d (delta %d; pad=%d mouse=%d over=%d inClient=%d captured=%d fg=%d menu=%d hCursor=0x%p)",
+                    iCursorLastShowCursorResult, CursorGuard.GetShowDelta(), bPadActive, bMouseActive, bMouseOverWindow,
+                    Frame.bMouseInClientRect, Frame.bCaptured, bForeground, bInMenu, static_cast<void*>(CursorInfo.hCursor));
+            }
+
+            const unsigned long long iNowMs = GetTickCount64();
+            if (!Want.bCursorVisible && bCursorShowing)
+            {
+                if (iCursorHideRunFrames++ == 0)
+                {
+                    iCursorHideRunStartMs = iNowMs;
+                    iCursorHideRunLastLogMs = iNowMs;
+                }
+                const unsigned long long iSinceStartMs = iNowMs - iCursorHideRunStartMs;
+                const unsigned long long iSinceLogMs = iNowMs - iCursorHideRunLastLogMs;
+                if ((iSinceStartMs >= 1000 && iCursorHideRunLastLogMs == iCursorHideRunStartMs) || iSinceLogMs >= 60000)
+                {
+                    iCursorHideRunLastLogMs = iNowMs;
+                    GLog->Logf(L"Cursor: hide requested for %u frames (%llu ms) but CURSOR_SHOWING persists; last ShowCursor -> %d, delta %d, flags=0x%x hCursor=0x%p (pad=%d fg=%d menu=%d captured=%d)",
+                        iCursorHideRunFrames, iSinceStartMs, iCursorLastShowCursorResult, CursorGuard.GetShowDelta(),
+                        CursorInfo.flags, static_cast<void*>(CursorInfo.hCursor), bPadActive, bForeground, bInMenu, Frame.bCaptured);
+                }
+            }
+            else if (iCursorHideRunFrames > 0)
+            {
+                if (iCursorHideRunLastLogMs != iCursorHideRunStartMs) //Only runs that were reported get a closing line
+                {
+                    GLog->Logf(L"Cursor: hide-requested run ended after %u frames (%llu ms); showing=%d wantVisible=%d",
+                        iCursorHideRunFrames, iNowMs - iCursorHideRunStartMs, bCursorShowing, Want.bCursorVisible);
+                }
+                iCursorHideRunFrames = 0;
             }
         }
     }
