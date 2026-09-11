@@ -362,6 +362,11 @@ function GamepadNavLog(coerce string msg)
     class'DXControllerDebug'.static.NavLog(msg);
 }
 
+function GamepadDebugLog(coerce string msg)
+{
+    class'DXControllerDebug'.static.DebugLog(msg);
+}
+
 // Override of the DeusExRootWindow.CloseGamepadKeyboard hook. Called
 // from ComputerUIWindow's IK_Escape handler so a physical-keyboard Esc
 // dismisses the on-screen keyboard. Returns true if the keyboard was

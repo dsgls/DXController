@@ -1240,8 +1240,8 @@ Gamepad-domain logs are split into three tiers:
   (the launcher also reads this flag for its device-idle edges).
 
 DeusEx-overlay classes cannot reference the DXController package
-(`DeusEx.u` builds first); they route nav diagnostics through the
-`DeusExRootWindow.GamepadNavLog` hook instead.
+(`DeusEx.u` builds first); they route diagnostics through the
+`DeusExRootWindow.GamepadNavLog` / `GamepadDebugLog` hooks instead.
 
 Do **not** create new ad-hoc `Log(...)` calls in controller code or
 per-class config bools; if a new debug category needs its own toggle, add a

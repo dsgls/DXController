@@ -12199,6 +12199,10 @@ function OnGamepadLeftTrigger(float value)
     w = DeusExWeapon(Weapon);
     if (w == None)
         return;
+    if (DeusExRootWindow(rootWindow) != None)
+        DeusExRootWindow(rootWindow).GamepadDebugLog("DXC-SCOPE LT held=" $ string(nowHeld)
+            $ " weapon=" $ string(w.Class.Name) $ " state=" $ string(w.GetStateName())
+            $ " bZoomed=" $ string(w.bZoomed) $ " bWasZoomed=" $ string(w.bWasZoomed));
     if (w.bHasScope)
     {
         if (w.IsInState('Reload'))

@@ -1110,6 +1110,12 @@ function GamepadNavLog(coerce string msg)
 {
 }
 
+// Same hook for the input-layer tier (bGamepadDebugLog); forwards to
+// DXControllerDebug.DebugLog.
+function GamepadDebugLog(coerce string msg)
+{
+}
+
 // Hook for the DXController cursor-mode policy. Base impl says "not in
 // gamepad cursor mode" so vanilla cursor behaviour is unchanged;
 // ControllerRootWindow overrides it to report its live cursor mode.
