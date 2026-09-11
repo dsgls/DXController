@@ -12180,6 +12180,14 @@ exec function TogglePlayerMenuWindow()
 // can dip into the scope without committing to a toggle; laser sight
 // is press-edge toggle (matches the stock keyboard binding —
 // hold-to-view would be useless for a hands-free aiming aid).
+//
+// State Reload turns the scope off for the animation and restores it
+// from bWasZoomed afterwards. ScopeOff() on an already-off scope is a
+// no-op, so an LT release mid-reload would be lost and the restore
+// would bring the scope back with LT up. While the weapon is reloading,
+// write the LT state into bWasZoomed and let the restore apply it.
+// Stock keyboard input never hits this: ScopeToggle() is gated on
+// state Idle.
 function OnGamepadLeftTrigger(float value)
 {
     local bool nowHeld;
@@ -12193,7 +12201,9 @@ function OnGamepadLeftTrigger(float value)
         return;
     if (w.bHasScope)
     {
-        if (nowHeld)
+        if (w.IsInState('Reload'))
+            w.bWasZoomed = nowHeld;
+        else if (nowHeld)
             w.ScopeOn();
         else
             w.ScopeOff();
