@@ -117,11 +117,11 @@ TEST_CASE("CursorPolicy::Diff sets a clip only when the OS clip does not already
     CursorPolicy::Desired Want;
     Want.bClip = true;
 
-    const CursorPolicy::Actions Stale = CursorPolicy::Diff(Want, false, true, true);
+    const CursorPolicy::Actions Stale = CursorPolicy::Diff(Want, false, true, 0);
     CHECK(Stale.bSetClip);
     CHECK_FALSE(Stale.bReleaseClip);
 
-    const CursorPolicy::Actions Steady = CursorPolicy::Diff(Want, true, true, true);
+    const CursorPolicy::Actions Steady = CursorPolicy::Diff(Want, true, true, 0);
     CHECK_FALSE(Steady.bSetClip);
     CHECK_FALSE(Steady.bReleaseClip);
 }
@@ -130,35 +130,44 @@ TEST_CASE("CursorPolicy::Diff releases a clip only while one is held")
 {
     CursorPolicy::Desired Want; //No clip wanted
 
-    CHECK(CursorPolicy::Diff(Want, false, true, true).bReleaseClip);
-    CHECK_FALSE(CursorPolicy::Diff(Want, false, false, true).bReleaseClip);
+    CHECK(CursorPolicy::Diff(Want, false, true, 0).bReleaseClip);
+    CHECK_FALSE(CursorPolicy::Diff(Want, false, false, 0).bReleaseClip);
 }
 
-TEST_CASE("CursorPolicy::Diff moves visibility one step at a time")
+TEST_CASE("CursorPolicy::Diff judges visibility from the thread's display counter")
 {
     CursorPolicy::Desired Hide;
     Hide.bCursorVisible = false;
 
-    const CursorPolicy::Actions ToHidden = CursorPolicy::Diff(Hide, false, false, true);
-    CHECK(ToHidden.bHideOneStep);
-    CHECK_FALSE(ToHidden.bShowOneStep);
+    //Visible at 0 and at any positive count (a ratcheted counter still shows).
+    const int aVisibleCounts[] = { 0, 1, 19190 };
+    for (const int iCount : aVisibleCounts)
+    {
+        const CursorPolicy::Actions ToHidden = CursorPolicy::Diff(Hide, false, false, iCount);
+        CHECK(ToHidden.bHide);
+        CHECK_FALSE(ToHidden.bShow);
+    }
 
     CursorPolicy::Desired Show;
-    const CursorPolicy::Actions ToShown = CursorPolicy::Diff(Show, false, false, false);
-    CHECK(ToShown.bShowOneStep);
-    CHECK_FALSE(ToShown.bHideOneStep);
+    const int aHiddenCounts[] = { -1, -30 };
+    for (const int iCount : aHiddenCounts)
+    {
+        const CursorPolicy::Actions ToShown = CursorPolicy::Diff(Show, false, false, iCount);
+        CHECK(ToShown.bShow);
+        CHECK_FALSE(ToShown.bHide);
+    }
 }
 
 TEST_CASE("CursorPolicy::Diff does nothing while visibility already matches")
 {
     CursorPolicy::Desired Hide;
     Hide.bCursorVisible = false;
-    const CursorPolicy::Actions Hidden = CursorPolicy::Diff(Hide, false, false, false);
-    CHECK_FALSE(Hidden.bHideOneStep);
-    CHECK_FALSE(Hidden.bShowOneStep);
+    const CursorPolicy::Actions Hidden = CursorPolicy::Diff(Hide, false, false, -1);
+    CHECK_FALSE(Hidden.bHide);
+    CHECK_FALSE(Hidden.bShow);
 
     CursorPolicy::Desired Show;
-    const CursorPolicy::Actions Shown = CursorPolicy::Diff(Show, false, false, true);
-    CHECK_FALSE(Shown.bHideOneStep);
-    CHECK_FALSE(Shown.bShowOneStep);
+    const CursorPolicy::Actions Shown = CursorPolicy::Diff(Show, false, false, 0);
+    CHECK_FALSE(Shown.bHide);
+    CHECK_FALSE(Shown.bShow);
 }

@@ -246,21 +246,30 @@ headers, no visible definition to check against).
 A cursor guard object, constructed at `MainLoop` entry, owns the
 currently-applied clip rect and the net `ShowCursor` delta this code
 has applied; its destructor releases both (covering normal return and
-C++ unwind). Cursor state is re-verified once per frame against actual
-OS state (`GetClipCursor`/`GetCursorInfo`), not a blind cache, so an
-externally-cleared clip self-heals within a frame. The clip is also
-gated on `GetForegroundWindow() == m_hWnd` rather than `GetFocus()` —
-`GetFocus()` is thread-queue focus and can diverge from what the user
-perceives as the active window — so an alt-tabbed-and-hung game can
-never hold a desktop-global clip.
+C++ unwind). The clip is re-verified once per frame against
+`GetClipCursor`, so an externally-cleared clip self-heals within a
+frame. The clip is also gated on `GetForegroundWindow() == m_hWnd`
+rather than `GetFocus()` — `GetFocus()` is thread-queue focus and can
+diverge from what the user perceives as the active window — so an
+alt-tabbed-and-hung game can never hold a desktop-global clip.
 
-**Quirk — `ShowCursor` is a per-process counter, not a boolean.** Each
-call moves the display counter by exactly ±1 and returns the new value;
-a per-frame `while(ShowCursor(FALSE) > 0);`-style loop run every frame
-(rather than once per visibility transition) runs the counter away from
-zero indefinitely. The launcher's cursor guard applies exactly one
-`ShowCursor` call per transition and tracks the net delta so its
-destructor can return the counter to where it found it.
+**Quirk — `ShowCursor` is a per-thread counter, and `GetCursorInfo`
+does not report it.** Each `ShowCursor` call moves the calling thread's
+display counter by exactly ±1 and returns the new value; the cursor
+draws over that thread's windows while the counter is ≥ 0. Nothing
+else reports that counter: `GetCursorInfo`'s `CURSOR_SHOWING` is the
+state of whichever thread's window last received the cursor, and it
+only agrees with our counter once the mouse has moved over the game
+window. Stepping the counter against `CURSOR_SHOWING` once per frame
+therefore ran it away at frame rate — thousands of stray `ShowCursor`
+calls after one alt-tab — and the cursor stayed visible in-game for
+minutes afterwards. The cursor guard keeps the counter from
+`ShowCursor`'s return values (sampled once at construction with a
+down/up pair), walks it to the wanted side of zero on each transition
+using those return values, and tracks the net delta so its destructor
+can return the counter to where it found it. Stock WinDrv touches the
+same counter (its capture release walks it up to ≥ 0), which the walk
+absorbs.
 
 ### Native dialogs
 

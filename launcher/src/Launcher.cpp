@@ -40,15 +40,22 @@ namespace
     //reboot - Windows reclaims per-process cursor state on exit, but a fullscreen
     //app that dies mid-clip can wedge the session's cursor first.
     //
-    //ShowCursor moves a per-process display counter by +-1 per call, so the state
-    //that has to be undone is the NET delta this process applied, not a boolean.
-    //The state is static and the release is a static function because the
-    //unhandled-exception filter has to run it from a crashed context where no
-    //destructor will.
+    //ShowCursor moves a per-thread display counter by +-1 per call and returns
+    //the new value; the cursor draws over this thread's windows while it is
+    //>= 0. That return value is the only trustworthy view of the counter:
+    //GetCursorInfo's CURSOR_SHOWING belongs to whichever thread's window last
+    //received the cursor, so it disagrees with our counter whenever the mouse
+    //has not moved over the game window since a focus change - and stepping
+    //the counter against it once per frame ran it away by thousands. The state
+    //that has to be undone on exit is the NET delta this code applied, not a
+    //boolean. The state is static and the release is a static function because
+    //the unhandled-exception filter has to run it from a crashed context where
+    //no destructor will.
     class CCursorGuard
     {
     public:
-        CCursorGuard() { assert(!s_bLive); s_bLive = true; }
+        //The counter is sampled without a net change: one down, one up.
+        CCursorGuard() { assert(!s_bLive); s_bLive = true; ShowCursor(FALSE); s_iDisplayCount = ShowCursor(TRUE); }
         ~CCursorGuard() { Release(); s_bLive = false; }
 
         CCursorGuard(const CCursorGuard&) = delete;
@@ -56,9 +63,15 @@ namespace
 
         void SetClip(const RECT& rClip) { s_bClipHeld = ClipCursor(&rClip) != FALSE; }
         void ReleaseClip() { ClipCursor(NULL); s_bClipHeld = false; }
-        //Both return ShowCursor's result: the display counter after the call.
-        int Show() { ++s_iShowDelta; return ShowCursor(TRUE); }
-        int Hide() { --s_iShowDelta; return ShowCursor(FALSE); }
+
+        //Walk the counter until the cursor is shown (>= 0) or hidden (< 0),
+        //keyed on ShowCursor's own return value so the walk is exact whatever
+        //other code (WinDrv's capture release, for one) did to the counter.
+        //The cap only guards against a pathological counter; a wrecked one (a
+        //few thousand, the size seen in the field) still clears in one walk.
+        int Show() { for (int i = 0; i < kMaxStepsPerWalk && s_iDisplayCount < 0; ++i) { ++s_iShowDelta; s_iDisplayCount = ShowCursor(TRUE); } return s_iDisplayCount; }
+        int Hide() { for (int i = 0; i < kMaxStepsPerWalk && s_iDisplayCount >= 0; ++i) { --s_iShowDelta; s_iDisplayCount = ShowCursor(FALSE); } return s_iDisplayCount; }
+        int GetDisplayCount() const { return s_iDisplayCount; }
         int GetShowDelta() const { return s_iShowDelta; }
 
         //GetClipCursor cannot answer this: an unclipped cursor reports the whole
@@ -88,14 +101,17 @@ namespace
         }
 
     private:
+        static constexpr int kMaxStepsPerWalk = 100000;
         static bool s_bLive;
         static bool s_bClipHeld;
         static int s_iShowDelta;
+        static int s_iDisplayCount;
     };
 
     bool CCursorGuard::s_bLive = false;
     bool CCursorGuard::s_bClipHeld = false;
     int CCursorGuard::s_iShowDelta = 0;
+    int CCursorGuard::s_iDisplayCount = 0;
 
     //Frame deadline timer plus the message-aware wait on it. Three paths, best
     //first: a high-resolution waitable timer (~0.5 ms, no global timer period), a
@@ -912,15 +928,7 @@ void CLauncher::MainLoop(UEngine* const pEngine)
     CCursorGuard CursorGuard; //Releases clip and ShowCursor delta on return and on unwind
     CLevelWatch LevelWatch;
     GLog->Logf(L"Main loop: frame pacing via %s.", FrameTimer.GetPathName());
-
-    //Cursor diagnostics: a hide is one ShowCursor step per frame, so a display
-    //counter that something else keeps above zero shows up as a run of frames
-    //where a hide was requested yet CURSOR_SHOWING persists. Logged once the
-    //run reaches a second, then once a minute, then once more when it ends.
-    unsigned long long iCursorHideRunStartMs = 0;
-    unsigned long long iCursorHideRunLastLogMs = 0;
-    unsigned int iCursorHideRunFrames = 0;
-    int iCursorLastShowCursorResult = 0;
+    GLog->Logf(L"Cursor: display counter at main-loop entry is %d.", CursorGuard.GetDisplayCount());
 
     while (GIsRunning && !GIsRequestingExit)
     {
@@ -1160,18 +1168,14 @@ void CLauncher::MainLoop(UEngine* const pEngine)
                 SetCursorPos(p.x, p.y);
             }
 
-            //Diff the desired state against what the OS actually reports, so an
-            //externally cleared clip or a foreign ShowCursor heals within a frame while
-            //a steady state costs two cheap reads. Each transition applies exactly one
-            //ShowCursor call, because it moves a display counter by +-1 per call and
-            //re-asserting a state every frame would run that counter away.
+            //The clip is diffed against what the OS reports, so an externally
+            //cleared clip heals within a frame. Visibility is diffed against this
+            //thread's own ShowCursor counter (the guard tracks it from the return
+            //values), never against GetCursorInfo - see the guard's comment.
             RECT rActualClip = {};
             const bool bClipMatchesDesired = Want.bClip && GetClipCursor(&rActualClip) && EqualRect(&rActualClip, &Want.rClip)!=FALSE;
-            CURSORINFO CursorInfo = {};
-            CursorInfo.cbSize = sizeof(CursorInfo);
-            const bool bCursorShowing = GetCursorInfo(&CursorInfo) ? (CursorInfo.flags & CURSOR_SHOWING)!=0 : true;
 
-            const CursorPolicy::Actions Act = CursorPolicy::Diff(Want, bClipMatchesDesired, CursorGuard.IsClipHeld(), bCursorShowing);
+            const CursorPolicy::Actions Act = CursorPolicy::Diff(Want, bClipMatchesDesired, CursorGuard.IsClipHeld(), CursorGuard.GetDisplayCount());
             if (Act.bSetClip) //Fixed being able to move cursor outside of fullscreen game on dual monitor systems
             {
                 CursorGuard.SetClip(Want.rClip);
@@ -1180,50 +1184,23 @@ void CLauncher::MainLoop(UEngine* const pEngine)
             {
                 CursorGuard.ReleaseClip();
             }
-            //Every applied step is logged with ShowCursor's returned counter: the
-            //value itself is the diagnostic (a plain +-1 counter never sits far
-            //from zero; a large value means another party owns the count).
-            if (Act.bHideOneStep) //Get rid of double mouse cursors when game doesn't clip it
+            //Transitions are logged with the counter the walk landed on: a value
+            //far from -1/0 means something outside this loop moved the counter.
+            if (Act.bHide) //Get rid of double mouse cursors when game doesn't clip it
             {
-                iCursorLastShowCursorResult = CursorGuard.Hide();
-                GLog->Logf(L"Cursor: ShowCursor(FALSE) -> %d (delta %d; pad=%d mouse=%d over=%d inClient=%d captured=%d fg=%d menu=%d hCursor=0x%p)",
-                    iCursorLastShowCursorResult, CursorGuard.GetShowDelta(), bPadActive, bMouseActive, bMouseOverWindow,
-                    Frame.bMouseInClientRect, Frame.bCaptured, bForeground, bInMenu, static_cast<void*>(CursorInfo.hCursor));
+                const int iBefore = CursorGuard.GetDisplayCount();
+                const int iAfter = CursorGuard.Hide();
+                GLog->Logf(L"Cursor: hidden; counter %d -> %d (delta %d; pad=%d mouse=%d over=%d inClient=%d captured=%d fg=%d menu=%d)",
+                    iBefore, iAfter, CursorGuard.GetShowDelta(), bPadActive, bMouseActive, bMouseOverWindow,
+                    Frame.bMouseInClientRect, Frame.bCaptured, bForeground, bInMenu);
             }
-            if (Act.bShowOneStep)
+            if (Act.bShow)
             {
-                iCursorLastShowCursorResult = CursorGuard.Show();
-                GLog->Logf(L"Cursor: ShowCursor(TRUE) -> %d (delta %d; pad=%d mouse=%d over=%d inClient=%d captured=%d fg=%d menu=%d hCursor=0x%p)",
-                    iCursorLastShowCursorResult, CursorGuard.GetShowDelta(), bPadActive, bMouseActive, bMouseOverWindow,
-                    Frame.bMouseInClientRect, Frame.bCaptured, bForeground, bInMenu, static_cast<void*>(CursorInfo.hCursor));
-            }
-
-            const unsigned long long iNowMs = GetTickCount64();
-            if (!Want.bCursorVisible && bCursorShowing)
-            {
-                if (iCursorHideRunFrames++ == 0)
-                {
-                    iCursorHideRunStartMs = iNowMs;
-                    iCursorHideRunLastLogMs = iNowMs;
-                }
-                const unsigned long long iSinceStartMs = iNowMs - iCursorHideRunStartMs;
-                const unsigned long long iSinceLogMs = iNowMs - iCursorHideRunLastLogMs;
-                if ((iSinceStartMs >= 1000 && iCursorHideRunLastLogMs == iCursorHideRunStartMs) || iSinceLogMs >= 60000)
-                {
-                    iCursorHideRunLastLogMs = iNowMs;
-                    GLog->Logf(L"Cursor: hide requested for %u frames (%llu ms) but CURSOR_SHOWING persists; last ShowCursor -> %d, delta %d, flags=0x%x hCursor=0x%p (pad=%d fg=%d menu=%d captured=%d)",
-                        iCursorHideRunFrames, iSinceStartMs, iCursorLastShowCursorResult, CursorGuard.GetShowDelta(),
-                        CursorInfo.flags, static_cast<void*>(CursorInfo.hCursor), bPadActive, bForeground, bInMenu, Frame.bCaptured);
-                }
-            }
-            else if (iCursorHideRunFrames > 0)
-            {
-                if (iCursorHideRunLastLogMs != iCursorHideRunStartMs) //Only runs that were reported get a closing line
-                {
-                    GLog->Logf(L"Cursor: hide-requested run ended after %u frames (%llu ms); showing=%d wantVisible=%d",
-                        iCursorHideRunFrames, iNowMs - iCursorHideRunStartMs, bCursorShowing, Want.bCursorVisible);
-                }
-                iCursorHideRunFrames = 0;
+                const int iBefore = CursorGuard.GetDisplayCount();
+                const int iAfter = CursorGuard.Show();
+                GLog->Logf(L"Cursor: shown; counter %d -> %d (delta %d; pad=%d mouse=%d over=%d inClient=%d captured=%d fg=%d menu=%d)",
+                    iBefore, iAfter, CursorGuard.GetShowDelta(), bPadActive, bMouseActive, bMouseOverWindow,
+                    Frame.bMouseInClientRect, Frame.bCaptured, bForeground, bInMenu);
             }
         }
     }

@@ -28,12 +28,13 @@ CursorPolicy::Desired CursorPolicy::Decide(const Facts& Frame)
     return Want;
 }
 
-CursorPolicy::Actions CursorPolicy::Diff(const Desired& Want, const bool bClipMatchesDesired, const bool bClipHeld, const bool bCursorShowing)
+CursorPolicy::Actions CursorPolicy::Diff(const Desired& Want, const bool bClipMatchesDesired, const bool bClipHeld, const int iDisplayCount)
 {
     Actions Result;
     Result.bSetClip = Want.bClip && !bClipMatchesDesired;
     Result.bReleaseClip = !Want.bClip && bClipHeld;
-    Result.bShowOneStep = Want.bCursorVisible && !bCursorShowing;
-    Result.bHideOneStep = !Want.bCursorVisible && bCursorShowing;
+    const bool bVisible = iDisplayCount >= 0;
+    Result.bShow = Want.bCursorVisible && !bVisible;
+    Result.bHide = !Want.bCursorVisible && bVisible;
     return Result;
 }
