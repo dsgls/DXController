@@ -6,12 +6,11 @@
 // else btnLogout (Public/ATM).
 //
 // Each populated choice button is its own row. Triggered options stay
-// visible but vanilla-disabled. Pressing a choice disables it
-// (ActivateSpecialOption -> SetSensitivity(False)) and the engine moves
-// the stock focus cue off it, so HandleActivate re-syncs nav focus to
-// the next sensitive choice (or the action bar) after each press —
-// otherwise `focused` is left on the dead button and A goes inert
-// until the user D-pads away and back.
+// visible but vanilla-disabled, and a disabled choice must never hold
+// focus: it paints no focus cue and swallows A (see HandleDPad). Two
+// places enforce that — HandleActivate re-homes focus the moment a
+// press disables the choice under it (ActivateSpecialOption ->
+// SetSensitivity(False)), and HandleDPad steps over disabled rows.
 //=============================================================================
 class ComputerScreenSpecialOptionsNav extends ComputerScreenNavSub;
 
@@ -145,14 +144,29 @@ function MoveToChoice(int idx)
 
 function bool HandleDPad(int dx, int dy)
 {
-    local int totalRows, newIdx;
+    local int totalRows, newIdx, steps;
 
     totalRows = numChoices + 1;  // choices + ActionBarRow
 
     if (dy != 0)
     {
-        // End-to-end wrap across all rows (choices + action bar).
-        newIdx = (rowIndex + dy + totalRows) % totalRows;
+        // End-to-end wrap across all rows (choices + action bar),
+        // stepping over triggered options. A vanilla-disabled choice is
+        // an invisible dead end: MenuUIBorderButtonWindow.SetButtonMetrics
+        // takes its "disabled" branch regardless of focus, and this
+        // screen's GetFocusedRect suppresses the overlay frame, so
+        // nothing on screen marks the row — while A there is a consumed
+        // no-op. The ActionBarRow always ends the walk, so a screen whose
+        // options are all spent simply keeps focus on the action bar.
+        newIdx = rowIndex;
+        for (steps = 0; steps < totalRows; steps++)
+        {
+            newIdx = (newIdx + dy + totalRows) % totalRows;
+            if (newIdx == numChoices)
+                break;
+            if (choices[newIdx] != None && choices[newIdx].bIsSensitive)
+                break;
+        }
         if (newIdx == numChoices)
             MoveToActionBar();
         else
@@ -184,7 +198,13 @@ function bool HandleActivate(byte button)
         return true;
 
     if (focused == None || !focused.bIsSensitive)
+    {
+        class'DXControllerDebug'.static.NavLog(
+            "DXC-TERM SPECIAL-ACTIVATE row=" $ string(rowIndex) $ " live=False");
         return true;
+    }
+    class'DXControllerDebug'.static.NavLog(
+        "DXC-TERM SPECIAL-ACTIVATE row=" $ string(rowIndex) $ " live=True");
 
     // Both MenuUIChoiceButton (choice rows) and MenuUIActionButtonWindow
     // (ActionBarRow) inherit MenuUIBorderButtonWindow → PressButton.
