@@ -102,8 +102,13 @@ std::vector<std::wstring> StartupHeader::Build(const Facts& F)
 
     for (const SPatchSiteOutcome& Site : F.PatchOutcomes)
     {
-        std::wstring sz = L"WinDrvPatch: ";
-        sz += Site.szDescription;
+        std::wstring sz = L"BytePatch: ";
+        sz += Site.szModule;
+        if (!Site.szDescription.empty()) //Empty on a whole-module "dll-absent" row
+        {
+            sz += L" ";
+            sz += Site.szDescription;
+        }
         sz += L" - ";
         sz += Site.szOutcome;
         Lines.push_back(sz);

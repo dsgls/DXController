@@ -6,16 +6,17 @@
 // Pure assembly of the startup diagnostic block (design doc sec3.4): a plain
 // facts struct in, the header's log lines out, delimited "=== DXController
 // startup ===" ... "=== end startup ===". CLauncher's constructor gathers the
-// facts (Win32 queries, GConfig reads, the CGamepad/CWinDrvPatch accessors)
+// facts (Win32 queries, GConfig reads, the CGamepad/CBytePatch accessors)
 // and logs each returned line via GLog - no syscalls, no engine headers here.
 // See development.md's pure-unit-layer entry.
 namespace StartupHeader
 {
-    //One CWinDrvPatch site: its description (matches the at-patch-time log
-    //line) and its outcome ("patched" / "mismatch" / "failed" / "skipped" /
-    //"dll-absent").
+    //One CBytePatch site: the owning DLL, its description (matches the
+    //at-patch-time log line; empty for a whole-module "dll-absent" row) and its
+    //outcome ("patched" / "mismatch" / "failed" / "skipped" / "dll-absent").
     struct SPatchSiteOutcome
     {
+        std::wstring szModule;
         std::wstring szDescription;
         std::wstring szOutcome;
     };
@@ -43,7 +44,7 @@ namespace StartupHeader
         std::wstring szPadGuid;   //"none" when no pad is active
         std::wstring szPadFamily; //CGamepad::GetInfo()
 
-        std::vector<SPatchSiteOutcome> PatchOutcomes; //CWinDrvPatch::GetSiteOutcomes(), in site order; may be empty
+        std::vector<SPatchSiteOutcome> PatchOutcomes; //CBytePatch::GetSiteOutcomes(), in site order; may be empty
 
         //Behavior-changing ini values (design doc sec3.4).
         bool bRawInput = false;
@@ -54,7 +55,7 @@ namespace StartupHeader
         int  iFpsLimitIni = 0;
     };
 
-    //One line per fact (plus the two delimiter lines); WinDrvPatch lines repeat
+    //One line per fact (plus the two delimiter lines); BytePatch lines repeat
     //once per PatchOutcomes entry, in order, and are omitted entirely when that
     //list is empty. Caller logs each returned line (e.g. GLog->Logf(L"%s", ...)).
     std::vector<std::wstring> Build(const Facts& F);

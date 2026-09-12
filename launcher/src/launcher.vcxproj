@@ -139,7 +139,7 @@
     </ClCompile>
     <ClCompile Include="ConfigOverride.cpp" />
     <ClCompile Include="NativeHooks.cpp" />
-    <ClCompile Include="WinDrvPatch.cpp" />
+    <ClCompile Include="BytePatch.cpp" />
     <ClCompile Include="RawInput.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Use</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Use</PrecompiledHeader>
@@ -191,7 +191,8 @@
     <ClInclude Include="ConfigOverride.h" />
     <ClInclude Include="NativeHooks.h" />
     <ClInclude Include="OutputDeviceFileFlush.h" />
-    <ClInclude Include="WinDrvPatch.h" />
+    <ClInclude Include="BytePatch.h" />
+    <ClInclude Include="BytePatchSites.h" />
     <ClInclude Include="RawInput.h" />
     <ClInclude Include="Gamepad.h" />
     <ClInclude Include="resource.h" />

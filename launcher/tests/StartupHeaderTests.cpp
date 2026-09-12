@@ -105,30 +105,41 @@ TEST_CASE("StartupHeader emits \"none\" pad facts unchanged, without special-cas
     CHECK(std::find(Lines.begin(), Lines.end(), L"Gamepad: None guid=none family=None") != Lines.end());
 }
 
-TEST_CASE("StartupHeader emits one line per WinDrvPatch site outcome, in order")
+TEST_CASE("StartupHeader emits one line per byte-patch site outcome, in order")
 {
     StartupHeader::Facts F = MakeFacts();
-    F.PatchOutcomes.push_back({ L"joy-loop press-branch bitmap index (Bug 1)", L"patched" });
-    F.PatchOutcomes.push_back({ L"joy-loop release-branch bitmap index (Bug 1)", L"patched" });
-    F.PatchOutcomes.push_back({ L"trailer outer-loop bound (Bug 2)", L"mismatch" });
-    F.PatchOutcomes.push_back({ L"a site whose VirtualProtect failed", L"failed" });
-    F.PatchOutcomes.push_back({ L"a site never attempted", L"skipped" });
+    F.PatchOutcomes.push_back({ L"WinDrv.dll", L"joy-loop press-branch bitmap index (Bug 1)", L"patched" });
+    F.PatchOutcomes.push_back({ L"WinDrv.dll", L"joy-loop release-branch bitmap index (Bug 1)", L"patched" });
+    F.PatchOutcomes.push_back({ L"WinDrv.dll", L"trailer outer-loop bound (Bug 2)", L"mismatch" });
+    F.PatchOutcomes.push_back({ L"DeusEx.dll", L"a site whose VirtualProtect failed", L"failed" });
+    F.PatchOutcomes.push_back({ L"DeusEx.dll", L"a site never attempted", L"skipped" });
     const auto Lines = StartupHeader::Build(F);
-    CHECK(std::find(Lines.begin(), Lines.end(), L"WinDrvPatch: joy-loop press-branch bitmap index (Bug 1) - patched") != Lines.end());
-    CHECK(std::find(Lines.begin(), Lines.end(), L"WinDrvPatch: joy-loop release-branch bitmap index (Bug 1) - patched") != Lines.end());
-    CHECK(std::find(Lines.begin(), Lines.end(), L"WinDrvPatch: trailer outer-loop bound (Bug 2) - mismatch") != Lines.end());
-    CHECK(std::find(Lines.begin(), Lines.end(), L"WinDrvPatch: a site whose VirtualProtect failed - failed") != Lines.end());
-    CHECK(std::find(Lines.begin(), Lines.end(), L"WinDrvPatch: a site never attempted - skipped") != Lines.end());
+    CHECK(std::find(Lines.begin(), Lines.end(), L"BytePatch: WinDrv.dll joy-loop press-branch bitmap index (Bug 1) - patched") != Lines.end());
+    CHECK(std::find(Lines.begin(), Lines.end(), L"BytePatch: WinDrv.dll joy-loop release-branch bitmap index (Bug 1) - patched") != Lines.end());
+    CHECK(std::find(Lines.begin(), Lines.end(), L"BytePatch: WinDrv.dll trailer outer-loop bound (Bug 2) - mismatch") != Lines.end());
+    CHECK(std::find(Lines.begin(), Lines.end(), L"BytePatch: DeusEx.dll a site whose VirtualProtect failed - failed") != Lines.end());
+    CHECK(std::find(Lines.begin(), Lines.end(), L"BytePatch: DeusEx.dll a site never attempted - skipped") != Lines.end());
 }
 
-TEST_CASE("StartupHeader emits no WinDrvPatch lines when the outcome list is empty")
+//A module that never loaded contributes one row for the whole module, with no
+//site description -- the rendered line must not carry the empty description as
+//a double space.
+TEST_CASE("StartupHeader renders a descriptionless byte-patch row as module and outcome only")
+{
+    StartupHeader::Facts F = MakeFacts();
+    F.PatchOutcomes.push_back({ L"DeusEx.dll", L"", L"dll-absent" });
+    const auto Lines = StartupHeader::Build(F);
+    CHECK(std::find(Lines.begin(), Lines.end(), L"BytePatch: DeusEx.dll - dll-absent") != Lines.end());
+}
+
+TEST_CASE("StartupHeader emits no byte-patch lines when the outcome list is empty")
 {
     StartupHeader::Facts F = MakeFacts();
     F.PatchOutcomes.clear();
     const auto Lines = StartupHeader::Build(F);
     for (const std::wstring& Line : Lines)
     {
-        CHECK(Line.find(L"WinDrvPatch:") == std::wstring::npos);
+        CHECK(Line.find(L"BytePatch:") == std::wstring::npos);
     }
 }
 

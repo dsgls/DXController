@@ -295,7 +295,7 @@ the previous log is rotated to `<package>.old.log` (the stock output
 device does not rotate on its own); right before `MainLoop` starts, a
 single delimited block logs the facts most useful for a bug report in
 one place — versions, exe/command line, OS build, renderer/viewport
-config, effective FPS cap, active pad identity, `WinDrvPatch` per-site
+config, effective FPS cap, active pad identity, `BytePatch` per-site
 outcomes, and the ini values that change behaviour.
 
 ## Source overlay model
@@ -416,11 +416,11 @@ backend is the *only* source of joystick events. Don't re-enable
 for the same `IK_Joy*` slots.
 
 The launcher also patches `WinDrv.dll` at startup (see
-`launcher/src/WinDrvPatch.cpp` and `windrv-input.md`) to fix two
+`launcher/src/BytePatch.cpp` and `windrv-input.md`) to fix two
 joystick bugs in the stock binary. The patches are defence-in-depth
-given `UseJoystick=False`. `WinDrvPatch: fingerprint MISMATCH` in the
+given `UseJoystick=False`. `BytePatch: fingerprint MISMATCH` in the
 launcher log means the patcher refused to write into an unrecognised
-`WinDrv.dll` — confirm against the GOG / Steam build the patch was
+DLL — confirm against the GOG / Steam build the patch was
 authored for.
 
 The launcher additionally synthesizes modifier-key releases when the

@@ -7,7 +7,7 @@
 #include "Fixapp.h"
 #include "ExecHook.h"
 #include "NativeHooks.h"
-#include "WinDrvPatch.h"
+#include "BytePatch.h"
 #include "OutputDeviceFileFlush.h"
 #include "CursorPolicy.h"
 #include "CrashRecord.h"
@@ -391,16 +391,18 @@ CLauncher::CLauncher()
     std::unique_ptr<WLog> LogWindowPtr;
     UEngine* const pEngine = InitEngineAndViewport(hMonitor, LogWindowPtr);
 
-    //Apply WinDrv binary patches BEFORE creating CNativeHooks so that any
-    //mismatch dialog runs before we start mutating GNatives[]. m_hWnd is
+    //Apply the stock-DLL byte patches BEFORE creating CNativeHooks so that any
+    //mismatch dialog runs before we start mutating GNatives[]. Every patched
+    //module is already bound by this point -- InitEngineAndViewport loads the
+    //game package, which pulls in DeusEx.dll, and WinDrv.dll with it. m_hWnd is
     //assigned by InitEngineAndViewport above; it will be NULL on a dedicated
     //server, which the dialog tolerates.
-    CWinDrvPatch WinDrvPatch(m_hWnd);
+    CBytePatch BytePatch(m_hWnd);
 
     //Initialize native hooks
     CNativeHooks NativeHooks(PROJECTNAME);
 
-    LogStartupHeader(pEngine, WinDrvPatch);
+    LogStartupHeader(pEngine, BytePatch);
 
     //Main loop. GIsGuarded makes appError append the engine's guard-chain
     //history to GErrorHist and throw instead of showing its message box on the
@@ -630,10 +632,10 @@ UEngine* CLauncher::InitEngineAndViewport(const HMONITOR hMonitor, std::unique_p
 }
 
 //Startup diagnostic block (design doc sec3.4) -- called from the latest point
-//where every fact it reports exists (viewport, WinDrvPatch outcomes, gamepad).
+//where every fact it reports exists (viewport, byte-patch outcomes, gamepad).
 //StartupHeader::Build is the pure assembly; everything here is plumbing that
 //gathers facts and logs the resulting lines.
-void CLauncher::LogStartupHeader(UEngine* const pEngine, const CWinDrvPatch& WinDrvPatch)
+void CLauncher::LogStartupHeader(UEngine* const pEngine, const CBytePatch& BytePatch)
 {
     StartupHeader::Facts Facts;
 
@@ -678,9 +680,11 @@ void CLauncher::LogStartupHeader(UEngine* const pEngine, const CWinDrvPatch& Win
     Facts.szPadGuid = szPadGuid;
     Facts.szPadFamily = m_Gamepad.GetInfo();
 
-    for (const CWinDrvPatch::SSiteOutcome& Site : WinDrvPatch.GetSiteOutcomes())
+    for (const CBytePatch::SSiteOutcome& Site : BytePatch.GetSiteOutcomes())
     {
-        Facts.PatchOutcomes.push_back({ Site.pszDescription, Site.pszOutcome });
+        Facts.PatchOutcomes.push_back({ Site.pszModule,
+                                        Site.pszDescription ? Site.pszDescription : L"",
+                                        Site.pszOutcome });
     }
 
     Facts.bRawInput = m_bRawInput != 0;

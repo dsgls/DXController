@@ -4,7 +4,7 @@
 #include "FrameStats.h"
 
 class CConfigOverride;
-class CWinDrvPatch;
+class CBytePatch;
 
 class CLauncher : private FExecHook
 {
@@ -22,7 +22,7 @@ private:
     bool RunPreGameDialogs(HMONITOR& hMonitorOut); //False means abort startup
     void ApplyConfigOverrides(std::list<CConfigOverride>& ConfigOverrides);
     UEngine* InitEngineAndViewport(const HMONITOR hMonitor, std::unique_ptr<WLog>& LogWindowPtr);
-    void LogStartupHeader(UEngine* const pEngine, const CWinDrvPatch& WinDrvPatch);
+    void LogStartupHeader(UEngine* const pEngine, const CBytePatch& BytePatch);
 
     void ApplyAutoFOV(const size_t iSizeX, const size_t iSizeY);
     void MainLoop(UEngine * const pEngine);

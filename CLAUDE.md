@@ -84,7 +84,7 @@ Y then waits for Z then frobs the fizz" is useless verbosity.
 
 **User-owned native code:** the launcher executable and its gamepad
 backend in `launcher/`, plus the runtime byte patches it applies to
-`WinDrv.dll` at startup (`launcher/src/WinDrvPatch.cpp`). Fixed at the
+stock DLLs at startup (`launcher/src/BytePatch.cpp`). Fixed at the
 source.
 
 **Stock native code:** `Engine.dll`, `Core.dll`, `Extension.dll`

@@ -114,7 +114,7 @@
     <ClCompile Include="NativeHooks.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="WinDrvPatch.cpp">
+    <ClCompile Include="BytePatch.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="FreeSpaceFix.cpp">
@@ -224,7 +224,10 @@
     <ClInclude Include="OutputDeviceFileFlush.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="WinDrvPatch.h">
+    <ClInclude Include="BytePatch.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="BytePatchSites.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="FreeSpaceFix.h">

@@ -74,6 +74,7 @@
     <ClCompile Include="LogTimeTests.cpp" />
     <ClCompile Include="LogPathTests.cpp" />
     <ClCompile Include="StartupHeaderTests.cpp" />
+    <ClCompile Include="BytePatchSitesTests.cpp" />
     <ClCompile Include="StickResponseTests.cpp" />
     <ClCompile Include="ButtonMapResolveTests.cpp" />
     <ClCompile Include="AxisMapParseTests.cpp" />
