@@ -298,6 +298,28 @@ one place — versions, exe/command line, OS build, renderer/viewport
 config, effective FPS cap, active pad identity, `BytePatch` per-site
 outcomes, and the ini values that change behaviour.
 
+### Stock-DLL byte patches
+
+`launcher/src/BytePatch.cpp` rewrites a handful of instructions in the
+stock DLLs in memory at startup, for bugs that cannot be reached from
+UnrealScript. Each site carries a whole-instruction fingerprint and is
+written only on an exact match, so an unrecognised build is refused
+rather than corrupted; the first mismatch prompts the user and abandons
+every remaining site, in every module, because a mismatch means the
+install is not the build the patches were measured against. Outcomes are
+reported per site in the startup header.
+
+Patched today: two `WinDrv.dll` joystick bugs (see the input pipeline
+below) and `DeusEx.dll`'s save-index scan, which read only the low three
+digits of a `SaveNNNN` directory name and so capped new save slots at
+`Save1000`, overwriting it on every subsequent save. Addresses are given
+against each module's preferred image base and relocated by the observed
+load delta.
+
+The patcher runs after `InitEngineAndViewport`, which is what guarantees
+both modules are bound: loading the game package pulls in `DeusEx.dll`,
+and `WinDrv.dll` with it.
+
 ## Source overlay model
 
 `DeusEx.u` is rebuildable, so additions live in `DeusEx/Classes/<File>.uc`

@@ -133,3 +133,31 @@ TEST_CASE("WinDrv trailer site lowers the outer-loop bound from 0x100 to 0xc8")
     CHECK(memcmp(kWinDrvSites[2].pExpected, aExpected, sizeof(aExpected)) == 0);
     CHECK(memcmp(kWinDrvSites[2].pReplacement, aReplacement, sizeof(aReplacement)) == 0);
 }
+
+TEST_CASE("DeusEx save-index site NOPs the truncating store and rewinds appAtoi by one digit")
+{
+    //  66 c7 40 08 00 00  MOV word [EAX+8], 0  -> 90 x6   (keep all four digits)
+    //  83 c0 0a           ADD EAX, 0xa         -> 83 c0 08 (parse from the first)
+    //Read off DeusEx.dll at 0x10017d13; see deusex-savegame-model.md.
+    const BYTE aExpected[]    = { 0x66, 0xC7, 0x40, 0x08, 0x00, 0x00, 0x83, 0xC0, 0x0A };
+    const BYTE aReplacement[] = { 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x83, 0xC0, 0x08 };
+
+    REQUIRE(_countof(kDeusExSites) == 1);
+    const SPatchSite& Site = kDeusExSites[0];
+    CHECK(Site.iPreferredVA == 0x10017D13);
+    REQUIRE(Site.iLen == _countof(aExpected));
+    CHECK(memcmp(Site.pExpected, aExpected, sizeof(aExpected)) == 0);
+    CHECK(memcmp(Site.pReplacement, aReplacement, sizeof(aReplacement)) == 0);
+
+    //The six NOPs must cover exactly the MOV; the ADD's opcode and modrm must
+    //survive so only its immediate changes.
+    for (size_t i = 0; i < 6; ++i)
+    {
+        CHECK(Site.pReplacement[i] == 0x90);
+    }
+    CHECK(Site.pReplacement[6] == Site.pExpected[6]);
+    CHECK(Site.pReplacement[7] == Site.pExpected[7]);
+    //ADD EAX, 8 reaches the first digit; ADD EAX, 0xa skipped it. TCHAR is two
+    //bytes, so the difference is exactly one character.
+    CHECK(Site.pExpected[8] - Site.pReplacement[8] == 2);
+}

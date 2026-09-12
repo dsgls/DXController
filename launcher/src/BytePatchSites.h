@@ -69,7 +69,36 @@ static constexpr SPatchSite kWinDrvSites[] =
              L"controller buttons may release spuriously every frame"),
 };
 
+// --- DeusEx.dll -----------------------------------------------------------
+// XGameDirectory::GetNewSaveFileIndex. See
+// ../deusex-native-re/docs/deusex-savegame-model.md.
+//
+// The scan reads each "SaveNNNN" directory name to find the highest index in
+// use, but NUL-terminates at the first digit and starts appAtoi at the second,
+// so it only ever sees the low three digits. The running max therefore cannot
+// exceed 999 and the function returns 1000 forever once any Save?999 exists --
+// every subsequent save overwrites Save1000, wiping the previous one first
+// (SaveGame calls DeleteSaveGameFiles(destDir)).
+//
+//   66 c7 40 08 00 00   MOV word [EAX+8], 0   -> six NOPs: keep all four digits
+//   83 c0 0a            ADD EAX, 0xa          -> ADD EAX, 8: parse from the first
+//
+// Patching the whole nine-byte run rather than the six changed bytes plus the
+// one displacement keeps this a single site (bytes 6-7 are unchanged in
+// between). Since "%04d" is a minimum width, the fixed scan keeps working past
+// Save9999 -- there is no ceiling left.
+static constexpr BYTE kSaveIndexExpected[]    = { 0x66, 0xC7, 0x40, 0x08, 0x00, 0x00, 0x83, 0xC0, 0x0A };
+static constexpr BYTE kSaveIndexReplacement[] = { 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x83, 0xC0, 0x08 };
+
+static constexpr SPatchSite kDeusExSites[] =
+{
+    MakeSite(0x10017D13, kSaveIndexExpected, kSaveIndexReplacement,
+             L"save-index scan digit truncation",
+             L"saves past the 1000th silently overwrite each other"),
+};
+
 static constexpr SPatchModule kPatchModules[] =
 {
     { L"WinDrv.dll", 0x11100000, kWinDrvSites, _countof(kWinDrvSites) },
+    { L"DeusEx.dll", 0x10000000, kDeusExSites, _countof(kDeusExSites) },
 };

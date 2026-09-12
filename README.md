@@ -82,6 +82,11 @@ The mod can autosave during play. It is off by default; turn it on and
 set the interval (default 5 minutes) in Settings → Autosave. Writing each
 save can cause a brief stutter.
 
+The launcher also repairs a bug in the stock game that caps save slots
+at 1000: past that point every new save, autosave or manual, silently
+overwrites the same slot and destroys the save already there. With the
+launcher running, saves keep counting up normally.
+
 ## Linux and Steam Deck
 
 The mod works on Linux and the Steam Deck under Proton. Some users have
