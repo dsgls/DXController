@@ -1,3 +1,5 @@
+# Every text file is LF in the tree (this overrides core.autocrlf). UCC.exe
+# wants CRLF; the build scripts convert on the way into the game dir.
 * text=auto eol=lf
 *.sh text eol=lf
 *.py text eol=lf

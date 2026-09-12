@@ -20,13 +20,13 @@
 #      generate textures (gen-wheel.py + png-to-pcx.py) into
 #      DXController/Textures/ for the #exec imports in DXControllerTextures.uc
 #   4. delete DeusEx.u; `echo n | UCC.exe make`. UCC prompts to overwrite
-#      DeusEx/Inc/DeusExClasses.h; we answer 'n'. UCC subsequently GPFs
+#      DeusEx/Inc/DeusExClasses.h; we answer 'n'. UCC subsequently crashes
 #      while loading the freshly-rebuilt DeusEx.u (the load happens before
 #      DXController compiles). DeusEx.u is written before the crash.
 #      `|| true` swallows the exit code; the `-f` check is the real
 #      success signal.
 #   5. delete DXController.u; fresh `UCC.exe make`. DeusEx.u exists
-#      (no rebuild, no GPF), then DXController.u is built against it.
+#      (no rebuild, no crash), then DXController.u is built against it.
 #
 # Requires `unix2dos` (from the dos2unix package) on PATH — run under
 # `nix develop`, which provides it, or install dos2unix.
@@ -191,9 +191,10 @@ fi
 
 cd "$BUILD_DIR/System"
 
-# Pass 1: rebuild DeusEx.u (tolerate the GPF; verify .u landed).
+# Pass 1: rebuild DeusEx.u (tolerate the crash; verify .u landed).
 rm -f "$BUILD_DIR/System/DeusEx.u"
 cmd.exe /c "echo n | UCC.exe make" || true
+echo "sync-and-build: the UCC error above is expected: a stock game bug makes UCC crash after writing DeusEx.u"
 if [[ ! -f "$BUILD_DIR/System/DeusEx.u" ]]; then
     echo "sync-and-build: DeusEx.u was not produced" >&2
     exit 1

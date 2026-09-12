@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# /// script
+# dependencies = ["pillow==12.2.0", "numpy==2.4.4"]
+# ///
 """Generate the DXController weapon-wheel textures (belt-style open ring).
 
 Outputs into OUT_DIR (default: a 'wheel-gen' dir next to this script), all
@@ -20,7 +23,7 @@ Deterministic: identical PARAMETERS produce byte-identical output.
 Geometry is expressed as a fraction of the disc radius R = TEX_SIZE/2,
 so it is resolution-independent.
 
-Run via the build (sync-and-build.sh / CI), or standalone:
+Run via the build (build.ps1 / sync-and-build.sh), or standalone:
   python3 gen-wheel.py [OUT_DIR]
 """
 import sys

@@ -36,131 +36,19 @@ jobs:
             git@github.com:dsgls/deusex-buildtools.git `
             "$env:RUNNER_TEMP\build"
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.x'
-
-      - name: Install Python deps for texture generation
-        shell: pwsh
-        run: pip install pillow numpy
-
-      - name: Overlay DXController and DeusEx sources
-        shell: pwsh
-        run: |
-          # The repo stores .uc as LF (pinned via .gitattributes); UCC.exe wants CRLF.
-          # Convert each overlay source into the build dir.
-          foreach ($pkg in @('DXController', 'DeusEx')) {
-              $dst = Join-Path $env:RUNNER_TEMP "build\$pkg\Classes"
-              New-Item -ItemType Directory -Force -Path $dst | Out-Null
-              foreach ($f in Get-ChildItem -File "$pkg\Classes\*.uc") {
-                  $content = (Get-Content -Raw -LiteralPath $f.FullName) -replace "`r`n", "`n" -replace "`n", "`r`n"
-                  Set-Content -NoNewline -LiteralPath (Join-Path $dst $f.Name) -Value $content
-              }
-          }
-          # Generate textures and convert to 8-bit PCX into the DXController package.
-          $texDir = Join-Path $env:RUNNER_TEMP "build\DXController\Textures"
-          New-Item -ItemType Directory -Force -Path $texDir | Out-Null
-          $wheelSrc = New-Item -ItemType Directory -Path (Join-Path $env:RUNNER_TEMP "wheel-src") -Force
-          $menuBgSrc = New-Item -ItemType Directory -Path (Join-Path $env:RUNNER_TEMP "menu-bg-src") -Force
-          $veilSrc = New-Item -ItemType Directory -Path (Join-Path $env:RUNNER_TEMP "veil-src") -Force
-          python assets/gen-wheel.py "$($wheelSrc.FullName)"
-          python assets/gen-menu-bg.py "$($menuBgSrc.FullName)"
-          python assets/gen-veil.py "$($veilSrc.FullName)"
-          python assets/png-to-pcx.py assets/XboxSeries "$texDir" --size 64 --mode masked
-          # --key black: the wheel plate is drawn DSTY_Translucent, which adds the
-          # palette-index-0 key colour to the scene — must match sync-and-build.sh.
-          python assets/png-to-pcx.py "$($wheelSrc.FullName)" "$texDir" --size 1024 --mode masked --key black
-          python assets/png-to-pcx.py "$(Join-Path $wheelSrc.FullName 'wedges')" "$texDir" --size 1024 --mode grey
-          python assets/png-to-pcx.py "$(Join-Path $wheelSrc.FullName 'veil')" "$texDir" --size 1024 --mode grey
-          python assets/png-to-pcx.py "$($menuBgSrc.FullName)" "$texDir" --size native --mode grey
-          python assets/png-to-pcx.py "$($veilSrc.FullName)" "$texDir" --size native --mode grey
-
-      - name: Register DXController in DeusEx.ini EditPackages
-        shell: pwsh
-        run: |
-          $ini = Join-Path $env:RUNNER_TEMP "build\System\DeusEx.ini"
-          $content = Get-Content -Raw -LiteralPath $ini
-          $insert = "EditPackages=DXController"
-          if (-not ($content -match [regex]::Escape($insert))) {
-              # ini ships CRLF; preserve it. Insert the new line after `EditPackages=DeusEx`.
-              $content = $content -replace "EditPackages=DeusEx`r`n", "EditPackages=DeusEx`r`nEditPackages=DXController`r`n"
-              Set-Content -NoNewline -LiteralPath $ini -Value $content
-          }
-          Write-Host "--- EditPackages block ---"
-          Select-String -Path $ini -Pattern 'EditPackages'
-
-      - name: Build pass 1 — DeusEx.u
-        shell: pwsh
-        working-directory: ${{ runner.temp }}/build/System
-        run: |
-          Remove-Item -ErrorAction SilentlyContinue DeusEx.u
-          # UCC prompts to overwrite DeusEx/Inc/DeusExClasses.h; 'n' lets it proceed.
-          # UCC then GPFs while loading the rebuilt DeusEx.u — file is on disk before the crash.
-          "n" | & .\UCC.exe make
-          $global:LASTEXITCODE = 0
-          if (-not (Test-Path DeusEx.u)) {
-              Write-Host "::error::DeusEx.u was not produced"
-              exit 1
-          }
-          $size = (Get-Item DeusEx.u).Length
-          if ($size -lt 1MB) {
-              Write-Host "::error::DeusEx.u is $size bytes (< 1 MiB) — UCC silent failure"
-              exit 1
-          }
-          Write-Host "DeusEx.u OK ($size bytes)"
-
-      - name: Build pass 2 — DXController.u
-        shell: pwsh
-        working-directory: ${{ runner.temp }}/build/System
-        run: |
-          Remove-Item -ErrorAction SilentlyContinue DXController.u
-          & .\UCC.exe make
-          if ($LASTEXITCODE -ne 0) {
-              Write-Host "::error::UCC returned $LASTEXITCODE"
-              exit 1
-          }
-          if (-not (Test-Path DXController.u)) {
-              Write-Host "::error::DXController.u was not produced"
-              exit 1
-          }
-          $size = (Get-Item DXController.u).Length
-          if ($size -lt 100KB) {
-              Write-Host "::error::DXController.u is $size bytes (< 100 KiB) — UCC silent failure"
-              exit 1
-          }
-          Write-Host "DXController.u OK ($size bytes)"
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v6
 
       - name: Add MSBuild to PATH
         uses: microsoft/setup-msbuild@v3
 
-      - name: Fetch SDL3
-        shell: bash
-        run: launcher/fetch-sdl3.sh
-
-      - name: Build launcher
+      - name: Build and install into the buildtools tree
         shell: pwsh
-        run: |
-          # Tag pushes get authoritative version from github.ref_name; non-tag
-          # pushes fall through to gen-version.ps1's `git describe` path against
-          # the fetch-depth: 0 checkout.
-          if ($env:GITHUB_REF -like 'refs/tags/*') {
-              $env:LAUNCHER_VERSION = $env:GITHUB_REF_NAME
-          }
-          msbuild launcher\launcher.sln /p:Configuration=Release /p:Platform=Win32 /m -verbosity:minimal -nologo
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          if (-not (Test-Path launcher\Release\DeusEx.exe)) {
-              Write-Host "::error::launcher build did not produce DeusEx.exe"
-              exit 1
-          }
-          Write-Host "launcher OK"
-
-      - name: Run launcher unit tests
-        shell: pwsh
-        run: |
-          # The solution build compiles tests.vcxproj but never runs it.
-          & launcher\tests\Release\tests.exe
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        env:
+          # Tag pushes get the authoritative version; otherwise gen-version.ps1
+          # falls through to git describe against the fetch-depth: 0 checkout.
+          LAUNCHER_VERSION: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || '' }}
+        run: .\build.ps1 -GameDir "$env:RUNNER_TEMP\build"
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v7

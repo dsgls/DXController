@@ -4,16 +4,16 @@
 # extracts it to launcher/external/SDL3/ so headers land at
 # external/SDL3/include/SDL3/*.h and libs at external/SDL3/lib/x86/.
 # Idempotent: skips the download/extract if the pinned version is already
-# present. Run from launcher/build.sh and from CI; the pinned version
-# lives only here.
+# present. Run from launcher/build.sh and sync-and-build.sh; build.ps1 and CI
+# use the fetch-sdl3.ps1 twin. The version pin is launcher/sdl3.version.
 set -e
 
-SDL_VERSION="3.4.14"
-SDL_SHA256="2fe279e70d426e9c644b625acb3083eb3cfb263a92f2c5718aff18d24a8b6e96"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+SDL_VERSION="$(sed -n '1{s/\r$//;p}' "$SCRIPT_DIR/sdl3.version")"
+SDL_SHA256="$(sed -n '2{s/\r$//;p}' "$SCRIPT_DIR/sdl3.version")"
 SDL_ZIP="SDL3-devel-${SDL_VERSION}-VC.zip"
 SDL_URL="https://github.com/libsdl-org/SDL/releases/download/release-${SDL_VERSION}/${SDL_ZIP}"
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 EXTERNAL_DIR="$SCRIPT_DIR/external"
 SDL_DIR="$EXTERNAL_DIR/SDL3"
 VERSION_FILE="$SDL_DIR/.fetched-version"

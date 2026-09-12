@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# /// script
+# dependencies = ["pillow==12.2.0"]
+# ///
 """Convert a directory of PNGs to 8-bit PCX for UE1 #exec Texture Import.
 
 Two modes:

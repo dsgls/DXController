@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# /// script
+# dependencies = ["pillow==12.2.0"]
+# ///
 """Generate DXController menu-background tile sets for multiple page specs.
 
 Drives a list of page specs (controller settings + autosave) and produces
@@ -22,7 +25,7 @@ Deterministic: identical PARAMETERS produce byte-identical output. All
 tuning knobs live in the PARAMETERS block below — edit them to change
 the look, then rebuild.
 
-Run via the build (sync-and-build.sh), or standalone:
+Run via the build (build.ps1 / sync-and-build.sh), or standalone:
   python3 gen-menu-bg.py [OUT_DIR]
 """
 import sys

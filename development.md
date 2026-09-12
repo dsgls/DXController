@@ -12,7 +12,8 @@ DXController/Classes/*.uc   the mod — one package, compiles to DXController.u
 DeusEx/Classes/*.uc         overlay edits to stock DeusEx classes (rebuilds DeusEx.u)
 launcher/                   launcher source (fork of Deus Exe — builds DeusEx.exe)
 assets/                     source art + generators for the DXController textures
-sync-and-build.sh           rsync + two-pass UCC build
+build.ps1                   build + install everything (see Building)
+sync-and-build.sh, flake.nix maintainer's WSL/Nix wrapper for the same steps
 .github/workflows/build.yml CI build and release packaging
 scripting-reference.txt     UE1-era UnrealScript language reference
 ```
@@ -29,56 +30,38 @@ without a game install.
 
 ## Building
 
-Prerequisites: a Deus Ex GOTY install with `UCC.exe` in `System/`, plus
-WSL (or bash with rsync and `cmd.exe` access).
+Prerequisites, all on Windows:
 
-One-time setup — symlink `gamedir/` at your install (gitignored) and
-export the stock `DeusEx` source once so the overlay has something to
-sit on top of:
+- A Deus Ex GOTY install.
+- Visual Studio 2022 Build Tools (or Visual Studio) with the "Desktop
+  development with C++" workload.
+- [`uv`](https://docs.astral.sh/uv/): `winget install astral-sh.uv`,
+  then open a new terminal. `uv` fetches Python and the texture
+  generators' dependencies during build.
 
-```bash
-ln -s "/path/to/Deus Ex" gamedir
+One-time setup: export the stock `DeusEx` source so the overlay has
+something to sit on top of. From the game's `System\` directory:
+
+```
+ucc batchexport DeusEx.u Class uc ..\DeusEx\Classes
 ```
 
-```cmd
-ucc.exe batchexport DeusEx.u Class uc ..\DeusEx\Classes
+Then, from the repo root in PowerShell:
+
+```
+.\build.ps1 -GameDir "C:\Games\Deus Ex"
 ```
 
-Then build:
-
-```bash
-nix run .#sync-and-build         # generate textures, sync overlays, two-pass UCC build
-nix run .#sync-and-build -- -n   # dry run
-BUILD_DIR=/path nix run .#sync-and-build
-```
-
-The flake app puts python3 + Pillow + numpy and `dos2unix` on PATH; the
-header comment in `sync-and-build.sh` explains the two-pass UCC dance
-and the GPF it tolerates. Output lands in `gamedir/System/`: `DeusEx.u`
-and `DXController.u`.
-
-### Build details worth knowing
-
-- **The repo is LF; UCC wants CRLF.** `.editorconfig` and
-  `.gitattributes` pin every text file to LF. The build script
-  converts each overlay `.uc` with `unix2dos -n` on the way into the
-  build dir, so only our overlay files are converted — stock files
-  stay verbatim. Never let git check out the tree under a config that
-  would re-CRLF it.
-- **`DeusEx.ini` needs `EditPackages=DXController`** at the end of the
-  `EditPackages` block. The build script adds it automatically.
-- **Two-pass, with a GPF.** Pass 1 rebuilds `DeusEx.u`; UCC GPFs while
-  loading the freshly-rebuilt package, but the `.u` is on disk before
-  the crash. The script pipes `n` to stdin (to skip a header overwrite
-  prompt), tolerates the non-zero exit, and verifies the `.u` is
-  present. Pass 2 builds `DXController.u` in a fresh UCC process to
-  side-step the load-time GPF.
+`-SkipLauncher` and `-SkipScripts` build one half only. If PowerShell
+refuses to run the script, allow local scripts once with
+`Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`. Output lands in
+`<GameDir>\System\`: `DeusEx.u`, `DXController.u`, `DeusEx.exe`.
 
 ## Releases
 
 CI builds on every push to `master`; on a `v*` tag it assembles a
 release `.zip` containing `DeusEx.u`, `DXController.u`, `README.md`,
-and `DeusEx.exe` (built from `launcher/` via `launcher/build.sh`).
+and `DeusEx.exe` (built by `build.ps1`).
 
 To cut a release, push a `v*` tag.
 
@@ -116,14 +99,11 @@ Current units: `FrameStats`, `FramePacing`, `CursorPolicy`, `LogTime`,
 `launcher/tests/` builds these units against doctest (vendored header,
 `launcher/tests/doctest.h`) via `launcher/tests/tests.vcxproj`, a
 console-exe project in `launcher.sln` that never includes engine headers
-or links engine libs. `launcher/build.sh` builds and runs the test exe
-after the launcher build (via Windows interop from WSL) and fails the
-build on a test failure; CI (`.github/workflows/build.yml`) runs the test
-exe as a separate step after its own msbuild invocation, since the
-solution build alone would compile the tests without checking results.
-`sync-and-build.sh` makes its own msbuild call rather than going through
-`build.sh`, and runs the test exe before installing, so a red test blocks
-the install instead of leaving a fresh binary in the game dir.
+or links engine libs. The solution build compiles the tests but never
+runs them. `build.ps1` and `sync-and-build.sh` run the test exe after
+msbuild and before installing, so a red test blocks the install;
+`launcher/build.sh` builds and runs it without installing. CI gets this
+through `build.ps1`.
 
 Every new pure-unit or test source file needs explicit `launcher.vcxproj`/
 `tests.vcxproj` (+ `.filters`) entries — no globbing — and must not set
@@ -1057,7 +1037,7 @@ rows currently shown. The variant tile sets are generated by
   by colour value — use a **black** index-0 key so the transparent
   region adds nothing additively. Pass `--key black` to
   `assets/png-to-pcx.py` (see the `WheelPlate` conversion call in
-  `sync-and-build.sh`).
+  `build.ps1`).
 - **`GC.SetTextColorRGB` / `SetTileColorRGB` leave `Color.A == 0`.**
   Both helpers build a `Color` from R/G/B only and never touch the
   alpha byte. Under `DSTY_Masked` the *text* renderer honours that
@@ -1317,8 +1297,8 @@ texture package.
   key, for the additive wedges).
 - Button glyphs are hand-authored PNGs under `assets/XboxSeries/`.
 
-`sync-and-build.sh` and CI (`.github/workflows/build.yml`) each carry
-their **own copy** of the generate-and-convert recipe — when adding a
-generator or changing a conversion flag, update both, or CI fails on
-the missing texture (this has happened). python3 + Pillow + numpy are
-provided by the `sync-and-build` flake app and `nix develop`.
+The generate-and-convert recipe lives in `build.ps1` and
+`sync-and-build.sh`; change both when adding a generator or a conversion
+flag. Each generator pins its Python dependencies in a PEP 723 header,
+resolved by `uv run`; the pins match the flake's nixpkgs so both paths
+produce identical textures.

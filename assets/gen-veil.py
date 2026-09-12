@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# /// script
+# dependencies = ["pillow==12.2.0"]
+# ///
 """Generate the flat modulation-veil texture (Veil.png).
 
 A DSTY_Modulated draw multiplies the framebuffer by texel/128 (texel
@@ -9,7 +12,7 @@ same: ConWindowBackground is flat 64 = x0.5 for the conversation
 letterbox). Texel 32 gives scene x0.25 — the on-screen keyboard's
 backdrop dim, also used by the hint overlay.
 
-Deterministic. Run via the build (sync-and-build.sh), or standalone:
+Deterministic. Run via the build (build.ps1 / sync-and-build.sh), or standalone:
   python3 gen-veil.py [OUT_DIR]
 """
 import sys
