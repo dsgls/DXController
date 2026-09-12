@@ -21,6 +21,9 @@ all of them), but all the on-screen button hints use Xbox controller icons.
 ## Requirements
 
 - *Deus Ex: Game of the Year Edition* — the standard GOG or Steam release.
+- **A modern renderer** — not specific to DXController, but the original
+  Direct3D renderer no longer works on current hardware. At least not
+  on my machine. YMMV. See [Renderer](#renderer).
 
 ## Credits
 
@@ -55,10 +58,12 @@ The release `.zip` contains everything you need:
 
 ## Install
 
-Copy `DeusEx.exe`, `SDL3.dll`, `DeusEx.u`, and `DXController.u` from
-the release `.zip` into the game's `System` folder (e.g.
-`C:\GOG Games\Deus Ex GOTY\System\`), overwriting the existing
-`DeusEx.exe` and `DeusEx.u`.
+1. Copy `DeusEx.exe`, `SDL3.dll`, `DeusEx.u`, and `DXController.u` from
+   the release `.zip` into the game's `System` folder (e.g.
+   `C:\GOG Games\Deus Ex GOTY\System\`), overwriting the existing
+   `DeusEx.exe` and `DeusEx.u`.
+2. Install a modern renderer and select it in the launcher — see
+   [Renderer](#renderer).
 
 If you have any other mods installed, start with a fresh game install
 and install only DXController. Compatibility with other mods has not
@@ -133,18 +138,22 @@ In the inventory screen the controller-specific actions are:
 
 ## Renderer
 
-While not required for the mod, I highly recommend installing a modern
-renderer. They work better with todays machines, and they improve the
-look of the graphics.
+You need one of these; the game's own Direct3D renderer no longer
+initialises in fullscreen on current hardware, and the game drops to the
+software renderer and shows a black screen. Modern renderers also look
+better and run better on today's machines.
 
-I have tested these renderers and can recommend them:
+I have tested these and can recommend them:
 
-- [D3D10 renderer](https://www.kentie.net/article/d3d11drv/)
+- [D3D10 renderer](https://www.kentie.net/article/d3d10drv/)
 - [D3D11 renderer](https://www.kentie.net/article/d3d11drv/)
 - [enhanced OpenGL renderer](https://www.cwdohnal.com/utglr/)
 
 The D3D10 renderer is better than the D3D11 renderer, so pick it unless
 you have a good reason not to.
+
+Each one comes with its own install instructions. After installing, pick
+it from the "Renderer" dropdown under Configure in the launcher.
 
 ## French version
 
