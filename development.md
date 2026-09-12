@@ -121,9 +121,17 @@ after the launcher build (via Windows interop from WSL) and fails the
 build on a test failure; CI (`.github/workflows/build.yml`) runs the test
 exe as a separate step after its own msbuild invocation, since the
 solution build alone would compile the tests without checking results.
+`sync-and-build.sh` makes its own msbuild call rather than going through
+`build.sh`, and runs the test exe before installing, so a red test blocks
+the install instead of leaving a fresh binary in the game dir.
+
 Every new pure-unit or test source file needs explicit `launcher.vcxproj`/
 `tests.vcxproj` (+ `.filters`) entries — no globbing — and must not set
 `PrecompiledHeader=Use`.
+
+A pure unit that is mostly a data table lives entirely in a header, so
+the tests can check the real table rather than a copy: `FixAppNavTable.h`
+and `BytePatchSites.h` are the two.
 
 ### Main loop (`CLauncher::MainLoop`, `Launcher.cpp`)
 

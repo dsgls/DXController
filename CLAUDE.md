@@ -45,6 +45,18 @@ commit. The line-ending conversion is the one allowed deviation from
 "verbatim" — it keeps the diff against upstream showing exactly our
 delta.
 
+## Launcher tests
+
+`launcher/tests/` is a doctest suite over the launcher's pure-unit layer
+(see development.md for what belongs there and how to add a unit). Both
+`launcher/build.sh` and `nix run .#sync-and-build` run it and fail on a
+red test, so either one tells you whether the launcher is good. To re-run
+the tests alone without rebuilding:
+`launcher/tests/Release/tests.exe`.
+
+Adding a source or test file needs an explicit `.vcxproj` (+ `.filters`)
+entry — nothing is globbed.
+
 ## Keep the documentation current
 
 Three files document this project; each has a specific scope. Update
